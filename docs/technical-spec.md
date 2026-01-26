@@ -1,0 +1,193 @@
+# Local-Only Notes (Web App) — Technical Specification
+
+Version: 0.1
+Owner: (you)
+Audience: Coding agent (primary)
+
+## 0) Non-negotiables
+
+- Web app only. No backend. No accounts. All data stored locally on the user device.
+- Offline-first: app must function fully without network once loaded once.
+- Dark theme only, macOS-like minimal UI, orange accent.
+- Fast: instant navigation, no jank, virtualized lists, incremental indexing.
+- Block editor as the primary editor, with strong Markdown interoperability (import/export + paste handling).
+- Works on all modern browsers; primary usage is Chrome.
+- Cross-browser storage strategy must degrade gracefully (Chrome best experience with “write-to-disk”).
+
+## 1) Feature set (overview)
+
+### 1.1 Core
+
+- Projects (containers/workspaces)
+- Notes within projects (target scale: ~1k notes/project, but no hard limit)
+- Folders + Tags (both)
+- Favorites (pinned notes)
+- Templates (create + apply)
+- Metadata panel (system fields + custom fields)
+- Backlinks + Graph view
+- Tabs + Split view
+- Drag & drop (folders, notes, tabs)
+- Search: full-text + filters + fuzzy
+- Command palette (Cmd/Ctrl+K)
+- Keyboard-first UX with comprehensive shortcuts
+- Soft delete (Trash), restore, and permanent delete
+
+### 1.2 Content
+
+- Block editor (ProseMirror/Tiptap-based)
+- Blocks: paragraph, heading, bulleted list, numbered list, checklist, quote, divider, code block, table, image, callout, embed/link preview (URL)
+- Inline: bold, italic, underline, strike, code, link
+- Syntax highlighting for code blocks
+- LaTeX math (inline + block) rendered via KaTeX
+- Images: paste from clipboard + drag-drop into editor; stored locally; displayed inline with resize + caption
+
+## 2) Tech stack (chosen)
+
+### 2.1 Framework
+
+- SvelteKit + TypeScript (new vs React/Next)
+- Build: Vite (via SvelteKit)
+- Package manager: pnpm
+- Styling: plain CSS with design tokens (CSS variables) + CSS modules (component-scoped)
+- UI primitives: Melt UI (headless, accessible) + custom styling (no Tailwind)
+- Motion: @motionone/svelte (micro-animations)
+- Icons: lucide-svelte
+
+### 2.2 Editor
+
+- Tiptap v2 (ProseMirror) for the block editor
+- Key extensions:
+  - StarterKit (selectively enabled)
+  - TaskList + TaskItem (checklists)
+  - Table + TableRow + TableHeader + TableCell
+  - CodeBlockLowlight + lowlight (syntax highlight)
+  - Link
+  - Placeholder
+  - History (undo/redo)
+  - Markdown interoperability:
+    - Import: parse Markdown -> ProseMirror doc
+    - Export: ProseMirror doc -> Markdown
+  - Math:
+    - KaTeX renderer for inline/block math nodes
+
+### 2.3 Search
+
+- MiniSearch for full-text indexing with fuzzy matching
+- Index persisted locally (IDB) and rebuilt incrementally as needed
+
+### 2.4 Graph view
+
+- sigma.js + graphology for rendering and layout
+- Edge types: wiki-link edges + backlink edges (same relation, different directionality)
+- Filters: tags, folders, favorites, depth
+
+### 2.5 Storage
+
+Hybrid, capability-driven:
+
+- Primary (best): File System Access API (Chrome/Edge) — user selects a directory (“Vault”)
+- Universal fallback: IndexedDB (all browsers)
+- Optional performance add-on (Chrome): OPFS via Storage Foundation if available (not required)
+
+See `storage.md` for canonical on-disk structure and fallback rules.
+
+## 3) Information architecture
+
+### 3.1 Entities
+
+- Vault (storage root; either disk directory or IDB namespace)
+- Project
+- Folder (tree)
+- Note
+- Tag
+- Template
+- Asset (image blob + metadata)
+- UI State (tabs, splits, last opened, sidebar widths)
+
+### 3.2 Project structure
+
+- Each project contains:
+  - Folder tree
+  - Notes list
+  - Tags dictionary
+  - Templates list
+  - Saved searches (optional)
+  - Graph cache (optional)
+
+## 4) Application views (must implement)
+
+- Onboarding / Vault selection
+- Project switcher
+- Main workspace:
+  - Sidebar (projects + folder tree + tags)
+  - Note list pane
+  - Editor pane (tabs + split view)
+  - Right panel (toggleable): Outline / Backlinks / Metadata
+- Command palette
+- Global search modal
+- Templates manager
+- Graph view
+- Favorites view
+- Trash view
+- Settings
+
+See `ui-spec.md` for pixel-level UI behavior.
+
+## 5) Offline-first requirements
+
+- Service worker caches:
+  - App shell assets (HTML/CSS/JS/fonts/icons)
+  - No remote data dependencies required
+- If network is unavailable:
+  - App loads from cache (after first visit)
+  - All project data accessible locally
+- “First visit offline” is not required.
+
+## 6) Performance budgets (hard targets)
+
+- Notes list scroll: 60fps on mid-range laptop
+- Open note: < 50ms perceived (show skeleton instantly, content paint quickly)
+- Search typing: results update within 80ms for 1k notes (debounce 50ms)
+- Graph render: initial layout < 500ms for 1k nodes
+
+Implementation requirements:
+
+- Virtualize note list and search results (windowing)
+- Debounce expensive operations
+- Incremental indexing: update index for changed notes only
+- Avoid re-parsing markdown on every keystroke; export on save debounce
+
+## 7) Data integrity + autosave
+
+- Autosave always on
+- Save strategy:
+  - Editor updates in memory on every transaction
+  - Persist to storage with a debounce of 400ms (reset on input)
+  - Immediate persist on:
+    - tab switch
+    - note switch
+    - app background/unload (best-effort)
+- Soft delete:
+  - Deleted notes moved to Trash with deletedAt timestamp
+  - Restore returns to original folder (if exists), else root
+
+## 8) Testing + CI (must be fully automated)
+
+- Unit tests: Vitest
+- Component tests: @testing-library/svelte
+- E2E: Playwright (Chromium + WebKit + Firefox)
+- Accessibility smoke: axe-core integration in Playwright for key screens
+- Lint: ESLint + TypeScript strict + Prettier
+- CI gates:
+  - All tests pass in CI
+  - No TypeScript errors
+  - Playwright runs headless on all 3 engines
+  - Minimum coverage: 80% lines on core packages (storage + search + parser)
+
+See `testing.md` for detailed test plan.
+
+## 9) Done criteria (release)
+
+- All milestones complete and checked in `milestones.md`
+- All CI gates green
+- Manual review only after completion (agent must self-verify with tests)
