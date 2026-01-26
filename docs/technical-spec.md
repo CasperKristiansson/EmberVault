@@ -177,7 +177,7 @@ Implementation requirements:
 - Accessibility smoke: axe-core integration in Playwright for key screens
 - Lint: ESLint + TypeScript strict + Prettier (https://github.com/haydenbleasel/ultracite, A production-grade, zero-configuration preset for ESLint, Biome, and Oxlint.)
   - Config: `eslint.config.mjs`, `prettier.config.mjs`, `stylelint.config.mjs` use ultracite presets
-  - Notes: Lefthook pre-commit hook configured by ultracite init; `tailwindcss@3` installed to satisfy `eslint-plugin-tailwindcss` (not used for styling)
+  - Notes: `tailwindcss@3` installed to satisfy `eslint-plugin-tailwindcss` (not used for styling)
   - ESLint config uses a local copy of ultracite core rules to avoid ESLint 9 frozen rule objects
 - CI gates:
   - All tests pass in CI

@@ -43,7 +43,6 @@ Notes:
 
 - Config files: `eslint.config.mjs`, `prettier.config.mjs`, `stylelint.config.mjs`.
 - A local copy of Ultracite's core ESLint rules lives under `config/eslint/` to stay compatible with ESLint 9.
-- Lefthook runs `pnpm dlx ultracite fix` on pre-commit.
 
 If Ultracite or ESLint changes in the future, update this section and keep the configs in sync with `docs/technical-spec.md`.
 
