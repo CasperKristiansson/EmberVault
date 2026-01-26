@@ -133,6 +133,7 @@ const config = [
   },
   {
     files: ["**/*.ts"],
+    ignores: ["playwright.config.ts", "tests/e2e/**/*.ts"],
     languageOptions: {
       parser: typescriptParser,
       parserOptions: {
@@ -148,6 +149,18 @@ const config = [
       ...typescriptRules,
       "@typescript-eslint/explicit-module-boundary-types": "off",
       "@typescript-eslint/only-throw-error": "off",
+    },
+  },
+  {
+    files: ["playwright.config.ts", "tests/e2e/**/*.ts"],
+    languageOptions: {
+      parser: typescriptParser,
+      parserOptions: {
+        project: null,
+      },
+    },
+    rules: {
+      "require-unicode-regexp": "off",
     },
   },
   {

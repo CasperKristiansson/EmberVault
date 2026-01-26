@@ -1,0 +1,19 @@
+# Allow Playwright e2e tests to run outside the sandbox.
+
+prefix_rule(
+    pattern = ["pnpm", "test:e2e"],
+    decision = "allow",
+    justification = "E2E tests require Playwright to bind a local port.",
+    match = [
+        "pnpm test:e2e",
+    ],
+)
+
+prefix_rule(
+    pattern = ["pnpm", "run", "test:e2e"],
+    decision = "allow",
+    justification = "E2E tests require Playwright to bind a local port.",
+    match = [
+        "pnpm run test:e2e",
+    ],
+)
