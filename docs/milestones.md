@@ -8,8 +8,8 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Configure ESLint + Prettier + strict TS
 - [x] Add Vitest + Testing Library (Svelte)
 - [x] Add Playwright (Chromium/Firefox/WebKit) + basic smoke test
-- [ ] Add CI workflow running lint/typecheck/unit/e2e
-- [ ] Add design tokens CSS file (from brand.md) and verify applied globally
+- [x] Add CI workflow running lint/typecheck/unit/e2e
+- [x] Add design tokens CSS file (from brand.md) and verify applied globally
 
 ## Milestone 1 — Storage foundation (IDB first)
 
