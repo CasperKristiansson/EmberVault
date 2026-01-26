@@ -4,8 +4,8 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 
 ## Milestone 0 — Repo + tooling baseline
 
-- [ ] Initialize SvelteKit + TypeScript project (pnpm)
-- [ ] Configure ESLint + Prettier + strict TS
+- [x] Initialize SvelteKit + TypeScript project (pnpm)
+- [x] Configure ESLint + Prettier + strict TS
 - [ ] Add Vitest + Testing Library (Svelte)
 - [ ] Add Playwright (Chromium/Firefox/WebKit) + basic smoke test
 - [ ] Add CI workflow running lint/typecheck/unit/e2e

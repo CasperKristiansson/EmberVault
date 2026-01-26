@@ -11,9 +11,7 @@ Goal: a fast, polished, “native-like” dark UI with subtle depth and zero vis
 
 ## 2) Typography
 
-- Font stack (must use exactly):
-  ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-  "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"
+- Font stack (must use exactly): ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"
 
 - Sizes:
   - App base: 14px
@@ -85,8 +83,7 @@ Implementation:
 
 - Background overlay: rgba(0,0,0,0.55)
 - Backdrop blur: blur(10px) saturate(1.1)
-- Modal panel: --bg-1 with 1px border --stroke-0 and panel shadow
-  Never blur normal panels (sidebar/editor panes) during routine navigation.
+- Modal panel: --bg-1 with 1px border --stroke-0 and panel shadow Never blur normal panels (sidebar/editor panes) during routine navigation.
 
 ## 6) Buttons (exact styles)
 
@@ -148,11 +145,9 @@ Use @motionone/svelte for:
 
 - Modal enter/exit: 120ms fade + 120ms scale 0.98 -> 1
 - Panel collapse: 160ms width/height transition (ease-out)
-- List item insertion/removal: 120ms fade/slide 4px
-  Never animate:
+- List item insertion/removal: 120ms fade/slide 4px Never animate:
 - Editor text itself
-- Large layout shifts during typing
-  Reduced motion:
+- Large layout shifts during typing Reduced motion:
 - Respect prefers-reduced-motion: disable transforms; keep 80ms fade only.
 
 ## 10) Iconography

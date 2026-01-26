@@ -1,8 +1,6 @@
 # Local-Only Notes (Web App) — Technical Specification
 
-Version: 0.1
-Owner: (you)
-Audience: Coding agent (primary)
+Version: 0.1 Owner: (you) Audience: Coding agent (primary)
 
 ## 0) Non-negotiables
 
@@ -177,7 +175,10 @@ Implementation requirements:
 - Component tests: @testing-library/svelte
 - E2E: Playwright (Chromium + WebKit + Firefox)
 - Accessibility smoke: axe-core integration in Playwright for key screens
-- Lint: ESLint + TypeScript strict + Prettier
+- Lint: ESLint + TypeScript strict + Prettier (https://github.com/haydenbleasel/ultracite, A production-grade, zero-configuration preset for ESLint, Biome, and Oxlint.)
+  - Config: `eslint.config.mjs`, `prettier.config.mjs`, `stylelint.config.mjs` use ultracite presets
+  - Notes: Lefthook pre-commit hook configured by ultracite init; `tailwindcss@3` installed to satisfy `eslint-plugin-tailwindcss` (not used for styling)
+  - ESLint config uses a local copy of ultracite core rules to avoid ESLint 9 frozen rule objects
 - CI gates:
   - All tests pass in CI
   - No TypeScript errors

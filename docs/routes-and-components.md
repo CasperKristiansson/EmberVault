@@ -26,8 +26,7 @@ Directory: `src/routes/`
 - `/onboarding`  
   Files:
   - `src/routes/onboarding/+page.svelte`
-  - `src/routes/onboarding/+page.ts` (optional load)
-    Behavior:
+  - `src/routes/onboarding/+page.ts` (optional load) Behavior:
   - Show storage mode selection cards:
     - Folder vault (File System Access) if supported
     - Browser storage (IndexedDB) always
@@ -41,8 +40,7 @@ Directory: `src/routes/`
 - `/app/[projectId]`  
   Files:
   - `src/routes/app/[projectId]/+page.svelte`
-  - `src/routes/app/[projectId]/+page.ts`
-    Behavior:
+  - `src/routes/app/[projectId]/+page.ts` Behavior:
   - Render full shell (sidebar + note list + editor + right panel)
   - All internal navigation (folder/tag filters, note open, tabs, split) is client-state driven (no subroutes required)
   - Update URL query params for shareable state (see 1.4)
@@ -56,8 +54,7 @@ Route remains `/app/[projectId]`, but keep URL state synchronized:
 - `?view=favorites|trash|all` optional view filter
 - `?note={noteId}` optional “primary focused note”
 - `?split={noteIdA},{noteIdB}` when split view enabled
-- `?tab={noteId}` active tab (primary pane)
-  Rules:
+- `?tab={noteId}` active tab (primary pane) Rules:
 - URL reflects current state, but app must function without URL state.
 - When split is enabled:
   - `split` must be set
@@ -67,8 +64,7 @@ Route remains `/app/[projectId]`, but keep URL state synchronized:
 ### 1.5 Settings (optional route; still opened as modal from workspace)
 
 - `/settings` (optional)  
-  Recommendation: do NOT use a dedicated route; implement settings as modal sheet.
-  If a route is used:
+  Recommendation: do NOT use a dedicated route; implement settings as modal sheet. If a route is used:
   - `src/routes/settings/+page.svelte`
   - Must render the same SettingsPanel as modal uses.
 

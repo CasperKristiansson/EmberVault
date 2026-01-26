@@ -33,12 +33,10 @@ Top bar:
 
 First launch view:
 
-- Title: “Choose where your notes live”
-  Options (cards):
+- Title: “Choose where your notes live” Options (cards):
 
 1. “Use a folder on this device” (File System Access; Chrome/Edge)
-2. “Store in this browser” (IndexedDB fallback; works everywhere)
-   Card layout:
+2. “Store in this browser” (IndexedDB fallback; works everywhere) Card layout:
 
 - 2 cards stacked on mobile, side-by-side on desktop
 - Each card has icon + title + 2-line description + primary button
@@ -117,8 +115,7 @@ Split view:
 - Toggle button in top bar (icon: split)
 - Modes:
   1. Single editor
-  2. Split vertical (two editors side-by-side)
-     Rules:
+  2. Split vertical (two editors side-by-side) Rules:
 - Split view only shows two notes at once (A and B)
 - Each split pane has its own tab context (active note per pane)
 - Drag a tab onto the other pane to open it there
@@ -160,8 +157,7 @@ Markdown support (must be explicit):
 
 Code blocks:
 
-- Monospace font stack:
-  ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace
+- Monospace font stack: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace
 - Language selector in block toolbar (top-right of code block)
 - Syntax highlighting using lowlight (theme matches dark UI)
 
@@ -220,8 +216,7 @@ Metadata:
   - Created, Updated, Folder, Tags, Favorite, Template
 - Custom fields:
   - Key-value pairs (string, number, date, boolean)
-  - Add field button
-    Rules:
+  - Add field button Rules:
 - Custom fields appear as small chips under title as well (first 3 only)
 
 ## 8) Command palette (Cmd/Ctrl+K)
@@ -229,12 +224,10 @@ Metadata:
 Modal:
 
 - Centered, width 640px desktop, full width minus 24px on mobile
-- Uses blur rules
-  Contents:
+- Uses blur rules Contents:
 - Input (auto-focused)
 - List of actions/results
-- Group headings: Notes, Actions, Settings
-  Actions (minimum):
+- Group headings: Notes, Actions, Settings Actions (minimum):
 - New note
 - Switch project
 - Search everywhere
@@ -253,8 +246,7 @@ Keyboard:
 ## 9) Global search modal
 
 - Trigger: Cmd/Ctrl+Shift+F or Search icon
-- Same modal styling as command palette
-  Features:
+- Same modal styling as command palette Features:
 - Full-text + fuzzy
 - Filters: project, folder, tag, favorites, created/updated range
 - Results show:
@@ -273,8 +265,7 @@ Keyboard:
 - Visual rules:
   - Nodes: circles, base color muted; current note in --accent-0
   - Hover shows tooltip with title + tags
-  - Click node opens note in a new tab (same pane)
-    Controls:
+  - Click node opens note in a new tab (same pane) Controls:
 - Search node input
 - Depth slider (1–3)
 - Filter tags dropdown
@@ -285,20 +276,17 @@ Keyboard:
 Templates manager view:
 
 - List of templates (left)
-- Preview/editor (right)
-  Apply template:
+- Preview/editor (right) Apply template:
 - On “New note” choose:
   - Blank
-  - From template (last used pinned)
-    Templates are notes with type=template; stored separately and searchable.
+  - From template (last used pinned) Templates are notes with type=template; stored separately and searchable.
 
 ## 12) Trash
 
 - Trash is a view (filter) in note list
 - Actions:
   - Restore
-  - Delete permanently (confirm dialog)
-    Retention:
+  - Delete permanently (confirm dialog) Retention:
 - No auto-purge
 
 ## 13) Notifications

@@ -73,8 +73,7 @@ project.json contains:
 
 ## 4) IndexedDB layout (IndexedDBAdapter)
 
-DB name: `local-notes`
-Object stores:
+DB name: `local-notes` Object stores:
 
 - projects (key: projectId)
 - notes (compound key: [projectId, noteId])
