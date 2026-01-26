@@ -1,2 +1,5 @@
+packages:
+  - "infra"
+
 onlyBuiltDependencies:
   - esbuild

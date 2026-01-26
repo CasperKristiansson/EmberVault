@@ -1,0 +1,3 @@
+name: embervault-infra
+description: EmberVault static site infrastructure (S3 + CloudFront + Route53)
+runtime: nodejs

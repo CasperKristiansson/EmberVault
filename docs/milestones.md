@@ -13,6 +13,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 
 ## Milestone 1 — Storage foundation (IDB first)
 
+- [x] Deploy static site via adapter-static + Pulumi (S3/CloudFront/Route53)
 - [ ] Implement StorageAdapter interface
 - [ ] Implement IndexedDBAdapter with object stores per storage.md
 - [ ] Implement Project create/read/update, default “Personal”

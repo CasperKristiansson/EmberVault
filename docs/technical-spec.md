@@ -46,6 +46,7 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
 - SvelteKit + TypeScript (new vs React/Next)
 - Build: Vite (via SvelteKit)
 - Package manager: pnpm
+- Adapter: @sveltejs/adapter-static (SPA fallback via 200.html for S3/CloudFront hosting)
 - Styling: plain CSS with design tokens (CSS variables) + CSS modules (component-scoped)
 - UI primitives: Melt UI (headless, accessible) + custom styling (no Tailwind)
 - Motion: @motionone/svelte (micro-animations)
@@ -88,6 +89,12 @@ Hybrid, capability-driven:
 - Optional performance add-on (Chrome): OPFS via Storage Foundation if available (not required)
 
 See `storage.md` for canonical on-disk structure and fallback rules.
+
+### 2.6 Deployment
+
+- Static hosting on AWS S3 + CloudFront + Route53 (custom domain).
+- IaC: Pulumi (TypeScript) under `infra/`.
+- Certificates: ACM in us-east-1 for CloudFront.
 
 ## 3) Information architecture
 

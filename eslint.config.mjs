@@ -11,6 +11,7 @@ const config = [
       "**/build/**",
       "**/coverage/**",
       "**/dist/**",
+      "infra/**",
       "config/eslint/**",
     ],
   },
