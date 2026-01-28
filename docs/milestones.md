@@ -27,7 +27,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Build app shell layout (sidebar, note list, editor pane, right panel)
 - [x] Implement responsive rules (desktop + mobile layout)
 - [x] Implement project switcher (single project ok for now)
-- [ ] Implement folder tree (create/rename/delete empty)
+- [x] Implement folder tree (create/rename/delete empty)
 - [ ] Implement note list with virtualization
 - [ ] Component tests for layout focus + basic navigation
 - [ ] E2E: create folder, create note in folder, list shows correct

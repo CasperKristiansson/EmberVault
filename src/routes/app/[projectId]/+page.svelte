@@ -4,7 +4,14 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/stores";
   import AppShell from "$lib/components/AppShell.svelte";
+  import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
   import ProjectSwitcher from "$lib/components/sidebar/ProjectSwitcher.svelte";
+  import {
+    addFolder,
+    isFolderEmpty,
+    removeFolder,
+    renameFolder as renameFolderEntry,
+  } from "$lib/core/utils/folder-tree";
   import { createUlid } from "$lib/core/utils/ulid";
   import {
     resolveMobileView,
@@ -106,6 +113,16 @@
     projects = await adapter.listProjects();
   };
 
+  const persistProject = async (nextProject: Project): Promise<void> => {
+    project = nextProject;
+    projects = projects.some(current => current.id === nextProject.id)
+      ? projects.map(current =>
+          current.id === nextProject.id ? nextProject : current
+        )
+      : [...projects, nextProject];
+    await adapter.writeProject(nextProject.id, nextProject);
+  };
+
   const openNote = async (noteId: string): Promise<void> => {
     const note = await adapter.readNote(projectId, noteId);
     if (note) {
@@ -189,6 +206,60 @@
     saveState = "saved";
   };
 
+  const createFolder = async (parentId: string | null): Promise<string | null> => {
+    if (!project) {
+      return null;
+    }
+    const folderId = createUlid();
+    const nextFolders = addFolder(project.folders, {
+      id: folderId,
+      name: "New folder",
+      parentId,
+    });
+    const updatedProject: Project = {
+      ...project,
+      folders: nextFolders,
+      updatedAt: Date.now(),
+    };
+    await persistProject(updatedProject);
+    return folderId;
+  };
+
+  const renameFolder = async (
+    folderId: string,
+    name: string
+  ): Promise<void> => {
+    if (!project) {
+      return;
+    }
+    const nextFolders = renameFolderEntry(project.folders, folderId, name);
+    if (nextFolders === project.folders) {
+      return;
+    }
+    const updatedProject: Project = {
+      ...project,
+      folders: nextFolders,
+      updatedAt: Date.now(),
+    };
+    await persistProject(updatedProject);
+  };
+
+  const deleteFolder = async (folderId: string): Promise<void> => {
+    if (!project) {
+      return;
+    }
+    if (!isFolderEmpty(folderId, project.folders, project.notesIndex)) {
+      return;
+    }
+    const nextFolders = removeFolder(project.folders, folderId);
+    const updatedProject: Project = {
+      ...project,
+      folders: nextFolders,
+      updatedAt: Date.now(),
+    };
+    await persistProject(updatedProject);
+  };
+
   const switchProject = async (nextProjectId: string): Promise<void> => {
     if (!nextProjectId || nextProjectId === projectId) {
       return;
@@ -250,6 +321,13 @@
       {projects}
       activeProjectId={project?.id ?? projectId}
       onSelect={switchProject}
+    />
+    <FolderTree
+      folders={project?.folders ?? {}}
+      notesIndex={project?.notesIndex ?? {}}
+      onCreate={createFolder}
+      onRename={renameFolder}
+      onDelete={deleteFolder}
     />
   </div>
 
