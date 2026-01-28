@@ -19,13 +19,13 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Implement Project create/read/update, default “Personal”
 - [x] Implement Note CRUD + soft delete + restore + permanent delete
 - [x] Implement Asset storage (blob) in IDB
-- [ ] Unit tests for all IDB storage operations
-- [ ] E2E: create/edit note, reload persists
+- [x] Unit tests for all IDB storage operations
+- [x] E2E: create/edit note, reload persists
 
 ## Milestone 2 — App shell + navigation skeleton
 
-- [ ] Build app shell layout (sidebar, note list, editor pane, right panel)
-- [ ] Implement responsive rules (desktop + mobile layout)
+- [x] Build app shell layout (sidebar, note list, editor pane, right panel)
+- [x] Implement responsive rules (desktop + mobile layout)
 - [ ] Implement project switcher (single project ok for now)
 - [ ] Implement folder tree (create/rename/delete empty)
 - [ ] Implement note list with virtualization

@@ -26,6 +26,7 @@ const noteIdKey = "noteId";
 const templateIdKey = "templateId";
 const assetIdKey = "assetId";
 const primaryIdKey = "id";
+const uiStateKey = "ui";
 
 type StoreName = (typeof storeNames)[keyof typeof storeNames];
 
@@ -476,15 +477,21 @@ export class IndexedDBAdapter implements StorageAdapter {
   }
 
   public async writeUIState(state: UIState): Promise<void> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.writeUIState is not implemented for ${JSON.stringify(state)}.`
+    await this.withStore<IndexedDatabaseKey>(
+      storeNames.uiState,
+      "readwrite",
+      (store) => store.put(state, uiStateKey)
     );
   }
 
   public async readUIState(): Promise<UIState | null> {
-    await this.openAndCloseDatabase();
-    throw new Error("IndexedDBAdapter.readUIState is not implemented yet.");
+    const state = await this.withStore<UIState | undefined>(
+      storeNames.uiState,
+      "readonly",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      (store) => store.get(uiStateKey)
+    );
+    return state ?? null;
   }
 
   private async openAndCloseDatabase(): Promise<void> {
