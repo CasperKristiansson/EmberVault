@@ -4,6 +4,7 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/stores";
   import AppShell from "$lib/components/AppShell.svelte";
+  import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
   import ProjectSwitcher from "$lib/components/sidebar/ProjectSwitcher.svelte";
   import {
@@ -352,22 +353,11 @@
     {:else if notes.length === 0}
       <div class="note-list-empty">No notes yet.</div>
     {:else}
-      <div class="note-list-rows" data-testid="note-list">
-        {#each notes as note (note.id)}
-          <button
-            class={note.id === activeNote?.id
-              ? "note-row active"
-              : "note-row"}
-            on:click={() => openNote(note.id)}
-            data-testid={`note-row-${note.id}`}
-          >
-            <span class="note-row-title">{note.title || "Untitled"}</span>
-            <span class="note-row-meta">
-              {new Date(note.updatedAt).toLocaleDateString()}
-            </span>
-          </button>
-        {/each}
-      </div>
+      <NoteListVirtualized
+        {notes}
+        activeNoteId={activeNote?.id ?? null}
+        onSelect={noteId => void openNote(noteId)}
+      />
     {/if}
   </div>
 
@@ -534,6 +524,7 @@
     flex-direction: column;
     gap: 16px;
     height: 100%;
+    min-height: 0;
   }
 
   .note-list-header {
@@ -549,63 +540,6 @@
 
   .note-list-subtitle {
     font-size: 12px;
-    color: var(--text-2);
-  }
-
-  .note-list-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    overflow: auto;
-    padding-right: 4px;
-  }
-
-  .note-row {
-    height: 34px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 0 10px 0 12px;
-    border-radius: var(--r-sm);
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--text-0);
-    cursor: pointer;
-    text-align: left;
-  }
-
-  .note-row:hover {
-    background: var(--bg-3);
-  }
-
-  .note-row.active {
-    background: var(--accent-2);
-    border-color: var(--accent-2);
-    position: relative;
-  }
-
-  .note-row.active::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 6px;
-    bottom: 6px;
-    width: 3px;
-    background: var(--accent-0);
-    border-radius: 3px;
-  }
-
-  .note-row-title {
-    font-size: 13px;
-    color: var(--text-0);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .note-row-meta {
-    font-size: 11px;
     color: var(--text-2);
   }
 
@@ -735,9 +669,4 @@
     opacity: 0.7;
   }
 
-  @media (max-width: 767px) {
-    .note-row {
-      height: 40px;
-    }
-  }
 </style>

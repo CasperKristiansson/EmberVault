@@ -28,8 +28,8 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Implement responsive rules (desktop + mobile layout)
 - [x] Implement project switcher (single project ok for now)
 - [x] Implement folder tree (create/rename/delete empty)
-- [ ] Implement note list with virtualization
-- [ ] Component tests for layout focus + basic navigation
+- [x] Implement note list with virtualization
+- [x] Component tests for layout focus + basic navigation
 - [ ] E2E: create folder, create note in folder, list shows correct
 
 ## Milestone 3 — Block editor MVP (Tiptap)
