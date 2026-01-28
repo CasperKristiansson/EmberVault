@@ -33,6 +33,13 @@ type StoreKeyPath = string | string[] | null;
 
 type IndexedDatabaseKey = IDBValidKey;
 
+type NoteRecord = {
+  projectId: string;
+  noteId: string;
+  noteDocument: NoteDocumentFile;
+  derivedMarkdown: string;
+};
+
 const noteKeyPath: string[] = [projectIdKey, noteIdKey];
 const templateKeyPath: string[] = [projectIdKey, templateIdKey];
 const assetKeyPath: string[] = [projectIdKey, assetIdKey];
@@ -144,6 +151,25 @@ export const createDefaultProject = (): Project => {
   };
 };
 
+const toNoteIndexEntry = (noteDocument: NoteDocumentFile): NoteIndexEntry => {
+  const hasCustomFields = Object.keys(noteDocument.customFields).length > 0;
+  return {
+    id: noteDocument.id,
+    title: noteDocument.title,
+    folderId: noteDocument.folderId,
+    tagIds: noteDocument.tagIds,
+    favorite: noteDocument.favorite,
+    createdAt: noteDocument.createdAt,
+    updatedAt: noteDocument.updatedAt,
+    deletedAt: noteDocument.deletedAt,
+    isTemplate: false,
+    ...(hasCustomFields ? { customFields: noteDocument.customFields } : {}),
+    ...(noteDocument.derived?.outgoingLinks
+      ? { linkOutgoing: noteDocument.derived.outgoingLinks }
+      : {}),
+  };
+};
+
 export class IndexedDBAdapter implements StorageAdapter {
   private readonly adapterDatabaseName = databaseName;
 
@@ -197,20 +223,19 @@ export class IndexedDBAdapter implements StorageAdapter {
   }
 
   public async listNotes(projectId: string): Promise<NoteIndexEntry[]> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.listNotes is not implemented for ${projectId}.`
-    );
+    const project = await this.readProject(projectId);
+    if (!project) {
+      return [];
+    }
+    return Object.values(project.notesIndex);
   }
 
   public async readNote(
     projectId: string,
     noteId: string
   ): Promise<NoteDocumentFile | null> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.readNote is not implemented for ${projectId}:${noteId}.`
-    );
+    const record = await this.readNoteRecord(projectId, noteId);
+    return record?.noteDocument ?? null;
   }
 
   public async writeNote(input: {
@@ -219,37 +244,150 @@ export class IndexedDBAdapter implements StorageAdapter {
     noteDocument: NoteDocumentFile;
     derivedMarkdown: string;
   }): Promise<void> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.writeNote is not implemented for ${input.projectId}:${input.noteId}.`
-    );
+    if (input.noteDocument.id !== input.noteId) {
+      throw new Error(
+        `IndexedDBAdapter.writeNote id mismatch for ${input.projectId}:${input.noteId}.`
+      );
+    }
+    const project = await this.readProject(input.projectId);
+    if (!project) {
+      throw new Error(
+        `IndexedDBAdapter.writeNote missing project ${input.projectId}.`
+      );
+    }
+
+    const record: NoteRecord = {
+      projectId: input.projectId,
+      noteId: input.noteId,
+      noteDocument: input.noteDocument,
+      derivedMarkdown: input.derivedMarkdown,
+    };
+    await this.writeNoteRecord(record);
+
+    const noteIndexEntry = toNoteIndexEntry(input.noteDocument);
+    const updatedProject: Project = {
+      ...project,
+      updatedAt: Math.max(project.updatedAt, input.noteDocument.updatedAt),
+      notesIndex: {
+        ...project.notesIndex,
+        [input.noteId]: noteIndexEntry,
+      },
+    };
+
+    await this.writeProject(input.projectId, updatedProject);
   }
 
   public async deleteNoteSoft(
     projectId: string,
     noteId: string
   ): Promise<void> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.deleteNoteSoft is not implemented for ${projectId}:${noteId}.`
-    );
+    const record = await this.readNoteRecord(projectId, noteId);
+    if (!record) {
+      throw new Error(
+        `IndexedDBAdapter.deleteNoteSoft missing note ${projectId}:${noteId}.`
+      );
+    }
+    const project = await this.readProject(projectId);
+    if (!project) {
+      throw new Error(
+        `IndexedDBAdapter.deleteNoteSoft missing project ${projectId}.`
+      );
+    }
+
+    const timestamp = Date.now();
+    const updatedNoteDocument: NoteDocumentFile = {
+      ...record.noteDocument,
+      deletedAt: timestamp,
+      updatedAt: timestamp,
+    };
+    const updatedRecord: NoteRecord = {
+      ...record,
+      noteDocument: updatedNoteDocument,
+    };
+    await this.writeNoteRecord(updatedRecord);
+
+    const updatedProject: Project = {
+      ...project,
+      updatedAt: Math.max(project.updatedAt, timestamp),
+      notesIndex: {
+        ...project.notesIndex,
+        [noteId]: toNoteIndexEntry(updatedNoteDocument),
+      },
+    };
+
+    await this.writeProject(projectId, updatedProject);
   }
 
   public async restoreNote(projectId: string, noteId: string): Promise<void> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.restoreNote is not implemented for ${projectId}:${noteId}.`
-    );
+    const record = await this.readNoteRecord(projectId, noteId);
+    if (!record) {
+      throw new Error(
+        `IndexedDBAdapter.restoreNote missing note ${projectId}:${noteId}.`
+      );
+    }
+    const project = await this.readProject(projectId);
+    if (!project) {
+      throw new Error(
+        `IndexedDBAdapter.restoreNote missing project ${projectId}.`
+      );
+    }
+
+    const timestamp = Date.now();
+    const currentFolderId = record.noteDocument.folderId;
+    const restoredFolderId =
+      currentFolderId && Object.hasOwn(project.folders, currentFolderId)
+        ? currentFolderId
+        : null;
+    const updatedNoteDocument: NoteDocumentFile = {
+      ...record.noteDocument,
+      deletedAt: null,
+      folderId: restoredFolderId,
+      updatedAt: timestamp,
+    };
+    const updatedRecord: NoteRecord = {
+      ...record,
+      noteDocument: updatedNoteDocument,
+    };
+    await this.writeNoteRecord(updatedRecord);
+
+    const updatedProject: Project = {
+      ...project,
+      updatedAt: Math.max(project.updatedAt, timestamp),
+      notesIndex: {
+        ...project.notesIndex,
+        [noteId]: toNoteIndexEntry(updatedNoteDocument),
+      },
+    };
+
+    await this.writeProject(projectId, updatedProject);
   }
 
   public async deleteNotePermanent(
     projectId: string,
     noteId: string
   ): Promise<void> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.deleteNotePermanent is not implemented for ${projectId}:${noteId}.`
-    );
+    const project = await this.readProject(projectId);
+    if (!project) {
+      throw new Error(
+        `IndexedDBAdapter.deleteNotePermanent missing project ${projectId}.`
+      );
+    }
+
+    const remainingNotesIndex: Record<string, NoteIndexEntry> = {};
+    for (const [entryId, entry] of Object.entries(project.notesIndex)) {
+      if (entryId !== noteId) {
+        remainingNotesIndex[entryId] = entry;
+      }
+    }
+
+    const updatedProject: Project = {
+      ...project,
+      updatedAt: Math.max(project.updatedAt, Date.now()),
+      notesIndex: remainingNotesIndex,
+    };
+
+    await this.writeProject(projectId, updatedProject);
+    await this.deleteNoteRecord(projectId, noteId);
   }
 
   public async writeAsset(input: {
@@ -337,5 +475,35 @@ export class IndexedDBAdapter implements StorageAdapter {
     } finally {
       database.close();
     }
+  }
+
+  private async readNoteRecord(
+    projectId: string,
+    noteId: string
+  ): Promise<NoteRecord | null> {
+    const record = await this.withStore<NoteRecord | undefined>(
+      storeNames.notes,
+      "readonly",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      (store) => store.get([projectId, noteId])
+    );
+    return record ?? null;
+  }
+
+  private async writeNoteRecord(record: NoteRecord): Promise<void> {
+    await this.withStore<IndexedDatabaseKey>(
+      storeNames.notes,
+      "readwrite",
+      (store) => store.put(record)
+    );
+  }
+
+  private async deleteNoteRecord(
+    projectId: string,
+    noteId: string
+  ): Promise<void> {
+    await this.withStore<undefined>(storeNames.notes, "readwrite", (store) =>
+      store.delete([projectId, noteId])
+    );
   }
 }
