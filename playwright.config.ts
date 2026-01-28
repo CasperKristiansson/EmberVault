@@ -1,5 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
+if (process.env.NO_COLOR !== undefined) {
+  delete process.env.NO_COLOR;
+}
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
