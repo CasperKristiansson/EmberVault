@@ -1,3 +1,5 @@
+/* eslint-disable sonarjs/arrow-function-convention */
+import { createUlid } from "../utils/ulid";
 import type {
   AssetMeta,
   NoteDocumentFile,
@@ -28,6 +30,8 @@ const primaryIdKey = "id";
 type StoreName = (typeof storeNames)[keyof typeof storeNames];
 
 type StoreKeyPath = string | string[] | null;
+
+type IndexedDatabaseKey = IDBValidKey;
 
 const noteKeyPath: string[] = [projectIdKey, noteIdKey];
 const templateKeyPath: string[] = [projectIdKey, templateIdKey];
@@ -87,6 +91,23 @@ const requestToPromise = async <T>(request: IDBRequest<T>): Promise<T> => {
   return result;
 };
 
+const waitForTransaction = async (
+  transaction: IDBTransaction
+): Promise<void> => {
+  // eslint-disable-next-line promise/avoid-new, compat/compat
+  await new Promise<void>((resolve, reject) => {
+    transaction.addEventListener("complete", () => {
+      resolve();
+    });
+    transaction.addEventListener("abort", () => {
+      reject(new Error("IndexedDB transaction aborted."));
+    });
+    transaction.addEventListener("error", () => {
+      reject(new Error("IndexedDB transaction failed."));
+    });
+  });
+};
+
 export const openIndexedDatabase = async (): Promise<IDBDatabase> => {
   const databaseFactory = getDatabaseFactory();
   const request: IDBOpenDBRequest = databaseFactory.open(
@@ -106,6 +127,23 @@ export const deleteIndexedDatabase = async (): Promise<void> => {
   await requestToPromise(request);
 };
 
+const defaultProjectName = "Personal";
+
+export const createDefaultProject = (): Project => {
+  const timestamp = Date.now();
+  return {
+    id: createUlid(),
+    name: defaultProjectName,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    folders: {},
+    tags: {},
+    notesIndex: {},
+    templatesIndex: {},
+    settings: {},
+  };
+};
+
 export class IndexedDBAdapter implements StorageAdapter {
   private readonly adapterDatabaseName = databaseName;
 
@@ -114,31 +152,47 @@ export class IndexedDBAdapter implements StorageAdapter {
   }
 
   public async listProjects(): Promise<Project[]> {
-    await this.openAndCloseDatabase();
-    throw new Error("IndexedDBAdapter.listProjects is not implemented yet.");
+    // eslint-disable-next-line sonarjs/prefer-immediate-return
+    const projects = await this.withStore<Project[]>(
+      storeNames.projects,
+      "readonly",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      (store) => store.getAll()
+    );
+    return projects;
   }
 
   public async createProject(project: Project): Promise<void> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.createProject is not implemented for ${project.id}.`
+    await this.withStore<IndexedDatabaseKey>(
+      storeNames.projects,
+      "readwrite",
+      (store) => store.add(project)
     );
   }
 
   public async readProject(projectId: string): Promise<Project | null> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.readProject is not implemented for ${projectId}.`
+    const project = await this.withStore<Project | undefined>(
+      storeNames.projects,
+      "readonly",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      (store) => store.get(projectId)
     );
+    return project ?? null;
   }
 
   public async writeProject(
     projectId: string,
     projectMeta: Project
   ): Promise<void> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.writeProject is not implemented for ${projectId}:${projectMeta.id}.`
+    if (projectMeta.id !== projectId) {
+      throw new Error(
+        `IndexedDBAdapter.writeProject id mismatch for ${projectId}.`
+      );
+    }
+    await this.withStore<IndexedDatabaseKey>(
+      storeNames.projects,
+      "readwrite",
+      (store) => store.put(projectMeta)
     );
   }
 
@@ -243,8 +297,45 @@ export class IndexedDBAdapter implements StorageAdapter {
     const database = await openIndexedDatabase();
     if (database.name !== this.adapterDatabaseName) {
       database.close();
-      return;
+      throw new Error(
+        `IndexedDBAdapter opened unexpected database ${database.name}.`
+      );
     }
     database.close();
+  }
+
+  private async withStore<T>(
+    storeName: StoreName,
+    mode: IDBTransactionMode,
+    action: (store: IDBObjectStore) => IDBRequest<T>
+  ): Promise<T> {
+    // eslint-disable-next-line sonarjs/prefer-immediate-return
+    const result = await this.withDatabase(async (database) => {
+      const transaction = database.transaction(storeName, mode);
+      const store = transaction.objectStore(storeName);
+      const actionResult = await requestToPromise(action(store));
+      await waitForTransaction(transaction);
+      return actionResult;
+    });
+    return result;
+  }
+
+  private async withDatabase<T>(
+    action: (database: IDBDatabase) => T | Promise<T>
+  ): Promise<T> {
+    const database = await openIndexedDatabase();
+    if (database.name !== this.adapterDatabaseName) {
+      database.close();
+      throw new Error(
+        `IndexedDBAdapter opened unexpected database ${database.name}.`
+      );
+    }
+    try {
+      // eslint-disable-next-line sonarjs/prefer-immediate-return
+      const result = await action(database);
+      return result;
+    } finally {
+      database.close();
+    }
   }
 }

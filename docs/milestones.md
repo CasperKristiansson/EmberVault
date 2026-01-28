@@ -16,7 +16,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Deploy static site via adapter-static + Pulumi (S3/CloudFront/Route53)
 - [x] Implement StorageAdapter interface
 - [x] Implement IndexedDBAdapter with object stores per storage.md
-- [ ] Implement Project create/read/update, default “Personal”
+- [x] Implement Project create/read/update, default “Personal”
 - [ ] Implement Note CRUD + soft delete + restore + permanent delete
 - [ ] Implement Asset storage (blob) in IDB
 - [ ] Unit tests for all IDB storage operations
