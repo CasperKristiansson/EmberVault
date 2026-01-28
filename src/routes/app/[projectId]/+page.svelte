@@ -4,6 +4,7 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/stores";
   import AppShell from "$lib/components/AppShell.svelte";
+  import ProjectSwitcher from "$lib/components/sidebar/ProjectSwitcher.svelte";
   import { createUlid } from "$lib/core/utils/ulid";
   import {
     resolveMobileView,
@@ -19,6 +20,7 @@
   const adapter = new IndexedDBAdapter();
 
   let project: Project | null = null;
+  let projects: Project[] = [];
   let notes: NoteIndexEntry[] = [];
   let activeNote: NoteDocumentFile | null = null;
   let titleValue = "";
@@ -98,6 +100,10 @@
       return;
     }
     notes = sortNotes(await adapter.listNotes(projectId));
+  };
+
+  const loadProjects = async (): Promise<void> => {
+    projects = await adapter.listProjects();
   };
 
   const openNote = async (noteId: string): Promise<void> => {
@@ -183,6 +189,18 @@
     saveState = "saved";
   };
 
+  const switchProject = async (nextProjectId: string): Promise<void> => {
+    if (!nextProjectId || nextProjectId === projectId) {
+      return;
+    }
+    const currentState = (await adapter.readUIState()) ?? {};
+    await adapter.writeUIState({
+      ...currentState,
+      lastProjectId: nextProjectId,
+    });
+    await goto(resolve("/app/[projectId]", { projectId: nextProjectId }));
+  };
+
   onMount(() => {
     const initialize = async (): Promise<void> => {
       await adapter.init();
@@ -196,6 +214,7 @@
         return;
       }
       project = storedProject;
+      await loadProjects();
       await loadNotes();
       if (notes.length > 0) {
         await openNote(notes[0]?.id ?? "");
@@ -227,9 +246,11 @@
   </div>
 
   <div slot="sidebar" class="sidebar-content">
-    <div class="sidebar-title">EmberVault</div>
-    <div class="sidebar-subtitle">Project</div>
-    <div class="sidebar-project">{project?.name ?? "Loading"}</div>
+    <ProjectSwitcher
+      {projects}
+      activeProjectId={project?.id ?? projectId}
+      onSelect={switchProject}
+    />
   </div>
 
   <div slot="note-list" class="note-list-content">
@@ -426,23 +447,8 @@
   .sidebar-content {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-  }
-
-  .sidebar-title {
-    font-weight: 600;
-  }
-
-  .sidebar-subtitle {
-    font-size: 12px;
-    color: var(--text-2);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  .sidebar-project {
-    font-size: 14px;
-    color: var(--text-1);
+    gap: 16px;
+    font-size: 13px;
   }
 
   .note-list-content {
