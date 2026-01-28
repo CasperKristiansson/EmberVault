@@ -181,6 +181,7 @@ Implementation requirements:
 - Unit tests: Vitest
 - Component tests: @testing-library/svelte
 - Test environment: Vitest uses jsdom for component tests
+- IndexedDB unit tests: fake-indexeddb provides the IDB globals
 - E2E: Playwright (Chromium + WebKit + Firefox)
 - Playwright config: runs headless across Chromium/Firefox/WebKit via `pnpm test:e2e`
 - Accessibility smoke: axe-core integration in Playwright for key screens
