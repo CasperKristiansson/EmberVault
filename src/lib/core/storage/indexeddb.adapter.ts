@@ -40,6 +40,14 @@ type NoteRecord = {
   derivedMarkdown: string;
 };
 
+type AssetRecord = {
+  projectId: string;
+  assetId: string;
+  blob: Blob;
+  meta?: AssetMeta;
+  bytes?: ArrayBuffer;
+};
+
 const noteKeyPath: string[] = [projectIdKey, noteIdKey];
 const templateKeyPath: string[] = [projectIdKey, templateIdKey];
 const assetKeyPath: string[] = [projectIdKey, assetIdKey];
@@ -168,6 +176,31 @@ const toNoteIndexEntry = (noteDocument: NoteDocumentFile): NoteIndexEntry => {
       ? { linkOutgoing: noteDocument.derived.outgoingLinks }
       : {}),
   };
+};
+
+const toBlob = (value: unknown, meta?: AssetMeta): Blob => {
+  const options = meta?.mime ? { type: meta.mime } : undefined;
+  if (value instanceof Blob) {
+    return value;
+  }
+  if (value instanceof ArrayBuffer) {
+    return new Blob([value], options);
+  }
+  if (value instanceof Uint8Array) {
+    const copied = new Uint8Array(value);
+    return new Blob([copied.buffer], options);
+  }
+  if (typeof value === "string") {
+    return new Blob([value], options);
+  }
+  return new Blob([String(value)], options);
+};
+
+const toArrayBuffer = async (value: Blob): Promise<ArrayBuffer> => {
+  if (typeof value.arrayBuffer === "function") {
+    return value.arrayBuffer();
+  }
+  return new Response(value).arrayBuffer();
 };
 
 export class IndexedDBAdapter implements StorageAdapter {
@@ -396,9 +429,18 @@ export class IndexedDBAdapter implements StorageAdapter {
     blob: Blob;
     meta?: AssetMeta;
   }): Promise<void> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.writeAsset is not implemented for ${input.projectId}:${input.assetId}.`
+    const bytes = await toArrayBuffer(input.blob);
+    const record: AssetRecord = {
+      projectId: input.projectId,
+      assetId: input.assetId,
+      blob: input.blob,
+      meta: input.meta,
+      bytes,
+    };
+    await this.withStore<IndexedDatabaseKey>(
+      storeNames.assets,
+      "readwrite",
+      (store) => store.put(record)
     );
   }
 
@@ -406,17 +448,31 @@ export class IndexedDBAdapter implements StorageAdapter {
     projectId: string,
     assetId: string
   ): Promise<Blob | null> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.readAsset is not implemented for ${projectId}:${assetId}.`
-    );
+    const record = await this.readAssetRecord(projectId, assetId);
+    if (!record) {
+      return null;
+    }
+    if (record.blob instanceof Blob) {
+      return record.blob;
+    }
+    if (record.bytes) {
+      return new Blob(
+        [record.bytes],
+        record.meta?.mime ? { type: record.meta.mime } : undefined
+      );
+    }
+    return toBlob(record.blob, record.meta);
   }
 
   public async listAssets(projectId: string): Promise<string[]> {
-    await this.openAndCloseDatabase();
-    throw new Error(
-      `IndexedDBAdapter.listAssets is not implemented for ${projectId}.`
+    const range = IDBKeyRange.bound([projectId, ""], [projectId, "\uFFFF"]);
+    const records = await this.withStore<AssetRecord[]>(
+      storeNames.assets,
+      "readonly",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      (store) => store.getAll(range)
     );
+    return records.map((record) => record.assetId);
   }
 
   public async writeUIState(state: UIState): Promise<void> {
@@ -505,5 +561,18 @@ export class IndexedDBAdapter implements StorageAdapter {
     await this.withStore<undefined>(storeNames.notes, "readwrite", (store) =>
       store.delete([projectId, noteId])
     );
+  }
+
+  private async readAssetRecord(
+    projectId: string,
+    assetId: string
+  ): Promise<AssetRecord | null> {
+    const record = await this.withStore<AssetRecord | undefined>(
+      storeNames.assets,
+      "readonly",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      (store) => store.get([projectId, assetId])
+    );
+    return record ?? null;
   }
 }

@@ -18,7 +18,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Implement IndexedDBAdapter with object stores per storage.md
 - [x] Implement Project create/read/update, default “Personal”
 - [x] Implement Note CRUD + soft delete + restore + permanent delete
-- [ ] Implement Asset storage (blob) in IDB
+- [x] Implement Asset storage (blob) in IDB
 - [ ] Unit tests for all IDB storage operations
 - [ ] E2E: create/edit note, reload persists
 
