@@ -8,9 +8,11 @@
   export let folders: FolderTree;
   export let depth = 0;
   export let expandedIds: SvelteSet<string>;
+  export let activeFolderId: string | null = null;
   export let editingFolderId: string | null = null;
   export let draftName = "";
   export let onToggle: (folderId: string) => void = () => {};
+  export let onSelect: (folderId: string) => void = () => {};
   export let onContextMenu: (folderId: string, event: MouseEvent) => void =
     () => {};
   export let onCommitRename: () => void = () => {};
@@ -21,6 +23,7 @@
   $: hasChildren = childFolderIds.length > 0;
   $: isExpanded = expandedIds.has(folderId);
   $: isEditing = editingFolderId === folderId;
+  $: isActive = activeFolderId === folderId;
 
   let renameInput: HTMLInputElement | null = null;
   let wasEditing = false;
@@ -44,16 +47,33 @@
       onCancelRename();
     }
   };
+
+  const handleSelect = (): void => {
+    if (isEditing) {
+      return;
+    }
+    onSelect(folderId);
+  };
+
+  const handleRowKeydown = (event: KeyboardEvent): void => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleSelect();
+    }
+  };
 </script>
 
 {#if folder}
   <div
     class="folder-row"
+    class:active={isActive}
     style={`--depth:${depth}`}
     data-testid={`folder-row-${folderId}`}
     role="treeitem"
-    aria-selected="false"
+    aria-selected={isActive ? "true" : "false"}
     tabindex="0"
+    on:click={handleSelect}
+    on:keydown={handleRowKeydown}
     on:contextmenu|preventDefault|stopPropagation={event =>
       onContextMenu(folderId, event)}
   >
@@ -93,9 +113,11 @@
           folderId={childId}
           {folders}
           {expandedIds}
+          {activeFolderId}
           {editingFolderId}
           bind:draftName={draftName}
           {onToggle}
+          {onSelect}
           {onContextMenu}
           {onCommitRename}
           {onCancelRename}
@@ -116,10 +138,26 @@
     border-radius: var(--r-sm);
     color: var(--text-0);
     cursor: pointer;
+    position: relative;
   }
 
   .folder-row:hover {
     background: var(--bg-3);
+  }
+
+  .folder-row.active {
+    background: var(--accent-2);
+  }
+
+  .folder-row.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    background: var(--accent-0);
+    border-radius: 3px;
   }
 
   .folder-chevron {
@@ -144,6 +182,10 @@
   .folder-label {
     font-size: 13px;
     color: var(--text-1);
+  }
+
+  .folder-row.active .folder-label {
+    color: var(--text-0);
   }
 
   .folder-input {

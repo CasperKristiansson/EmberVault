@@ -13,6 +13,8 @@
 
   export let folders: FolderTree = {};
   export let notesIndex: Record<string, NoteIndexEntry> = {};
+  export let activeFolderId: string | null = null;
+  export let onSelect: (folderId: string) => void = () => {};
   export let onCreate: (parentId: string | null) => Promise<string | null> =
     async () => null;
   export let onRename: (folderId: string, name: string) => Promise<void> =
@@ -154,12 +156,14 @@
         {folderId}
         {folders}
         {expandedIds}
+        {activeFolderId}
         {editingFolderId}
         bind:draftName={draftName}
         onToggle={toggleFolder}
         onContextMenu={openMenu}
         onCommitRename={commitRename}
         onCancelRename={cancelRename}
+        onSelect={onSelect}
       />
     {/each}
   {/if}

@@ -30,7 +30,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Implement folder tree (create/rename/delete empty)
 - [x] Implement note list with virtualization
 - [x] Component tests for layout focus + basic navigation
-- [ ] E2E: create folder, create note in folder, list shows correct
+- [x] E2E: create folder, create note in folder, list shows correct
 
 ## Milestone 3 — Block editor MVP (Tiptap)
 

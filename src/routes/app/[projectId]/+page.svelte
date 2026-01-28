@@ -13,6 +13,7 @@
     removeFolder,
     renameFolder as renameFolderEntry,
   } from "$lib/core/utils/folder-tree";
+  import { filterNotesByFolder } from "$lib/core/utils/notes-filter";
   import { createUlid } from "$lib/core/utils/ulid";
   import {
     resolveMobileView,
@@ -36,6 +37,7 @@
   let isLoading = true;
   let saveState: "idle" | "saving" | "saved" = "idle";
   let mobileView: MobileView = "notes";
+  let activeFolderId: string | null = null;
 
   const saveDelay = 400;
   let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -77,7 +79,7 @@
       title: "Untitled",
       createdAt: timestamp,
       updatedAt: timestamp,
-      folderId: null,
+      folderId: activeFolderId,
       tagIds: [],
       favorite: false,
       deletedAt: null,
@@ -102,6 +104,16 @@
 
   const sortNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] =>
     [...list].sort((first, second) => second.updatedAt - first.updatedAt);
+
+  $: activeFolderName =
+    activeFolderId && project
+      ? project.folders[activeFolderId]?.name ?? null
+      : null;
+  $: displayNotes = filterNotesByFolder(notes, activeFolderId);
+  $: noteListTitle = project
+    ? `${project.name} / ${activeFolderName ?? "All notes"}`
+    : "Notes";
+  $: noteListCount = displayNotes.length;
 
   const loadNotes = async (): Promise<void> => {
     if (!projectId) {
@@ -259,6 +271,9 @@
       updatedAt: Date.now(),
     };
     await persistProject(updatedProject);
+    if (activeFolderId === folderId) {
+      activeFolderId = null;
+    }
   };
 
   const switchProject = async (nextProjectId: string): Promise<void> => {
@@ -270,7 +285,12 @@
       ...currentState,
       lastProjectId: nextProjectId,
     });
+    activeFolderId = null;
     await goto(resolve("/app/[projectId]", { projectId: nextProjectId }));
+  };
+
+  const selectFolder = (folderId: string): void => {
+    activeFolderId = folderId;
   };
 
   onMount(() => {
@@ -291,6 +311,7 @@
       if (notes.length > 0) {
         await openNote(notes[0]?.id ?? "");
       }
+      activeFolderId = null;
       isLoading = false;
     };
     void initialize();
@@ -326,6 +347,8 @@
     <FolderTree
       folders={project?.folders ?? {}}
       notesIndex={project?.notesIndex ?? {}}
+      {activeFolderId}
+      onSelect={selectFolder}
       onCreate={createFolder}
       onRename={renameFolder}
       onDelete={deleteFolder}
@@ -335,8 +358,8 @@
   <div slot="note-list" class="note-list-content">
     <header class="note-list-header">
       <div>
-        <div class="note-list-title">Notes</div>
-        <div class="note-list-subtitle">{notes.length} total</div>
+        <div class="note-list-title">{noteListTitle}</div>
+        <div class="note-list-subtitle">{noteListCount} total</div>
       </div>
       <button
         class="button primary"
@@ -350,11 +373,11 @@
 
     {#if isLoading}
       <div class="note-list-empty">Loading notes...</div>
-    {:else if notes.length === 0}
+    {:else if displayNotes.length === 0}
       <div class="note-list-empty">No notes yet.</div>
     {:else}
       <NoteListVirtualized
-        {notes}
+        notes={displayNotes}
         activeNoteId={activeNote?.id ?? null}
         onSelect={noteId => void openNote(noteId)}
       />
@@ -517,6 +540,8 @@
     flex-direction: column;
     gap: 16px;
     font-size: 13px;
+    flex: 1;
+    min-height: 0;
   }
 
   .note-list-content {
