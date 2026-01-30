@@ -102,10 +102,11 @@
   };
 
   const deleteSlashIfPresent = (chain: SlashMenuChain): void => {
-    if (!editor || slashMenuSlashPosition === null) {
+    if (!editor) {
       return;
     }
-    const slashPos = slashMenuSlashPosition;
+    const fallbackPos = editor.state.selection.from - 1;
+    const slashPos = slashMenuSlashPosition ?? fallbackPos;
     if (slashPos < 0 || slashPos + 1 > editor.state.doc.content.size) {
       return;
     }
