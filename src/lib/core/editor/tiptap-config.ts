@@ -9,6 +9,7 @@ import { TaskItem } from "@tiptap/extension-task-item";
 import { TaskList } from "@tiptap/extension-task-list";
 import StarterKit from "@tiptap/starter-kit";
 import { common, createLowlight } from "lowlight";
+import { AssetImage } from "./image-extension";
 import type { Extensions } from "@tiptap/core";
 
 const lowlight = createLowlight(common);
@@ -28,6 +29,7 @@ export const createTiptapExtensions = (): Extensions => [
     undoRedo: {},
   }),
   CodeBlockLowlight.configure({ lowlight }),
+  AssetImage,
   TaskList,
   TaskItem,
   Table.configure({

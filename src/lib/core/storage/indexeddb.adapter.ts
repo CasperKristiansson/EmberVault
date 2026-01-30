@@ -44,7 +44,7 @@ type NoteRecord = {
 type AssetRecord = {
   projectId: string;
   assetId: string;
-  blob: Blob;
+  blob?: Blob;
   meta?: AssetMeta;
   bytes?: ArrayBuffer;
 };
@@ -434,7 +434,6 @@ export class IndexedDBAdapter implements StorageAdapter {
     const record: AssetRecord = {
       projectId: input.projectId,
       assetId: input.assetId,
-      blob: input.blob,
       meta: input.meta,
       bytes,
     };

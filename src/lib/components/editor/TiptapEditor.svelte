@@ -8,6 +8,7 @@
     type SlashMenuChain,
     type SlashMenuItemId,
   } from "$lib/core/editor/slash-menu";
+  import { extractImageFromClipboard } from "$lib/core/editor/images/paste";
   import {
     createEmptyDocument,
     createTiptapExtensions,
@@ -18,6 +19,14 @@
   export let editable = true;
   export let ariaLabel = "Note content";
   export let dataTestId = "note-body";
+  export let onImagePaste: (file: File | Blob) => Promise<{
+    assetId: string;
+    src: string;
+    alt?: string;
+    mime?: string;
+    width?: number;
+    height?: number;
+  } | null> = async () => null;
   export let onUpdate: (payload: {
     json: Record<string, unknown>;
     text: string;
@@ -26,6 +35,7 @@
   let element: HTMLDivElement | null = null;
   let editor: Editor | null = null;
   let lastContent: Record<string, unknown> | null = null;
+  let syntheticPasteHandler: ((event: Event) => void) | null = null;
 
   let slashMenuOpen = false;
   let slashMenuPosition: { x: number; y: number } | null = null;
@@ -139,6 +149,63 @@
     }
   };
 
+  const handleImagePaste = async (file: File | Blob): Promise<void> => {
+    if (!editor) {
+      return;
+    }
+    const result = await onImagePaste(file);
+    if (!result) {
+      return;
+    }
+    const attributes = {
+      src: result.src,
+      assetId: result.assetId,
+      ...(result.alt ? { alt: result.alt } : {}),
+      ...(result.mime ? { mime: result.mime } : {}),
+      ...(typeof result.width === "number" ? { width: result.width } : {}),
+      ...(typeof result.height === "number" ? { height: result.height } : {}),
+    };
+    editor.chain().focus().setImage(attributes).run();
+  };
+
+  const resolveDetailFile = (event: Event): File | Blob | null => {
+    if (!("detail" in event)) {
+      return null;
+    }
+    const detail = (event as CustomEvent<{ file?: unknown }>).detail;
+    if (detail && typeof detail === "object") {
+      const bytes = (detail as { bytes?: unknown }).bytes;
+      const mime = (detail as { mime?: unknown }).mime;
+      if (
+        Array.isArray(bytes) &&
+        bytes.every((entry) => typeof entry === "number")
+      ) {
+        const typedBytes = new Uint8Array(bytes);
+        return new Blob(
+          [typedBytes],
+          typeof mime === "string" ? { type: mime } : undefined
+        );
+      }
+    }
+    const file =
+      detail && typeof detail === "object"
+        ? (detail as { file?: unknown }).file
+        : null;
+    if (file instanceof File) {
+      return file;
+    }
+    if (file instanceof Blob) {
+      return file;
+    }
+    if (file && typeof file === "object") {
+      const candidate = file as { arrayBuffer?: unknown };
+      if (typeof candidate.arrayBuffer === "function") {
+        return file as Blob;
+      }
+    }
+    return null;
+  };
+
   const initializeEditor = (): void => {
     if (!element) {
       return;
@@ -193,6 +260,17 @@
           }
           return false;
         },
+        handlePaste: (_view, event) => {
+          const imageFile =
+            extractImageFromClipboard(event.clipboardData) ??
+            resolveDetailFile(event);
+          if (!imageFile) {
+            return false;
+          }
+          event.preventDefault();
+          void handleImagePaste(imageFile);
+          return true;
+        },
         handleTextInput: (_view, from, _to, text) => {
           if (text === "/" && editor && !editor.isActive("codeBlock")) {
             const slashPos = from;
@@ -217,6 +295,20 @@
       }
       slashMenuSlashPosition = transaction.mapping.map(slashMenuSlashPosition);
     });
+    syntheticPasteHandler = (event: Event): void => {
+      const file = resolveDetailFile(event);
+      if (!file) {
+        return;
+      }
+      event.preventDefault();
+      void handleImagePaste(file);
+    };
+    element.addEventListener("embervault-paste-image", syntheticPasteHandler);
+    (
+      globalThis as {
+        embervaultPasteImage?: (blob: File | Blob) => Promise<void>;
+      }
+    ).embervaultPasteImage = handleImagePaste;
     lastContent = content;
   };
 
@@ -243,8 +335,20 @@
     return () => {
       window.removeEventListener("click", handleClick);
       window.removeEventListener("keydown", handleKeydown);
+      if (element && syntheticPasteHandler) {
+        element.removeEventListener(
+          "embervault-paste-image",
+          syntheticPasteHandler
+        );
+      }
       editor?.destroy();
       editor = null;
+      syntheticPasteHandler = null;
+      (
+        globalThis as {
+          embervaultPasteImage?: (blob: File | Blob) => Promise<void>;
+        }
+      ).embervaultPasteImage = undefined;
     };
   });
 

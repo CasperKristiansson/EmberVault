@@ -61,6 +61,7 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
   - TaskList + TaskItem (checklists)
   - Table + TableRow + TableHeader + TableCell
   - CodeBlockLowlight + lowlight (syntax highlight)
+  - Image (asset-backed image blocks)
   - Link
   - Placeholder
   - History (undo/redo)

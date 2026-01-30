@@ -18,12 +18,14 @@
   import { filterNotesByFolder } from "$lib/core/utils/notes-filter";
   import { createUlid } from "$lib/core/utils/ulid";
   import { createDebouncedTask } from "$lib/core/utils/debounce";
+  import { hashBlobSha256 } from "$lib/core/utils/hash";
   import {
     resolveMobileView,
     type MobileView,
   } from "$lib/core/utils/mobile-view";
   import { IndexedDBAdapter } from "$lib/core/storage/indexeddb.adapter";
   import type {
+    AssetMeta,
     NoteDocumentFile,
     NoteIndexEntry,
     Project,
@@ -77,6 +79,58 @@
         plainText: "",
         outgoingLinks: [],
       },
+    };
+  };
+
+  const readImageMeta = async (file: Blob): Promise<AssetMeta> => {
+    const meta: AssetMeta = {
+      mime: file.type,
+      size: file.size,
+    };
+    if (!("createImageBitmap" in window)) {
+      return meta;
+    }
+    try {
+      const bitmap = await createImageBitmap(file);
+      meta.width = bitmap.width;
+      meta.height = bitmap.height;
+      bitmap.close();
+    } catch {
+      return meta;
+    }
+    return meta;
+  };
+
+  const handleImagePaste = async (
+    file: File | Blob
+  ): Promise<{
+    assetId: string;
+    src: string;
+    alt?: string;
+    mime?: string;
+    width?: number;
+    height?: number;
+  } | null> => {
+    if (!projectId) {
+      return null;
+    }
+    const assetId = await hashBlobSha256(file);
+    const meta = await readImageMeta(file);
+    await adapter.writeAsset({
+      projectId,
+      assetId,
+      blob: file,
+      meta,
+    });
+    const src = URL.createObjectURL(file);
+    const altText = file instanceof File ? file.name : "Pasted image";
+    return {
+      assetId,
+      src,
+      alt: altText,
+      mime: meta.mime,
+      width: meta.width,
+      height: meta.height,
     };
   };
 
@@ -432,6 +486,7 @@
           content={editorContent}
           ariaLabel="Note content"
           dataTestId="note-body"
+          onImagePaste={handleImagePaste}
           onUpdate={handleEditorUpdate}
         />
       </div>

@@ -11,6 +11,7 @@ const requiredExtensions = [
   "tableCell",
   "taskList",
   "taskItem",
+  "image",
 ];
 
 describe("tiptap config", () => {
