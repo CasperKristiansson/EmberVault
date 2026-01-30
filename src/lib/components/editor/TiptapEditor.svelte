@@ -8,7 +8,10 @@
     type SlashMenuChain,
     type SlashMenuItemId,
   } from "$lib/core/editor/slash-menu";
-  import { extractImageFromClipboard } from "$lib/core/editor/images/paste";
+  import {
+    extractImageFromClipboard,
+    extractImageFromDataTransfer,
+  } from "$lib/core/editor/images/paste";
   import {
     createEmptyDocument,
     createTiptapExtensions,
@@ -220,6 +223,19 @@
           role: "textbox",
           spellcheck: "true",
         },
+        handleDOMEvents: {
+          drop: (_view, event) => {
+            const imageFile = extractImageFromDataTransfer(
+              (event as DragEvent).dataTransfer
+            );
+            if (!imageFile) {
+              return false;
+            }
+            event.preventDefault();
+            void handleImagePaste(imageFile);
+            return true;
+          },
+        },
         handleKeyDown: (_view, event) => {
           if (slashMenuOpen) {
             if (event.key === "ArrowDown") {
@@ -264,6 +280,18 @@
           const imageFile =
             extractImageFromClipboard(event.clipboardData) ??
             resolveDetailFile(event);
+          if (!imageFile) {
+            return false;
+          }
+          event.preventDefault();
+          void handleImagePaste(imageFile);
+          return true;
+        },
+        handleDrop: (_view, event) => {
+          if (event.defaultPrevented) {
+            return true;
+          }
+          const imageFile = extractImageFromDataTransfer(event.dataTransfer);
           if (!imageFile) {
             return false;
           }

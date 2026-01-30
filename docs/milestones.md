@@ -45,7 +45,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 ## Milestone 4 — Images + LaTeX
 
 - [x] Paste image -> asset stored -> image block inserted
-- [ ] Drag-drop image -> same behavior
+- [x] Drag-drop image -> same behavior
 - [ ] Image rendering with caption + lightbox modal (blur rules)
 - [ ] Implement math nodes + KaTeX render (inline + block)
 - [ ] Unit tests for asset dedupe + math serialize/deserialize
