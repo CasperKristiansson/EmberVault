@@ -36,7 +36,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 
 - [x] Integrate Tiptap editor with required extensions (checklist, table, code, link)
 - [x] Title field + autosave pipeline (debounced)
-- [ ] Slash menu for block insertion
+- [x] Slash menu for block insertion
 - [ ] Undo/redo wired
 - [ ] Code block syntax highlighting
 - [ ] Unit tests: editor doc save/load stable

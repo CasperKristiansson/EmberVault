@@ -2,9 +2,17 @@
   import { onMount } from "svelte";
   import { Editor, type JSONContent } from "@tiptap/core";
   import {
+    applySlashMenuCommand,
+    getSlashMenuItems,
+    isSlashMenuItemEnabled,
+    type SlashMenuChain,
+    type SlashMenuItemId,
+  } from "$lib/core/editor/slash-menu";
+  import {
     createEmptyDocument,
     createTiptapExtensions,
   } from "$lib/core/editor/tiptap-config";
+  import SlashMenu from "./SlashMenu.svelte";
 
   export let content: Record<string, unknown> = createEmptyDocument();
   export let editable = true;
@@ -18,6 +26,117 @@
   let element: HTMLDivElement | null = null;
   let editor: Editor | null = null;
   let lastContent: Record<string, unknown> | null = null;
+
+  let slashMenuOpen = false;
+  let slashMenuPosition: { x: number; y: number } | null = null;
+  let slashMenuSelectedIndex = 0;
+  let slashMenuElement: HTMLDivElement | null = null;
+  let slashMenuSlashPosition: number | null = null;
+  const slashMenuItems = getSlashMenuItems();
+
+  const menuWidth = 240;
+  const menuHeight = 320;
+  const menuMargin = 8;
+
+  const clamp = (value: number, min: number, max: number): number =>
+    Math.min(Math.max(value, min), max);
+
+  const getFirstEnabledIndex = (): number => {
+    const index = slashMenuItems.findIndex(item => item.enabled);
+    return index === -1 ? 0 : index;
+  };
+
+  const getNextEnabledIndex = (
+    startIndex: number,
+    direction: 1 | -1
+  ): number => {
+    if (slashMenuItems.length === 0) {
+      return 0;
+    }
+    let nextIndex = startIndex;
+    for (let step = 0; step < slashMenuItems.length; step += 1) {
+      nextIndex =
+        (nextIndex + direction + slashMenuItems.length) %
+        slashMenuItems.length;
+      if (slashMenuItems[nextIndex]?.enabled) {
+        return nextIndex;
+      }
+    }
+    return startIndex;
+  };
+
+  const resolveMenuPosition = (coords: {
+    left: number;
+    bottom: number;
+  }): { x: number; y: number } => {
+    const maxX = Math.max(menuMargin, window.innerWidth - menuWidth - menuMargin);
+    const maxY = Math.max(
+      menuMargin,
+      window.innerHeight - menuHeight - menuMargin
+    );
+
+    return {
+      x: clamp(coords.left, menuMargin, maxX),
+      y: clamp(coords.bottom + 6, menuMargin, maxY),
+    };
+  };
+
+  const openSlashMenu = (slashPos: number | null): void => {
+    if (!editor) {
+      return;
+    }
+    const coords = editor.view.coordsAtPos(editor.state.selection.from);
+    slashMenuPosition = resolveMenuPosition({
+      left: coords.left,
+      bottom: coords.bottom,
+    });
+    slashMenuOpen = true;
+    slashMenuSlashPosition = slashPos;
+    slashMenuSelectedIndex = getFirstEnabledIndex();
+  };
+
+  const closeSlashMenu = (): void => {
+    slashMenuOpen = false;
+    slashMenuPosition = null;
+    slashMenuSlashPosition = null;
+  };
+
+  const deleteSlashIfPresent = (chain: SlashMenuChain): void => {
+    if (!editor || slashMenuSlashPosition === null) {
+      return;
+    }
+    const slashPos = slashMenuSlashPosition;
+    if (slashPos < 0 || slashPos + 1 > editor.state.doc.content.size) {
+      return;
+    }
+    const text = editor.state.doc.textBetween(
+      slashPos,
+      slashPos + 1,
+      "\0",
+      "\0"
+    );
+    if (text === "/") {
+      chain.deleteRange({ from: slashPos, to: slashPos + 1 });
+    }
+  };
+
+  const selectSlashMenuItem = (itemId: SlashMenuItemId): void => {
+    if (!editor || !isSlashMenuItemEnabled(itemId)) {
+      return;
+    }
+    const chain = editor.chain().focus() as SlashMenuChain;
+    deleteSlashIfPresent(chain);
+    if (applySlashMenuCommand(chain, itemId)) {
+      chain.run();
+    }
+    closeSlashMenu();
+  };
+
+  const handleSlashMenuHighlight = (index: number): void => {
+    if (slashMenuItems[index]?.enabled) {
+      slashMenuSelectedIndex = index;
+    }
+  };
 
   const initializeEditor = (): void => {
     if (!element) {
@@ -33,6 +152,53 @@
           role: "textbox",
           spellcheck: "true",
         },
+        handleKeyDown: (_view, event) => {
+          if (slashMenuOpen) {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              slashMenuSelectedIndex = getNextEnabledIndex(
+                slashMenuSelectedIndex,
+                1
+              );
+              return true;
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              slashMenuSelectedIndex = getNextEnabledIndex(
+                slashMenuSelectedIndex,
+                -1
+              );
+              return true;
+            }
+            if (event.key === "Enter") {
+              event.preventDefault();
+              const selected = slashMenuItems[slashMenuSelectedIndex];
+              if (selected) {
+                selectSlashMenuItem(selected.id);
+              }
+              return true;
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              closeSlashMenu();
+              return true;
+            }
+          }
+
+          if ((event.metaKey || event.ctrlKey) && event.key === "/") {
+            event.preventDefault();
+            openSlashMenu(null);
+            return true;
+          }
+          return false;
+        },
+        handleTextInput: (_view, from, _to, text) => {
+          if (text === "/" && editor && !editor.isActive("codeBlock")) {
+            const slashPos = from;
+            queueMicrotask(() => openSlashMenu(slashPos));
+          }
+          return false;
+        },
       },
       extensions: createTiptapExtensions(),
       content: content as JSONContent,
@@ -44,12 +210,38 @@
         });
       },
     });
+    editor.on("transaction", ({ transaction }) => {
+      if (!slashMenuOpen || slashMenuSlashPosition === null) {
+        return;
+      }
+      slashMenuSlashPosition = transaction.mapping.map(slashMenuSlashPosition);
+    });
     lastContent = content;
   };
 
   onMount(() => {
     initializeEditor();
+    const handleClick = (event: MouseEvent) => {
+      if (!slashMenuOpen) {
+        return;
+      }
+      if (slashMenuElement && slashMenuElement.contains(event.target as Node)) {
+        return;
+      }
+      closeSlashMenu();
+    };
+
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && slashMenuOpen) {
+        closeSlashMenu();
+      }
+    };
+
+    window.addEventListener("click", handleClick);
+    window.addEventListener("keydown", handleKeydown);
     return () => {
+      window.removeEventListener("click", handleClick);
+      window.removeEventListener("keydown", handleKeydown);
       editor?.destroy();
       editor = null;
     };
@@ -75,6 +267,16 @@
     class="editor-mount"
   ></div>
 </div>
+
+<SlashMenu
+  open={slashMenuOpen}
+  position={slashMenuPosition}
+  items={slashMenuItems}
+  selectedIndex={slashMenuSelectedIndex}
+  bind:element={slashMenuElement}
+  onSelect={selectSlashMenuItem}
+  onHighlight={handleSlashMenuHighlight}
+/>
 
 <style>
   .editor-surface {
