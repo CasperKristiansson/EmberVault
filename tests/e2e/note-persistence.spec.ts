@@ -9,11 +9,13 @@ test("create and edit a note persists after reload", async ({ page }) => {
   await page.getByTestId("new-note").click();
 
   const titleInput = page.getByTestId("note-title");
-  const bodyInput = page.getByTestId("note-body");
+  const bodyEditor = page.getByTestId("note-body");
 
   await expect(titleInput).toBeVisible();
+  await expect(bodyEditor).toBeVisible();
   await titleInput.fill("E2E Note");
-  await bodyInput.fill("Hello from Playwright");
+  await bodyEditor.click();
+  await page.keyboard.type("Hello from Playwright");
 
   await expect(page.locator('[data-save-state="saving"]')).toBeVisible();
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
@@ -21,5 +23,5 @@ test("create and edit a note persists after reload", async ({ page }) => {
   await page.reload();
 
   await expect(titleInput).toHaveValue("E2E Note");
-  await expect(bodyInput).toHaveValue("Hello from Playwright");
+  await expect(bodyEditor).toContainText("Hello from Playwright");
 });

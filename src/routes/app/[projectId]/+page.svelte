@@ -4,9 +4,11 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/stores";
   import AppShell from "$lib/components/AppShell.svelte";
+  import TiptapEditor from "$lib/components/editor/TiptapEditor.svelte";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
   import ProjectSwitcher from "$lib/components/sidebar/ProjectSwitcher.svelte";
+  import { createEmptyDocument } from "$lib/core/editor/tiptap-config";
   import {
     addFolder,
     isFolderEmpty,
@@ -15,6 +17,7 @@
   } from "$lib/core/utils/folder-tree";
   import { filterNotesByFolder } from "$lib/core/utils/notes-filter";
   import { createUlid } from "$lib/core/utils/ulid";
+  import { createDebouncedTask } from "$lib/core/utils/debounce";
   import {
     resolveMobileView,
     type MobileView,
@@ -33,33 +36,18 @@
   let notes: NoteIndexEntry[] = [];
   let activeNote: NoteDocumentFile | null = null;
   let titleValue = "";
-  let bodyValue = "";
+  let editorContent = createEmptyDocument();
+  let editorPlainText = "";
   let isLoading = true;
   let saveState: "idle" | "saving" | "saved" = "idle";
   let mobileView: MobileView = "notes";
   let activeFolderId: string | null = null;
 
   const saveDelay = 400;
-  let saveTimeout: ReturnType<typeof setTimeout> | null = null;
   let saveToken = 0;
 
   let projectId = "";
   $: projectId = $page.params.projectId ?? "";
-
-  const createPmDoc = (text: string): Record<string, unknown> => {
-    if (text.trim().length === 0) {
-      return { type: "doc", content: [] };
-    }
-    return {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text }],
-        },
-      ],
-    };
-  };
 
   const toDerivedMarkdown = (title: string, body: string): string => {
     const trimmedTitle = title.trim();
@@ -76,7 +64,7 @@
     const timestamp = Date.now();
     return {
       id: createUlid(),
-      title: "Untitled",
+      title: "",
       createdAt: timestamp,
       updatedAt: timestamp,
       folderId: activeFolderId,
@@ -84,7 +72,7 @@
       favorite: false,
       deletedAt: null,
       customFields: {},
-      pmDoc: createPmDoc(""),
+      pmDoc: createEmptyDocument(),
       derived: {
         plainText: "",
         outgoingLinks: [],
@@ -95,7 +83,9 @@
   const setActiveNote = (note: NoteDocumentFile | null): void => {
     activeNote = note;
     titleValue = note?.title ?? "";
-    bodyValue = note?.derived?.plainText ?? "";
+    editorContent = note?.pmDoc ?? createEmptyDocument();
+    editorPlainText = note?.derived?.plainText ?? "";
+    saveState = note ? "saved" : "idle";
   };
 
   const setMobileView = (view: MobileView): void => {
@@ -137,10 +127,10 @@
   };
 
   const openNote = async (noteId: string): Promise<void> => {
+    await flushPendingSave();
     const note = await adapter.readNote(projectId, noteId);
     if (note) {
       setActiveNote(note);
-      saveState = "saved";
     }
   };
 
@@ -156,35 +146,49 @@
     });
   };
 
-  const scheduleSave = (note: NoteDocumentFile): void => {
-    saveState = "saving";
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-    }
-    const token = (saveToken += 1);
-    const noteSnapshot = structuredClone(note);
-    saveTimeout = setTimeout(async () => {
+  const debouncedSave = createDebouncedTask(
+    async (noteSnapshot: NoteDocumentFile, token: number) => {
       await persistNote(noteSnapshot);
       await loadNotes();
       if (token === saveToken) {
         saveState = "saved";
       }
-    }, saveDelay);
+    },
+    saveDelay
+  );
+
+  const scheduleSave = (note: NoteDocumentFile): void => {
+    saveState = "saving";
+    const token = (saveToken += 1);
+    const noteSnapshot = structuredClone(note);
+    debouncedSave.schedule(noteSnapshot, token);
   };
 
-  const applyEdits = (): void => {
+  const flushPendingSave = async (): Promise<void> => {
+    if (!debouncedSave.pending()) {
+      return;
+    }
+    await debouncedSave.flush();
+  };
+
+  const applyEdits = (
+    pmDoc: Record<string, unknown> | null = null,
+    plainText: string | null = null
+  ): void => {
     if (!activeNote) {
       return;
     }
     const timestamp = Date.now();
-    const resolvedTitle = titleValue.trim().length > 0 ? titleValue : "Untitled";
+    const resolvedTitle = titleValue.trim();
+    const resolvedDoc = pmDoc ?? activeNote.pmDoc ?? createEmptyDocument();
+    const resolvedPlainText = plainText ?? editorPlainText;
     const updatedNote: NoteDocumentFile = {
       ...activeNote,
       title: resolvedTitle,
       updatedAt: timestamp,
-      pmDoc: createPmDoc(bodyValue),
+      pmDoc: resolvedDoc,
       derived: {
-        plainText: bodyValue,
+        plainText: resolvedPlainText,
         outgoingLinks: activeNote.derived?.outgoingLinks ?? [],
       },
     };
@@ -201,16 +205,16 @@
     applyEdits();
   };
 
-  const handleBodyInput = (event: Event): void => {
-    const target = event.currentTarget;
-    if (!(target instanceof HTMLTextAreaElement)) {
-      return;
-    }
-    bodyValue = target.value;
-    applyEdits();
+  const handleEditorUpdate = (payload: {
+    json: Record<string, unknown>;
+    text: string;
+  }): void => {
+    editorPlainText = payload.text;
+    applyEdits(payload.json, payload.text);
   };
 
   const createNote = async (): Promise<void> => {
+    await flushPendingSave();
     const note = createNoteDocument();
     setActiveNote(note);
     saveState = "saving";
@@ -280,6 +284,7 @@
     if (!nextProjectId || nextProjectId === projectId) {
       return;
     }
+    await flushPendingSave();
     const currentState = (await adapter.readUIState()) ?? {};
     await adapter.writeUIState({
       ...currentState,
@@ -315,6 +320,24 @@
       isLoading = false;
     };
     void initialize();
+
+    const handleVisibilityChange = (): void => {
+      if (document.visibilityState === "hidden") {
+        void flushPendingSave();
+      }
+    };
+
+    const handleBeforeUnload = (): void => {
+      void flushPendingSave();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
   });
 
   $: {
@@ -390,10 +413,9 @@
     {:else if !activeNote}
       <div class="editor-empty">Select a note to start writing.</div>
     {:else}
-      <label class="field">
-        <span class="field-label">Title</span>
+      <div class="editor-header">
         <input
-          class="field-input"
+          class="title-input field-input"
           data-testid="note-title"
           type="text"
           placeholder="Untitled"
@@ -401,19 +423,18 @@
           on:input={handleTitleInput}
           aria-label="Note title"
         />
-      </label>
+        <div class="chips-row" aria-label="Metadata chips"></div>
+      </div>
 
-      <label class="field field-body">
+      <div class="field field-body">
         <span class="field-label">Content</span>
-        <textarea
-          class="field-textarea"
-          data-testid="note-body"
-          placeholder="Start writing..."
-          value={bodyValue}
-          on:input={handleBodyInput}
-          aria-label="Note content"
-        ></textarea>
-      </label>
+        <TiptapEditor
+          content={editorContent}
+          ariaLabel="Note content"
+          dataTestId="note-body"
+          onUpdate={handleEditorUpdate}
+        />
+      </div>
     {/if}
   </div>
 
@@ -579,6 +600,24 @@
     gap: 16px;
   }
 
+  .editor-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .title-input {
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  .chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   .editor-empty {
     color: var(--text-2);
   }
@@ -595,7 +634,7 @@
   }
 
   .field-input,
-  .field-textarea {
+  .field-input {
     width: 100%;
     background: var(--bg-2);
     border: 1px solid var(--stroke-0);
@@ -605,16 +644,9 @@
   }
 
   .field-input:focus,
-  .field-textarea:focus {
+  .field-input:focus {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
-  }
-
-  .field-textarea {
-    min-height: 320px;
-    resize: vertical;
-    line-height: 1.55;
-    font-size: 15px;
   }
 
   .button {

@@ -55,6 +55,7 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
 ### 2.2 Editor
 
 - Tiptap v2 (ProseMirror) for the block editor
+- Tiptap packages: @tiptap/core, @tiptap/pm, @tiptap/starter-kit
 - Key extensions:
   - StarterKit (selectively enabled)
   - TaskList + TaskItem (checklists)
