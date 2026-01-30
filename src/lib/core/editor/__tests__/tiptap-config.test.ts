@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/arrow-function-convention */
 import { describe, expect, it } from "vitest";
 import { createEmptyDocument, createTiptapExtensions } from "../tiptap-config";
 
@@ -18,6 +19,12 @@ describe("tiptap config", () => {
     const names = extensions.map(({ name }) => name);
 
     expect(names).toEqual(expect.arrayContaining(requiredExtensions));
+
+    const codeBlockExtension = extensions.find(
+      (extension) => extension.name === "codeBlock"
+    );
+
+    expect(codeBlockExtension?.options).toHaveProperty("lowlight");
   });
 
   it("creates an empty doc shape", () => {

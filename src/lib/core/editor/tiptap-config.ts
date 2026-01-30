@@ -1,4 +1,4 @@
-import { CodeBlock } from "@tiptap/extension-code-block";
+import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import { Link } from "@tiptap/extension-link";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { Table } from "@tiptap/extension-table";
@@ -8,7 +8,10 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TaskItem } from "@tiptap/extension-task-item";
 import { TaskList } from "@tiptap/extension-task-list";
 import StarterKit from "@tiptap/starter-kit";
+import { common, createLowlight } from "lowlight";
 import type { Extensions } from "@tiptap/core";
+
+const lowlight = createLowlight(common);
 
 const emptyDocument: Record<string, unknown> = {
   type: "doc",
@@ -24,7 +27,7 @@ export const createTiptapExtensions = (): Extensions => [
     link: false,
     undoRedo: {},
   }),
-  CodeBlock,
+  CodeBlockLowlight.configure({ lowlight }),
   TaskList,
   TaskItem,
   Table.configure({

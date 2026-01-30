@@ -324,6 +324,42 @@
     overflow-x: auto;
   }
 
+  .editor-surface :global(.ProseMirror pre code) {
+    color: var(--text-0);
+  }
+
+  .editor-surface :global(.ProseMirror pre .hljs-comment),
+  .editor-surface :global(.ProseMirror pre .hljs-quote) {
+    color: var(--text-2);
+  }
+
+  .editor-surface :global(.ProseMirror pre .hljs-keyword),
+  .editor-surface :global(.ProseMirror pre .hljs-selector-tag),
+  .editor-surface :global(.ProseMirror pre .hljs-literal) {
+    color: var(--accent-0);
+  }
+
+  .editor-surface :global(.ProseMirror pre .hljs-string),
+  .editor-surface :global(.ProseMirror pre .hljs-regexp) {
+    color: var(--accent-1);
+  }
+
+  .editor-surface :global(.ProseMirror pre .hljs-title),
+  .editor-surface :global(.ProseMirror pre .hljs-function) {
+    color: var(--warning);
+  }
+
+  .editor-surface :global(.ProseMirror pre .hljs-attr),
+  .editor-surface :global(.ProseMirror pre .hljs-attribute) {
+    color: var(--success);
+  }
+
+  .editor-surface :global(.ProseMirror pre .hljs-number),
+  .editor-surface :global(.ProseMirror pre .hljs-symbol),
+  .editor-surface :global(.ProseMirror pre .hljs-built_in) {
+    color: var(--info);
+  }
+
   .editor-surface :global(.ProseMirror code) {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
       "Liberation Mono", "Courier New", monospace;
