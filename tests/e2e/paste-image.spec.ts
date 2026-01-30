@@ -5,6 +5,12 @@ const pngBase64 =
 const noteBodyTestId = "note-body";
 const pngMime = "image/png";
 const noteBodySelector = `[data-testid="${noteBodyTestId}"]`;
+const captionText = "Caption text";
+const onboardingPath = "/onboarding";
+const useBrowserStorageTestId = "use-browser-storage";
+const newNoteTestId = "new-note";
+const imageSelector = "img[data-asset-id]";
+const editorMountSelector = ".editor-mount";
 
 const isContentEditable = function isContentEditable(
   selector: string
@@ -14,11 +20,11 @@ const isContentEditable = function isContentEditable(
 };
 
 test("paste image inserts an image block", async ({ page }) => {
-  await page.goto("/onboarding");
-  await page.getByTestId("use-browser-storage").click();
+  await page.goto(onboardingPath);
+  await page.getByTestId(useBrowserStorageTestId).click();
   await page.waitForURL(/\/app\/.+/);
 
-  await page.getByTestId("new-note").click();
+  await page.getByTestId(newNoteTestId).click();
 
   const editor = page.getByTestId(noteBodyTestId);
   await editor.click();
@@ -57,20 +63,20 @@ test("paste image inserts an image block", async ({ page }) => {
       const target = document.querySelector(selector);
       target?.dispatchEvent(event);
     },
-    [pngBase64, pngMime, ".editor-mount"]
+    [pngBase64, pngMime, editorMountSelector]
   );
 
-  const image = page.locator("img[data-asset-id]");
+  const image = page.locator(imageSelector);
   await expect(image).toBeVisible({ timeout: 10_000 });
   await expect(image).toHaveAttribute("data-asset-id", /[\da-f]{64}/);
 });
 
 test("drag-drop image inserts an image block", async ({ page }) => {
-  await page.goto("/onboarding");
-  await page.getByTestId("use-browser-storage").click();
+  await page.goto(onboardingPath);
+  await page.getByTestId(useBrowserStorageTestId).click();
   await page.waitForURL(/\/app\/.+/);
 
-  await page.getByTestId("new-note").click();
+  await page.getByTestId(newNoteTestId).click();
 
   const editor = page.getByTestId(noteBodyTestId);
   await editor.click();
@@ -110,7 +116,60 @@ test("drag-drop image inserts an image block", async ({ page }) => {
     [pngBase64, pngMime, noteBodySelector]
   );
 
-  const image = page.locator("img[data-asset-id]");
+  const image = page.locator(imageSelector);
   await expect(image).toBeVisible({ timeout: 10_000 });
   await expect(image).toHaveAttribute("data-asset-id", /[\da-f]{64}/);
+});
+
+test("image caption renders and opens lightbox", async ({ page }) => {
+  await page.goto(onboardingPath);
+  await page.getByTestId(useBrowserStorageTestId).click();
+  await page.waitForURL(/\/app\/.+/);
+
+  await page.getByTestId(newNoteTestId).click();
+
+  const editor = page.getByTestId(noteBodyTestId);
+  await editor.click();
+  await page.waitForFunction(isContentEditable, noteBodySelector);
+
+  await page.evaluate(
+    async ([base64, mime]) => {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      const startIndex = 0;
+      const step = 1;
+      for (let index = startIndex; index < binary.length; index += step) {
+        const codePoint = binary.codePointAt(index);
+        if (typeof codePoint === "number") {
+          bytes[index] = codePoint;
+        }
+      }
+      const blob = new Blob([bytes], { type: mime });
+      // eslint-disable-next-line no-unused-vars
+      type PasteImageHandler = (blob: Blob) => Promise<void>;
+      const pasteHandler = (
+        globalThis as {
+          embervaultPasteImage?: PasteImageHandler;
+        }
+      ).embervaultPasteImage;
+      if (typeof pasteHandler === "function") {
+        await pasteHandler(blob);
+      }
+    },
+    [pngBase64, pngMime]
+  );
+
+  const caption = page.locator("figure.embervault-image figcaption");
+  await caption.evaluate((node, text) => {
+    node.textContent = text;
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+  }, captionText);
+  await expect(caption).toContainText(captionText);
+
+  const image = page.locator(imageSelector);
+  await image.click();
+
+  const lightbox = page.getByTestId("image-lightbox");
+  await expect(lightbox).toBeVisible();
+  await expect(lightbox).toContainText(captionText);
 });

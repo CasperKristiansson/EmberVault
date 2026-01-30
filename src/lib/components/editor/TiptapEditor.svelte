@@ -39,6 +39,7 @@
   let editor: Editor | null = null;
   let lastContent: Record<string, unknown> | null = null;
   let syntheticPasteHandler: ((event: Event) => void) | null = null;
+  let imageClickHandler: ((event: MouseEvent) => void) | null = null;
 
   let slashMenuOpen = false;
   let slashMenuPosition: { x: number; y: number } | null = null;
@@ -46,6 +47,12 @@
   let slashMenuElement: HTMLDivElement | null = null;
   let slashMenuSlashPosition: number | null = null;
   const slashMenuItems = getSlashMenuItems();
+
+  let lightboxOpen = false;
+  let lightboxSrc = "";
+  let lightboxAlt = "";
+  let lightboxCaption = "";
+  let lightboxBackdrop: HTMLDivElement | null = null;
 
   const menuWidth = 240;
   const menuHeight = 320;
@@ -169,6 +176,50 @@
       ...(typeof result.height === "number" ? { height: result.height } : {}),
     };
     editor.chain().focus().setImage(attributes).run();
+  };
+
+  const resolveImageTarget = (
+    target: EventTarget | null
+  ): HTMLImageElement | null => {
+    if (!target) {
+      return null;
+    }
+    if (target instanceof HTMLImageElement) {
+      return target.getAttribute("data-asset-id") ? target : null;
+    }
+    if (target instanceof HTMLElement) {
+      const candidate = target.closest("img[data-asset-id]");
+      return candidate instanceof HTMLImageElement ? candidate : null;
+    }
+    return null;
+  };
+
+  const openLightbox = (image: HTMLImageElement): void => {
+    lightboxSrc = image.src;
+    lightboxAlt = image.alt ?? "";
+    const figure = image.closest("figure");
+    lightboxCaption = figure?.getAttribute("data-caption") ?? "";
+    lightboxOpen = Boolean(lightboxSrc);
+  };
+
+  const closeLightbox = (): void => {
+    lightboxOpen = false;
+    lightboxSrc = "";
+    lightboxAlt = "";
+    lightboxCaption = "";
+  };
+
+  const handleLightboxClick = (event: MouseEvent): void => {
+    if (event.currentTarget === event.target) {
+      closeLightbox();
+    }
+  };
+
+  const handleLightboxKeydown = (event: KeyboardEvent): void => {
+    if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      closeLightbox();
+    }
   };
 
   const resolveDetailFile = (event: Event): File | Blob | null => {
@@ -337,6 +388,15 @@
         embervaultPasteImage?: (blob: File | Blob) => Promise<void>;
       }
     ).embervaultPasteImage = handleImagePaste;
+    imageClickHandler = (event: MouseEvent): void => {
+      const image = resolveImageTarget(event.target);
+      if (!image) {
+        return;
+      }
+      event.preventDefault();
+      openLightbox(image);
+    };
+    element.addEventListener("click", imageClickHandler);
     lastContent = content;
   };
 
@@ -353,7 +413,14 @@
     };
 
     const handleKeydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && slashMenuOpen) {
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (lightboxOpen) {
+        closeLightbox();
+        return;
+      }
+      if (slashMenuOpen) {
         closeSlashMenu();
       }
     };
@@ -369,9 +436,13 @@
           syntheticPasteHandler
         );
       }
+      if (element && imageClickHandler) {
+        element.removeEventListener("click", imageClickHandler);
+      }
       editor?.destroy();
       editor = null;
       syntheticPasteHandler = null;
+      imageClickHandler = null;
       (
         globalThis as {
           embervaultPasteImage?: (blob: File | Blob) => Promise<void>;
@@ -392,6 +463,12 @@
     editor.commands.setContent(content as JSONContent, { emitUpdate: false });
     lastContent = content;
   }
+
+  $: if (lightboxOpen && lightboxBackdrop) {
+    queueMicrotask(() => {
+      lightboxBackdrop?.focus();
+    });
+  }
 </script>
 
 <div class="editor-surface" data-testid="tiptap-surface">
@@ -410,6 +487,27 @@
   onSelect={selectSlashMenuItem}
   onHighlight={handleSlashMenuHighlight}
 />
+
+{#if lightboxOpen}
+  <div
+    class="lightbox-backdrop"
+    data-testid="image-lightbox"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Image preview"
+    tabindex="0"
+    bind:this={lightboxBackdrop}
+    on:click={handleLightboxClick}
+    on:keydown={handleLightboxKeydown}
+  >
+    <div class="lightbox-panel" role="document">
+      <img class="lightbox-image" src={lightboxSrc} alt={lightboxAlt} />
+      {#if lightboxCaption}
+        <div class="lightbox-caption">{lightboxCaption}</div>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <style>
   .editor-surface {
@@ -542,5 +640,69 @@
     float: left;
     height: 0;
     pointer-events: none;
+  }
+
+  .editor-surface :global(.embervault-image) {
+    margin: 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .editor-surface :global(.embervault-image img) {
+    max-width: 100%;
+    border-radius: var(--r-md);
+    cursor: zoom-in;
+    display: block;
+  }
+
+  .editor-surface :global(.embervault-image figcaption) {
+    font-size: 12px;
+    color: var(--text-2);
+    outline: none;
+  }
+
+  .editor-surface :global(.embervault-image figcaption[data-empty="true"]) {
+    min-height: 16px;
+  }
+
+  .editor-surface
+    :global(.embervault-image figcaption[data-empty="true"]::before) {
+    content: attr(data-placeholder);
+    color: var(--text-2);
+  }
+
+  .lightbox-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(10px) saturate(1.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 50;
+  }
+
+  .lightbox-panel {
+    background: var(--bg-1);
+    border: 1px solid var(--stroke-0);
+    box-shadow: var(--shadow-panel);
+    border-radius: var(--r-md);
+    padding: 16px;
+    max-width: min(92vw, 960px);
+  }
+
+  .lightbox-image {
+    display: block;
+    max-width: 100%;
+    max-height: 80vh;
+    border-radius: var(--r-md);
+  }
+
+  .lightbox-caption {
+    margin-top: 8px;
+    color: var(--text-2);
+    font-size: 13px;
   }
 </style>
