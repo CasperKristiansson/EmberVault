@@ -39,7 +39,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Slash menu for block insertion
 - [x] Undo/redo wired
 - [x] Code block syntax highlighting
-- [ ] Unit tests: editor doc save/load stable
+- [x] Unit tests: editor doc save/load stable
 - [ ] E2E: create blocks, reload preserves structure
 
 ## Milestone 4 — Images + LaTeX
