@@ -22,7 +22,7 @@ export const createTiptapExtensions = (): Extensions => [
   StarterKit.configure({
     codeBlock: false,
     link: false,
-    undoRedo: false,
+    undoRedo: {},
   }),
   CodeBlock,
   TaskList,
