@@ -66,7 +66,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Split view mode with two panes
 - [x] Drag tab to other pane
 - [x] Drag notes to folders + reorder within folder (persist order)
-- [ ] Component tests for tab close + split toggle
+- [x] Component tests for tab close + split toggle
 - [ ] E2E: open split, edit both, reload persists
 
 ## Milestone 7 — Backlinks + graph view
