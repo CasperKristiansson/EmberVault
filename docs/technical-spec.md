@@ -69,7 +69,7 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
     - Import: parse Markdown -> ProseMirror doc
     - Export: ProseMirror doc -> Markdown
   - Math:
-    - KaTeX renderer for inline/block math nodes
+    - KaTeX renderer for inline/block math nodes (katex package)
 
 ### 2.3 Search
 

@@ -672,6 +672,33 @@
     color: var(--text-2);
   }
 
+  .editor-surface :global(.embervault-math-inline) {
+    display: inline-block;
+    vertical-align: baseline;
+  }
+
+  .editor-surface :global(.embervault-math-block) {
+    display: block;
+    margin: 12px 0;
+  }
+
+  .editor-surface :global(.embervault-math-raw) {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      "Liberation Mono", "Courier New", monospace;
+    white-space: pre-wrap;
+  }
+
+  .editor-surface :global(.embervault-math-block .embervault-math-raw) {
+    padding: 8px 10px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-3);
+  }
+
+  .editor-surface :global(.embervault-math-render) {
+    display: inline-block;
+  }
+
   .lightbox-backdrop {
     position: fixed;
     inset: 0;

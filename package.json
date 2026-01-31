@@ -70,6 +70,7 @@
     "@tiptap/extension-task-list": "^3.18.0",
     "@tiptap/pm": "^3.18.0",
     "@tiptap/starter-kit": "^3.18.0",
+    "katex": "^0.16.22",
     "lowlight": "^3.3.0"
   }
 }

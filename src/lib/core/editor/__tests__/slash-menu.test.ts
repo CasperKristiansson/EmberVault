@@ -40,6 +40,10 @@ const createChainRecorder = () => {
       calls.push({ name: "insertTable", args: options });
       return chain;
     },
+    insertMathBlock: () => {
+      calls.push({ name: "insertMathBlock" });
+      return chain;
+    },
     setHorizontalRule: () => {
       calls.push({ name: "setHorizontalRule" });
       return chain;
@@ -72,7 +76,7 @@ describe("slash menu", () => {
     const disabledItems = items
       .filter((item) => !item.enabled)
       .map((item) => item.id);
-    expect(disabledItems).toEqual(["image", "math", "callout", "embed"]);
+    expect(disabledItems).toEqual(["image", "callout", "embed"]);
   });
 
   const commandCases = [
@@ -88,6 +92,7 @@ describe("slash menu", () => {
         args: { rows: 3, cols: 3, withHeaderRow: true },
       },
     ],
+    ["math", { name: "insertMathBlock" }],
     ["divider", { name: "setHorizontalRule" }],
   ] as const satisfies readonly (readonly [SlashMenuItemId, Call])[];
 
@@ -100,7 +105,7 @@ describe("slash menu", () => {
     expect(calls).toContainEqual(expectedCall as Call);
   });
 
-  const disabledCases = ["image", "math", "callout", "embed"] as const;
+  const disabledCases = ["image", "callout", "embed"] as const;
 
   it.each(disabledCases)("disables %s", (itemId: SlashMenuItemId) => {
     const { chain } = createChainRecorder();

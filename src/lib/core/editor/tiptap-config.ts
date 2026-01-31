@@ -10,6 +10,7 @@ import { TaskList } from "@tiptap/extension-task-list";
 import StarterKit from "@tiptap/starter-kit";
 import { common, createLowlight } from "lowlight";
 import { AssetImage } from "./image-extension";
+import { MathBlock, MathInline } from "./math/katex";
 import type { Extensions } from "@tiptap/core";
 
 const lowlight = createLowlight(common);
@@ -38,6 +39,8 @@ export const createTiptapExtensions = (): Extensions => [
   TableRow,
   TableHeader,
   TableCell,
+  MathInline,
+  MathBlock,
   Link.configure({
     autolink: true,
     linkOnPaste: true,

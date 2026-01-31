@@ -47,7 +47,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Paste image -> asset stored -> image block inserted
 - [x] Drag-drop image -> same behavior
 - [x] Image rendering with caption + lightbox modal (blur rules)
-- [ ] Implement math nodes + KaTeX render (inline + block)
+- [x] Implement math nodes + KaTeX render (inline + block)
 - [ ] Unit tests for asset dedupe + math serialize/deserialize
 - [ ] E2E: paste image, reload; insert LaTeX, reload
 

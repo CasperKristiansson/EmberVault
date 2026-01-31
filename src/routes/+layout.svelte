@@ -1,6 +1,7 @@
 <script lang="ts">
   import "../styles/tokens.css";
   import "../styles/base.css";
+  import "katex/dist/katex.min.css";
   import favicon from "$lib/assets/favicon.svg";
 
   let { children } = $props();

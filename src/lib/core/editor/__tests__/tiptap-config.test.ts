@@ -12,6 +12,8 @@ const requiredExtensions = [
   "taskList",
   "taskItem",
   "image",
+  "mathInline",
+  "mathBlock",
 ];
 
 describe("tiptap config", () => {

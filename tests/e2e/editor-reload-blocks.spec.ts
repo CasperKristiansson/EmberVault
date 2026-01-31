@@ -49,7 +49,9 @@ test("create blocks and reload preserves structure", async ({ page }) => {
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
   await insertSlashBlock(page, "code", "const foo = 1;");
+  await page.keyboard.press(`${resolveModifierKey()}+Enter`);
   await page.keyboard.press("Enter");
+  await page.keyboard.type("$$E = mc^2$$");
   await page.keyboard.press("Enter");
 
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
@@ -58,5 +60,6 @@ test("create blocks and reload preserves structure", async ({ page }) => {
 
   await expect(page.locator("h2")).toHaveText("Reload heading");
   await expect(page.locator('ul[data-type="taskList"]')).toBeVisible();
-  await expect(page.locator("pre")).toContainText("const foo = 1;");
+  await expect(page.locator("pre code")).toContainText("const foo = 1;");
+  await expect(page.locator(".embervault-math-block")).toBeVisible();
 });

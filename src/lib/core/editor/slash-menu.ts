@@ -29,6 +29,7 @@ export type SlashMenuChain = {
     cols: number;
     withHeaderRow: boolean;
   }) => SlashMenuChain;
+  insertMathBlock: () => SlashMenuChain;
   setHorizontalRule: () => SlashMenuChain;
   run: () => void;
 };
@@ -55,6 +56,7 @@ const enabledItems = new Set<SlashMenuItemId>([
   "code",
   "table",
   "divider",
+  "math",
 ]);
 
 /* eslint-disable sonarjs/arrow-function-convention */
@@ -98,6 +100,10 @@ const applyDivider = (chain: SlashMenuChain): void => {
   chain.setHorizontalRule();
 };
 
+const applyMath = (chain: SlashMenuChain): void => {
+  chain.insertMathBlock();
+};
+
 const commandMap: Record<SlashMenuItemId, (chain: SlashMenuChain) => void> = {
   heading: applyHeading,
   list: applyList,
@@ -105,9 +111,9 @@ const commandMap: Record<SlashMenuItemId, (chain: SlashMenuChain) => void> = {
   quote: applyQuote,
   code: applyCode,
   table: applyTable,
+  math: applyMath,
   divider: applyDivider,
   image: noop,
-  math: noop,
   callout: noop,
   embed: noop,
 };
