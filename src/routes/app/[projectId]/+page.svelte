@@ -23,6 +23,7 @@
   import {
     addTab,
     closeTabState,
+    moveTabBetweenPanes,
     reorderTabs,
   } from "$lib/core/utils/tabs";
   import { resolveSecondaryNoteId } from "$lib/core/utils/split-view";
@@ -82,6 +83,7 @@
   let activeTabs: string[] = [];
   let tabTitles: Record<string, string> = {};
   let draggingTabId: string | null = null;
+  let draggingTabPane: PaneId | null = null;
   let dropTargetTabId: string | null = null;
   let primaryTitleInput: HTMLInputElement | null = null;
   let secondaryTitleInput: HTMLInputElement | null = null;
@@ -591,6 +593,7 @@
     noteId: string
   ): void => {
     draggingTabId = noteId;
+    draggingTabPane = activePane;
     dropTargetTabId = null;
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = "move";
@@ -627,7 +630,80 @@
 
   const handleTabDragEnd = (): void => {
     draggingTabId = null;
+    draggingTabPane = null;
     dropTargetTabId = null;
+  };
+
+  const moveTabToPane = async (
+    noteId: string,
+    sourcePane: PaneId,
+    targetPane: PaneId
+  ): Promise<void> => {
+    if (sourcePane === targetPane) {
+      return;
+    }
+    const source = getPaneState(sourcePane);
+    if (!source.tabs.includes(noteId)) {
+      return;
+    }
+    const target = getPaneState(targetPane);
+    if (source.activeTabId === noteId) {
+      await flushPendingSaveForNote(source.activeTabId);
+    }
+    if (target.activeTabId && target.activeTabId !== noteId) {
+      await flushPendingSaveForNote(target.activeTabId);
+    }
+    const nextStates = moveTabBetweenPanes(
+      { tabs: source.tabs, activeTabId: source.activeTabId },
+      { tabs: target.tabs, activeTabId: target.activeTabId },
+      noteId
+    );
+    updatePaneState(sourcePane, nextStates.source);
+    updatePaneState(targetPane, nextStates.target);
+    activePane = targetPane;
+    scheduleUiStateWrite();
+    if (source.activeTabId === noteId) {
+      if (nextStates.source.activeTabId) {
+        await loadNote(nextStates.source.activeTabId, sourcePane);
+      } else {
+        setPaneNote(sourcePane, null);
+      }
+    }
+    await loadNote(noteId, targetPane);
+  };
+
+  const handlePaneDragOver = (event: DragEvent, paneId: PaneId): void => {
+    if (!splitEnabled) {
+      return;
+    }
+    const draggedId =
+      draggingTabId || event.dataTransfer?.getData("text/plain") || "";
+    if (!draggedId || draggingTabPane === paneId) {
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+  };
+
+  const handlePaneDrop = async (
+    event: DragEvent,
+    paneId: PaneId
+  ): Promise<void> => {
+    if (!splitEnabled) {
+      return;
+    }
+    event.preventDefault();
+    const draggedId =
+      draggingTabId || event.dataTransfer?.getData("text/plain") || "";
+    const sourcePane = draggingTabPane;
+    if (!draggedId || !sourcePane || sourcePane === paneId) {
+      handleTabDragEnd();
+      return;
+    }
+    await moveTabToPane(draggedId, sourcePane, paneId);
+    handleTabDragEnd();
   };
 
   const persistNote = async (note: NoteDocumentFile): Promise<void> => {
@@ -1136,6 +1212,8 @@
         on:focusin={() => setActivePane("primary")}
         on:click={() => setActivePane("primary")}
         on:keydown={event => handlePaneKeydown(event, "primary")}
+        on:dragover={event => handlePaneDragOver(event, "primary")}
+        on:drop={event => void handlePaneDrop(event, "primary")}
         role="button"
         tabindex="0"
       >
@@ -1180,6 +1258,8 @@
         on:focusin={() => setActivePane("secondary")}
         on:click={() => setActivePane("secondary")}
         on:keydown={event => handlePaneKeydown(event, "secondary")}
+        on:dragover={event => handlePaneDragOver(event, "secondary")}
+        on:drop={event => void handlePaneDrop(event, "secondary")}
         role="button"
         tabindex="0"
       >

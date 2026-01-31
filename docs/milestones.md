@@ -64,7 +64,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 
 - [x] Tab system in top bar (open/close/reorder)
 - [x] Split view mode with two panes
-- [ ] Drag tab to other pane
+- [x] Drag tab to other pane
 - [ ] Drag notes to folders + reorder within folder (persist order)
 - [ ] Component tests for tab close + split toggle
 - [ ] E2E: open split, edit both, reload persists

@@ -36,6 +36,25 @@ export const closeTabState = (state: TabState, noteId: string): TabState => {
   };
 };
 
+export const moveTabBetweenPanes = (
+  source: TabState,
+  target: TabState,
+  noteId: string
+): { source: TabState; target: TabState } => {
+  if (!source.tabs.includes(noteId)) {
+    return { source, target };
+  }
+  const nextSource = closeTabState(source, noteId);
+  const nextTargetTabs = addTab(target.tabs, noteId);
+  return {
+    source: nextSource,
+    target: {
+      tabs: nextTargetTabs,
+      activeTabId: noteId,
+    },
+  };
+};
+
 export const reorderTabs = (
   tabs: string[],
   fromId: string,

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { addTab, closeTabState, reorderTabs } from "../tabs";
+import {
+  addTab,
+  closeTabState,
+  moveTabBetweenPanes,
+  reorderTabs,
+} from "../tabs";
 
 describe("tab helpers", () => {
   it("adds a tab if missing", () => {
@@ -9,6 +14,36 @@ describe("tab helpers", () => {
   it("does not duplicate existing tabs", () => {
     const tabs = ["a", "b"];
     expect(addTab(tabs, "a")).toBe(tabs);
+  });
+
+  it("moves a tab between panes and activates it in the target", () => {
+    const source = { tabs: ["a", "b"], activeTabId: "b" };
+    const target = { tabs: ["c"], activeTabId: "c" };
+
+    const result = moveTabBetweenPanes(source, target, "b");
+
+    expect(result.source).toEqual({ tabs: ["a"], activeTabId: "a" });
+    expect(result.target).toEqual({ tabs: ["c", "b"], activeTabId: "b" });
+  });
+
+  it("activates an existing tab in the target when moving", () => {
+    const source = { tabs: ["a", "b"], activeTabId: "a" };
+    const target = { tabs: ["b", "c"], activeTabId: "c" };
+
+    const result = moveTabBetweenPanes(source, target, "b");
+
+    expect(result.source).toEqual({ tabs: ["a"], activeTabId: "a" });
+    expect(result.target).toEqual({ tabs: ["b", "c"], activeTabId: "b" });
+  });
+
+  it("returns the original state when the tab is missing from source", () => {
+    const source = { tabs: ["a"], activeTabId: "a" };
+    const target = { tabs: ["b"], activeTabId: "b" };
+
+    const result = moveTabBetweenPanes(source, target, "c");
+
+    expect(result.source).toBe(source);
+    expect(result.target).toBe(target);
   });
 
   it("closes inactive tabs without changing the active tab", () => {
