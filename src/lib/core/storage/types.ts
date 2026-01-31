@@ -92,9 +92,14 @@ export type StorageAdapter = {
   readProject: (projectId: string) => Promise<Project | null>;
   writeProject: (projectId: string, projectMeta: Project) => Promise<void>;
   listNotes: (projectId: string) => Promise<NoteIndexEntry[]>;
+  listTemplates: (projectId: string) => Promise<TemplateIndexEntry[]>;
   readNote: (
     projectId: string,
     noteId: string
+  ) => Promise<NoteDocumentFile | null>;
+  readTemplate: (
+    projectId: string,
+    templateId: string
   ) => Promise<NoteDocumentFile | null>;
   writeNote: (input: {
     projectId: string;
@@ -102,9 +107,16 @@ export type StorageAdapter = {
     noteDocument: NoteDocumentFile;
     derivedMarkdown: string;
   }) => Promise<void>;
+  writeTemplate: (input: {
+    projectId: string;
+    templateId: string;
+    noteDocument: NoteDocumentFile;
+    derivedMarkdown: string;
+  }) => Promise<void>;
   deleteNoteSoft: (projectId: string, noteId: string) => Promise<void>;
   restoreNote: (projectId: string, noteId: string) => Promise<void>;
   deleteNotePermanent: (projectId: string, noteId: string) => Promise<void>;
+  deleteTemplate: (projectId: string, templateId: string) => Promise<void>;
   writeAsset: (input: {
     projectId: string;
     assetId: string;

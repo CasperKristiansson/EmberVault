@@ -5,6 +5,7 @@
   export let mobileView: MobileView = "notes";
   export let mobileSidebarOpen = false;
   export let mobileRightPanelOpen = false;
+  export let workspaceMode: "notes" | "graph" | "templates" = "notes";
 </script>
 
 <div
@@ -13,6 +14,7 @@
   data-mobile-view={mobileView}
   data-mobile-sidebar={mobileSidebarOpen ? "open" : "closed"}
   data-mobile-right-panel={mobileRightPanelOpen ? "open" : "closed"}
+  data-workspace-mode={workspaceMode}
 >
   <aside class="sidebar" data-testid="sidebar-pane">
     <slot name="sidebar" />
@@ -37,6 +39,10 @@
   <nav class="mobile-nav" data-testid="mobile-nav" aria-label="Primary">
     <slot name="bottom-nav" />
   </nav>
+
+  <div class="app-shell-default-slot" aria-hidden="true">
+    <slot />
+  </div>
 
   <slot name="modal" />
   <slot name="toast" />
@@ -68,6 +74,20 @@
     padding: 0 16px;
     background: var(--bg-1);
     border-bottom: 1px solid var(--stroke-0);
+  }
+
+  .app-shell[data-workspace-mode="templates"] {
+    grid-template-columns: minmax(240px, var(--sidebar-width))
+      minmax(280px, var(--note-list-width))
+      minmax(0, 1fr);
+  }
+
+  .app-shell[data-workspace-mode="templates"] .topbar {
+    grid-column: 2 / 4;
+  }
+
+  .app-shell[data-workspace-mode="templates"] .right-panel {
+    display: none;
   }
 
   .sidebar {
@@ -116,6 +136,10 @@
   }
 
   .mobile-nav {
+    display: none;
+  }
+
+  .app-shell-default-slot {
     display: none;
   }
 

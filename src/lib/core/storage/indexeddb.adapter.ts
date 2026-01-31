@@ -6,6 +6,7 @@ import type {
   NoteIndexEntry,
   Project,
   StorageAdapter,
+  TemplateIndexEntry,
   UIState,
 } from "./types";
 
@@ -37,6 +38,13 @@ type IndexedDatabaseKey = IDBValidKey;
 type NoteRecord = {
   projectId: string;
   noteId: string;
+  noteDocument: NoteDocumentFile;
+  derivedMarkdown: string;
+};
+
+type TemplateRecord = {
+  projectId: string;
+  templateId: string;
   noteDocument: NoteDocumentFile;
   derivedMarkdown: string;
 };
@@ -176,11 +184,21 @@ const toNoteIndexEntry = (noteDocument: NoteDocumentFile): NoteIndexEntry => {
     createdAt: noteDocument.createdAt,
     updatedAt: noteDocument.updatedAt,
     deletedAt: noteDocument.deletedAt,
-    isTemplate: false,
+    isTemplate: noteDocument.isTemplate ?? false,
     ...(hasCustomFields ? { customFields: noteDocument.customFields } : {}),
     ...(noteDocument.derived?.outgoingLinks
       ? { linkOutgoing: noteDocument.derived.outgoingLinks }
       : {}),
+  };
+};
+
+const toTemplateIndexEntry = (
+  templateDocument: NoteDocumentFile
+): TemplateIndexEntry => {
+  const base = toNoteIndexEntry(templateDocument);
+  return {
+    ...base,
+    isTemplate: true,
   };
 };
 
@@ -269,11 +287,27 @@ export class IndexedDBAdapter implements StorageAdapter {
     return Object.values(project.notesIndex);
   }
 
+  public async listTemplates(projectId: string): Promise<TemplateIndexEntry[]> {
+    const project = await this.readProject(projectId);
+    if (!project) {
+      return [];
+    }
+    return Object.values(project.templatesIndex);
+  }
+
   public async readNote(
     projectId: string,
     noteId: string
   ): Promise<NoteDocumentFile | null> {
     const record = await this.readNoteRecord(projectId, noteId);
+    return record?.noteDocument ?? null;
+  }
+
+  public async readTemplate(
+    projectId: string,
+    templateId: string
+  ): Promise<NoteDocumentFile | null> {
+    const record = await this.readTemplateRecord(projectId, templateId);
     return record?.noteDocument ?? null;
   }
 
@@ -310,6 +344,45 @@ export class IndexedDBAdapter implements StorageAdapter {
       notesIndex: {
         ...project.notesIndex,
         [input.noteId]: noteIndexEntry,
+      },
+    };
+
+    await this.writeProject(input.projectId, updatedProject);
+  }
+
+  public async writeTemplate(input: {
+    projectId: string;
+    templateId: string;
+    noteDocument: NoteDocumentFile;
+    derivedMarkdown: string;
+  }): Promise<void> {
+    if (input.noteDocument.id !== input.templateId) {
+      throw new Error(
+        `IndexedDBAdapter.writeTemplate id mismatch for ${input.projectId}:${input.templateId}.`
+      );
+    }
+    const project = await this.readProject(input.projectId);
+    if (!project) {
+      throw new Error(
+        `IndexedDBAdapter.writeTemplate missing project ${input.projectId}.`
+      );
+    }
+
+    const record: TemplateRecord = {
+      projectId: input.projectId,
+      templateId: input.templateId,
+      noteDocument: input.noteDocument,
+      derivedMarkdown: input.derivedMarkdown,
+    };
+    await this.writeTemplateRecord(record);
+
+    const templateIndexEntry = toTemplateIndexEntry(input.noteDocument);
+    const updatedProject: Project = {
+      ...project,
+      updatedAt: Math.max(project.updatedAt, input.noteDocument.updatedAt),
+      templatesIndex: {
+        ...project.templatesIndex,
+        [input.templateId]: templateIndexEntry,
       },
     };
 
@@ -427,6 +500,34 @@ export class IndexedDBAdapter implements StorageAdapter {
 
     await this.writeProject(projectId, updatedProject);
     await this.deleteNoteRecord(projectId, noteId);
+  }
+
+  public async deleteTemplate(
+    projectId: string,
+    templateId: string
+  ): Promise<void> {
+    const project = await this.readProject(projectId);
+    if (!project) {
+      throw new Error(
+        `IndexedDBAdapter.deleteTemplate missing project ${projectId}.`
+      );
+    }
+
+    const remainingTemplatesIndex: Record<string, TemplateIndexEntry> = {};
+    for (const [entryId, entry] of Object.entries(project.templatesIndex)) {
+      if (entryId !== templateId) {
+        remainingTemplatesIndex[entryId] = entry;
+      }
+    }
+
+    const updatedProject: Project = {
+      ...project,
+      updatedAt: Math.max(project.updatedAt, Date.now()),
+      templatesIndex: remainingTemplatesIndex,
+    };
+
+    await this.writeProject(projectId, updatedProject);
+    await this.deleteTemplateRecord(projectId, templateId);
   }
 
   public async writeAsset(input: {
@@ -582,9 +683,30 @@ export class IndexedDBAdapter implements StorageAdapter {
     return record ?? null;
   }
 
+  private async readTemplateRecord(
+    projectId: string,
+    templateId: string
+  ): Promise<TemplateRecord | null> {
+    const record = await this.withStore<TemplateRecord | undefined>(
+      storeNames.templates,
+      "readonly",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      (store) => store.get([projectId, templateId])
+    );
+    return record ?? null;
+  }
+
   private async writeNoteRecord(record: NoteRecord): Promise<void> {
     await this.withStore<IndexedDatabaseKey>(
       storeNames.notes,
+      "readwrite",
+      (store) => store.put(record)
+    );
+  }
+
+  private async writeTemplateRecord(record: TemplateRecord): Promise<void> {
+    await this.withStore<IndexedDatabaseKey>(
+      storeNames.templates,
       "readwrite",
       (store) => store.put(record)
     );
@@ -596,6 +718,17 @@ export class IndexedDBAdapter implements StorageAdapter {
   ): Promise<void> {
     await this.withStore<undefined>(storeNames.notes, "readwrite", (store) =>
       store.delete([projectId, noteId])
+    );
+  }
+
+  private async deleteTemplateRecord(
+    projectId: string,
+    templateId: string
+  ): Promise<void> {
+    await this.withStore<undefined>(
+      storeNames.templates,
+      "readwrite",
+      (store) => store.delete([projectId, templateId])
     );
   }
 

@@ -80,7 +80,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 
 ## Milestone 8 — Templates + metadata + favorites + trash polish
 
-- [ ] Templates manager + apply template on new note
+- [x] Templates manager + apply template on new note
 - [ ] Favorites view + star toggles in list/editor
 - [ ] Metadata panel with custom fields CRUD
 - [ ] Trash view polish with restore/permanent delete confirm

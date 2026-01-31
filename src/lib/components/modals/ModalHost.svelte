@@ -2,7 +2,12 @@
   import { onDestroy } from "svelte";
   import CommandPaletteModal from "$lib/components/modals/CommandPaletteModal.svelte";
   import GlobalSearchModal from "$lib/components/modals/GlobalSearchModal.svelte";
-  import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
+  import TemplatePickerModal from "$lib/components/modals/TemplatePickerModal.svelte";
+  import type {
+    NoteIndexEntry,
+    Project,
+    TemplateIndexEntry,
+  } from "$lib/core/storage/types";
   import type { SearchIndexState } from "$lib/state/search.store";
   import { activeModal, closeTopModal, modalStackStore } from "$lib/state/ui.store";
 
@@ -10,9 +15,14 @@
   export let projects: Project[] = [];
   export let searchState: SearchIndexState | null = null;
   export let notes: NoteIndexEntry[] = [];
+  export let templates: TemplateIndexEntry[] = [];
   export let activeNoteId: string | null = null;
+  export let lastUsedTemplateId: string | null = null;
   export let onOpenNote: (noteId: string) => void | Promise<void> = async () => {};
   export let onCreateNote: (() => void | Promise<void>) | null = null;
+  export let onCreateNoteFromTemplate:
+    | ((templateId: string) => void | Promise<void>)
+    | null = null;
   export let onOpenGlobalSearch: (() => void | Promise<void>) | null = null;
   export let onProjectChange: (projectId: string) => void | Promise<void> = async () => {};
   export let onToggleSplitView: (() => void | Promise<void>) | null = null;
@@ -105,5 +115,13 @@
     {onGoToTrash}
     {onToggleRightPanel}
     {onOpenSettings}
+  />
+{:else if $activeModal?.type === "template-picker"}
+  <TemplatePickerModal
+    {templates}
+    {lastUsedTemplateId}
+    onClose={handleClose}
+    onCreateBlank={onCreateNote}
+    onCreateFromTemplate={onCreateNoteFromTemplate}
   />
 {/if}
