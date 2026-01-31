@@ -50,8 +50,11 @@ test("creates notes in folders and filters the list", async ({ page }) => {
 
   await tree.getByText("Work", { exact: true }).click();
 
-  await expect(page.getByText(workNoteTitle, { exact: true })).toBeVisible();
-  await expect(page.getByText(personalNoteTitle, { exact: true })).toHaveCount(
-    emptyCount
-  );
+  const noteList = page.getByTestId("note-list");
+  await expect(
+    noteList.getByText(workNoteTitle, { exact: true })
+  ).toBeVisible();
+  await expect(
+    noteList.getByText(personalNoteTitle, { exact: true })
+  ).toHaveCount(emptyCount);
 });

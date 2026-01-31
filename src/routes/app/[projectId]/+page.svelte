@@ -21,6 +21,11 @@
   import { createDebouncedTask } from "$lib/core/utils/debounce";
   import { hashBlobSha256 } from "$lib/core/utils/hash";
   import {
+    addTab,
+    closeTabState,
+    reorderTabs,
+  } from "$lib/core/utils/tabs";
+  import {
     applySearchIndexChange,
     hydrateSearchIndex,
     type SearchIndexState,
@@ -44,6 +49,11 @@
   let projects: Project[] = [];
   let notes: NoteIndexEntry[] = [];
   let activeNote: NoteDocumentFile | null = null;
+  let tabs: string[] = [];
+  let activeTabId: string | null = null;
+  let tabTitles: Record<string, string> = {};
+  let draggingTabId: string | null = null;
+  let dropTargetTabId: string | null = null;
   let titleValue = "";
   let editorContent = createEmptyDocument();
   let editorPlainText = "";
@@ -150,6 +160,17 @@
     saveState = note ? "saved" : "idle";
   };
 
+  const getTabTitle = (
+    noteId: string,
+    titles: Record<string, string>
+  ): string => {
+    const storedTitle = titles[noteId];
+    if (storedTitle !== undefined) {
+      return storedTitle.trim() || "Untitled";
+    }
+    return "Untitled";
+  };
+
   const setMobileView = (view: MobileView): void => {
     mobileView = resolveMobileView(view, Boolean(activeNote));
   };
@@ -245,12 +266,94 @@
     await adapter.writeProject(nextProject.id, nextProject);
   };
 
-  const openNote = async (noteId: string): Promise<void> => {
+  const loadNote = async (noteId: string): Promise<void> => {
     await flushPendingSave();
     const note = await adapter.readNote(projectId, noteId);
     if (note) {
       setActiveNote(note);
+      tabTitles = { ...tabTitles, [note.id]: note.title ?? "" };
     }
+  };
+
+  const activateTab = async (noteId: string): Promise<void> => {
+    if (!noteId) {
+      return;
+    }
+    tabs = addTab(tabs, noteId);
+    activeTabId = noteId;
+    await loadNote(noteId);
+  };
+
+  const handleCloseTab = async (noteId: string): Promise<void> => {
+    const wasActive = noteId === activeTabId;
+    if (wasActive) {
+      await flushPendingSave();
+    }
+    const nextState = closeTabState({ tabs, activeTabId }, noteId);
+    tabs = nextState.tabs;
+    activeTabId = nextState.activeTabId;
+    if (noteId in tabTitles) {
+      const { [noteId]: _closedTitle, ...rest } = tabTitles;
+      tabTitles = rest;
+    }
+    if (!wasActive) {
+      return;
+    }
+    if (activeTabId) {
+      await loadNote(activeTabId);
+      return;
+    }
+    setActiveNote(null);
+  };
+
+  const handleTabKeydown = (
+    event: KeyboardEvent,
+    noteId: string
+  ): void => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void activateTab(noteId);
+    }
+  };
+
+  const handleTabDragStart = (
+    event: DragEvent,
+    noteId: string
+  ): void => {
+    draggingTabId = noteId;
+    dropTargetTabId = null;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", noteId);
+    }
+  };
+
+  const handleTabDragOver = (event: DragEvent, noteId: string): void => {
+    if (!draggingTabId || draggingTabId === noteId) {
+      return;
+    }
+    event.preventDefault();
+    dropTargetTabId = noteId;
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+  };
+
+  const handleTabDrop = (event: DragEvent, noteId: string): void => {
+    event.preventDefault();
+    const draggedId =
+      draggingTabId || event.dataTransfer?.getData("text/plain") || "";
+    if (!draggedId || draggedId === noteId) {
+      dropTargetTabId = null;
+      return;
+    }
+    tabs = reorderTabs(tabs, draggedId, noteId);
+    dropTargetTabId = null;
+  };
+
+  const handleTabDragEnd = (): void => {
+    draggingTabId = null;
+    dropTargetTabId = null;
   };
 
   const persistNote = async (note: NoteDocumentFile): Promise<void> => {
@@ -313,6 +416,7 @@
       },
     };
     activeNote = updatedNote;
+    tabTitles = { ...tabTitles, [updatedNote.id]: resolvedTitle };
     scheduleSave(updatedNote);
   };
 
@@ -337,6 +441,9 @@
     await flushPendingSave();
     const note = createNoteDocument();
     setActiveNote(note);
+    tabs = addTab(tabs, note.id);
+    activeTabId = note.id;
+    tabTitles = { ...tabTitles, [note.id]: note.title ?? "" };
     saveState = "saving";
     await persistNote(note);
     await loadNotes();
@@ -435,7 +542,12 @@
       await loadNotes();
       await loadSearchIndex();
       if (notes.length > 0) {
-        await openNote(notes[0]?.id ?? "");
+        await activateTab(notes[0]?.id ?? "");
+      } else {
+        tabs = [];
+        activeTabId = null;
+        tabTitles = {};
+        setActiveNote(null);
       }
       activeFolderId = null;
       isLoading = false;
@@ -489,9 +601,59 @@
 
 <AppShell {saveState} {mobileView}>
   <div slot="topbar" class="topbar-content">
-    <div class="topbar-tabs">
-      <button class="tab active" type="button">Untitled</button>
-      <button class="tab" type="button">+</button>
+    <div
+      class="topbar-tabs"
+      role="tablist"
+      aria-label="Open notes"
+      data-testid="tab-list"
+    >
+      {#each tabs as tabId (tabId)}
+        <div
+          class="tab"
+          role="tab"
+          tabindex={tabId === activeTabId ? 0 : -1}
+          aria-selected={tabId === activeTabId}
+          data-testid="tab-item"
+          data-note-id={tabId}
+          data-active={tabId === activeTabId}
+          data-drop-target={dropTargetTabId === tabId}
+          data-dragging={draggingTabId === tabId}
+          draggable="true"
+          on:click={() => void activateTab(tabId)}
+          on:keydown={event => handleTabKeydown(event, tabId)}
+          on:dragstart={event => handleTabDragStart(event, tabId)}
+          on:dragover={event => handleTabDragOver(event, tabId)}
+          on:drop={event => handleTabDrop(event, tabId)}
+          on:dragend={handleTabDragEnd}
+        >
+          <span class="tab-title" data-testid="tab-title">
+            {getTabTitle(tabId, tabTitles)}
+          </span>
+          <button
+            class="tab-close"
+            type="button"
+            aria-label="Close tab"
+            data-testid="tab-close"
+            data-note-id={tabId}
+            draggable="false"
+            on:click|stopPropagation={() => void handleCloseTab(tabId)}
+          >
+            <svg
+              class="tab-close-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M6 6 18 18" />
+              <path d="M6 18 18 6" />
+            </svg>
+          </button>
+        </div>
+      {/each}
     </div>
     <div class="topbar-actions">
       <button class="icon-button" type="button">Outline</button>
@@ -563,8 +725,8 @@
     {:else}
       <NoteListVirtualized
         notes={displayNotes}
-        activeNoteId={activeNote?.id ?? null}
-        onSelect={noteId => void openNote(noteId)}
+        activeNoteId={activeTabId}
+        onSelect={noteId => void activateTab(noteId)}
       />
     {/if}
   </div>
@@ -614,9 +776,9 @@
     {project}
     {projects}
     notes={notes}
-    activeNoteId={activeNote?.id ?? null}
+    activeNoteId={activeTabId}
     {searchState}
-    onOpenNote={openNote}
+    onOpenNote={activateTab}
     onCreateNote={createNote}
     onOpenGlobalSearch={openGlobalSearch}
     onProjectChange={switchProject}
@@ -688,27 +850,85 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    padding: 2px 0;
   }
 
   .tab {
     height: 32px;
-    padding: 0 12px;
+    padding: 0 8px 0 12px;
     border-radius: var(--r-sm);
     border: 1px solid transparent;
     background: transparent;
     color: var(--text-1);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    max-width: 220px;
   }
 
-  .tab.active {
+  .tab[data-active="true"] {
     background: var(--bg-2);
     border-color: var(--stroke-0);
     color: var(--text-0);
   }
 
-  .tab:hover {
+  .tab:hover,
+  .tab[data-drop-target="true"] {
     background: var(--bg-3);
     color: var(--text-0);
+  }
+
+  .tab:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .tab[data-dragging="true"] {
+    opacity: 0.6;
+  }
+
+  .tab-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tab-close {
+    height: 20px;
+    width: 20px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+  }
+
+  .tab:hover .tab-close,
+  .tab[data-active="true"] .tab-close {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .tab-close:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
+  .tab-close-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
   }
 
   .topbar-actions {
