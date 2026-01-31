@@ -1601,6 +1601,7 @@
         notes={notes}
         tags={project?.tags ?? {}}
         activeNoteId={activeNote?.id ?? null}
+        onNodeClick={noteId => void activateTab(noteId)}
       />
     {:else}
       {#if splitEnabled}

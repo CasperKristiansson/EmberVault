@@ -17,6 +17,12 @@
   export let activeNoteId: string | null = null;
   export let onNodeClick: (noteId: string) => void = () => {};
 
+  const globalWindow =
+    typeof globalThis === "undefined"
+      ? null
+      : (globalThis as unknown as Window);
+  const isE2E = (globalWindow?.location?.search ?? "").includes("e2e=1");
+
   let mode: "project" | "note" = "project";
   let depth = 1;
   let searchQuery = "";
@@ -109,6 +115,37 @@
     hoverNodeId = nodeId;
   };
 
+  const registerGraphTestApi = (): void => {
+    if (!isE2E || !globalWindow) {
+      return;
+    }
+    const api = {
+      clickNode: (nodeId: string): boolean => {
+        if (!graph || !graph.hasNode(nodeId)) {
+          return false;
+        }
+        onNodeClick(nodeId);
+        return true;
+      },
+    };
+    const typedWindow = globalWindow as Window & {
+      embervaultGraphTest?: typeof api;
+    };
+    typedWindow.embervaultGraphTest = api;
+  };
+
+  const clearGraphTestApi = (): void => {
+    if (!isE2E || !globalWindow) {
+      return;
+    }
+    const typedWindow = globalWindow as Window & {
+      embervaultGraphTest?: unknown;
+    };
+    if (typedWindow.embervaultGraphTest) {
+      delete typedWindow.embervaultGraphTest;
+    }
+  };
+
   onMount(() => {
     if (typeof window === "undefined") {
       return;
@@ -129,6 +166,10 @@
       activeNoteId,
       colorTokens,
     });
+    registerGraphTestApi();
+    return () => {
+      clearGraphTestApi();
+    };
   });
 
   $: refreshGraph({

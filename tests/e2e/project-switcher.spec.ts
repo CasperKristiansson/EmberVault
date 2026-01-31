@@ -8,6 +8,7 @@ test("shows the project switcher for a single project", async ({ page }) => {
   await page.waitForURL(/\/app\/.+/);
 
   const switcher = page.getByRole("combobox", { name: "Project switcher" });
+  await expect(switcher).toHaveText(/Personal/);
   await expect(switcher).toBeDisabled();
   const selectedLabel = await switcher.evaluate(
     (element: HTMLSelectElement) =>
