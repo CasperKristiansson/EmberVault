@@ -5,6 +5,7 @@ import type {
   NoteDocumentFile,
   NoteIndexEntry,
   Project,
+  SearchIndexSnapshot,
   StorageAdapter,
   UIState,
 } from "./types";
@@ -47,6 +48,11 @@ type AssetRecord = {
   blob?: Blob;
   meta?: AssetMeta;
   bytes?: ArrayBuffer;
+};
+
+type SearchIndexRecord = {
+  projectId: string;
+  snapshot: SearchIndexSnapshot;
 };
 
 const noteKeyPath: string[] = [projectIdKey, noteIdKey];
@@ -491,6 +497,33 @@ export class IndexedDBAdapter implements StorageAdapter {
       (store) => store.get(uiStateKey)
     );
     return state ?? null;
+  }
+
+  public async writeSearchIndex(
+    projectId: string,
+    snapshot: SearchIndexSnapshot
+  ): Promise<void> {
+    const record: SearchIndexRecord = {
+      projectId,
+      snapshot,
+    };
+    await this.withStore<IndexedDatabaseKey>(
+      storeNames.searchIndex,
+      "readwrite",
+      (store) => store.put(record)
+    );
+  }
+
+  public async readSearchIndex(
+    projectId: string
+  ): Promise<SearchIndexSnapshot | null> {
+    const record = await this.withStore<SearchIndexRecord | undefined>(
+      storeNames.searchIndex,
+      "readonly",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      (store) => store.get(projectId)
+    );
+    return record?.snapshot ?? null;
   }
 
   private async openAndCloseDatabase(): Promise<void> {

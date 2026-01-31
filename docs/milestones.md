@@ -53,7 +53,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 
 ## Milestone 5 — Search + command palette
 
-- [ ] Implement MiniSearch index build + persistence
+- [x] Implement MiniSearch index build + persistence
 - [ ] Incremental indexing on note save/delete/restore
 - [ ] Global search modal with filters + fuzzy
 - [ ] Command palette (Cmd/Ctrl+K) with actions + note switching
