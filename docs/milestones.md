@@ -63,7 +63,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 ## Milestone 6 — Tabs + split view + drag/drop
 
 - [x] Tab system in top bar (open/close/reorder)
-- [ ] Split view mode with two panes
+- [x] Split view mode with two panes
 - [ ] Drag tab to other pane
 - [ ] Drag notes to folders + reorder within folder (persist order)
 - [ ] Component tests for tab close + split toggle

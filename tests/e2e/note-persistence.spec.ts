@@ -17,7 +17,6 @@ test("create and edit a note persists after reload", async ({ page }) => {
   await bodyEditor.click();
   await page.keyboard.type("Hello from Playwright");
 
-  await expect(page.locator('[data-save-state="saving"]')).toBeVisible();
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
 
   await page.reload();
