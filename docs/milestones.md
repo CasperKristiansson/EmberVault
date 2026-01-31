@@ -58,7 +58,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Global search modal with filters + fuzzy
 - [x] Command palette (Cmd/Ctrl+K) with actions + note switching
 - [x] Unit tests for fuzzy search correctness
-- [ ] E2E: search finds note by partial typo
+- [x] E2E: search finds note by partial typo
 
 ## Milestone 6 — Tabs + split view + drag/drop
 
