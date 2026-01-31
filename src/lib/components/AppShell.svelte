@@ -152,6 +152,10 @@
       display: flex;
     }
 
+    .app-shell[data-mobile-view="graph"] .editor {
+      display: flex;
+    }
+
     .editor {
       padding: 16px;
     }

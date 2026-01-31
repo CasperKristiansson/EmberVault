@@ -52,9 +52,10 @@ Structure (top to bottom):
 
 1. Project switcher (44px row)
 2. Quick actions row (icon buttons): New Note, Cmd Palette hint, Search
-3. Folder tree (scrollable)
-4. Tags list (collapsible section)
-5. Footer (sync/status + settings icon)
+3. Views row (text buttons): Notes, Graph
+4. Folder tree (scrollable)
+5. Tags list (collapsible section)
+6. Footer (sync/status + settings icon)
 
 Folder tree:
 

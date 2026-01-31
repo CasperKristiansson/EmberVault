@@ -4,6 +4,7 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/stores";
   import AppShell from "$lib/components/AppShell.svelte";
+  import GraphView from "$lib/components/graph/GraphView.svelte";
   import RightPanel from "$lib/components/rightpanel/RightPanel.svelte";
   import RightPanelTabs from "$lib/components/rightpanel/RightPanelTabs.svelte";
   import ModalHost from "$lib/components/modals/ModalHost.svelte";
@@ -114,6 +115,7 @@
   let isLoading = true;
   let saveState: "idle" | "saving" | "saved" = "idle";
   let mobileView: MobileView = "notes";
+  let workspaceMode: "notes" | "graph" = "notes";
   let activeFolderId: string | null = null;
   let searchState: SearchIndexState | null = null;
   let wikiLinkCandidates: WikiLinkCandidate[] = [];
@@ -329,6 +331,13 @@
 
   const setMobileView = (view: MobileView): void => {
     mobileView = resolveMobileView(view, Boolean(activeNote));
+    if (view === "graph") {
+      workspaceMode = "graph";
+      return;
+    }
+    if (view === "notes" || view === "editor") {
+      workspaceMode = "notes";
+    }
   };
 
   const openGlobalSearch = (): void => {
@@ -337,6 +346,18 @@
 
   const openCommandPalette = (): void => {
     openModal("command-palette");
+  };
+
+  const openGraphView = (): void => {
+    workspaceMode = "graph";
+    mobileView = "graph";
+  };
+
+  const openNotesView = (): void => {
+    workspaceMode = "notes";
+    if (mobileView === "graph") {
+      mobileView = "notes";
+    }
   };
 
   const handleRightPanelTabSelect = (tab: RightPanelTab): void => {
@@ -648,6 +669,7 @@
     if (!noteId) {
       return;
     }
+    openNotesView();
     const pane = getPaneState(paneId);
     await flushPendingSaveForNote(pane.activeTabId);
     const nextTabs = addTab(pane.tabs, noteId);
@@ -1150,6 +1172,7 @@
 
   const createNote = async (): Promise<void> => {
     await flushPendingSave();
+    openNotesView();
     const note = createNoteDocument();
     setPaneNote(activePane, note);
     const pane = getPaneState(activePane);
@@ -1340,6 +1363,11 @@
         openGlobalSearch();
         return;
       }
+      if (key === "g" && !event.shiftKey) {
+        event.preventDefault();
+        openGraphView();
+        return;
+      }
       if (event.shiftKey && (event.key === "\\" || event.key === "|")) {
         event.preventDefault();
         void toggleSplitView();
@@ -1469,6 +1497,28 @@
       activeProjectId={project?.id ?? projectId}
       onSelect={switchProject}
     />
+    <div class="sidebar-views" role="list" aria-label="Views">
+      <button
+        class="sidebar-view"
+        type="button"
+        aria-pressed={workspaceMode === "notes"}
+        data-active={workspaceMode === "notes"}
+        data-testid="sidebar-view-notes"
+        on:click={openNotesView}
+      >
+        Notes
+      </button>
+      <button
+        class="sidebar-view"
+        type="button"
+        aria-pressed={workspaceMode === "graph"}
+        data-active={workspaceMode === "graph"}
+        data-testid="sidebar-view-graph"
+        on:click={openGraphView}
+      >
+        Graph
+      </button>
+    </div>
     <FolderTree
       folders={project?.folders ?? {}}
       notesIndex={project?.notesIndex ?? {}}
@@ -1543,23 +1593,111 @@
 
   <div
     slot="editor"
-    class="editor-content"
+    class={workspaceMode === "graph" ? "graph-content" : "editor-content"}
     data-split={splitEnabled ? "true" : "false"}
   >
-    {#if splitEnabled}
-      <div
-        class="editor-pane"
-        data-pane="primary"
-        data-active={activePane === "primary"}
-        data-testid="editor-pane-primary"
-        on:focusin={() => setActivePane("primary")}
-        on:click={() => setActivePane("primary")}
-        on:keydown={event => handlePaneKeydown(event, "primary")}
-        on:dragover={event => handlePaneDragOver(event, "primary")}
-        on:drop={event => void handlePaneDrop(event, "primary")}
-        role="button"
-        tabindex="0"
-      >
+    {#if workspaceMode === "graph"}
+      <GraphView
+        notes={notes}
+        tags={project?.tags ?? {}}
+        activeNoteId={activeNote?.id ?? null}
+      />
+    {:else}
+      {#if splitEnabled}
+        <div
+          class="editor-pane"
+          data-pane="primary"
+          data-active={activePane === "primary"}
+          data-testid="editor-pane-primary"
+          on:focusin={() => setActivePane("primary")}
+          on:click={() => setActivePane("primary")}
+          on:keydown={event => handlePaneKeydown(event, "primary")}
+          on:dragover={event => handlePaneDragOver(event, "primary")}
+          on:drop={event => void handlePaneDrop(event, "primary")}
+          role="button"
+          tabindex="0"
+        >
+          {#if isLoading}
+            <div class="editor-empty">Preparing editor...</div>
+          {:else if !paneStates.primary.note}
+            <div class="editor-empty">Select a note to start writing.</div>
+          {:else}
+            <div class="editor-header">
+              <input
+                class="title-input field-input"
+                data-testid="note-title"
+                type="text"
+                placeholder="Untitled"
+                bind:this={primaryTitleInput}
+                value={paneStates.primary.titleValue}
+                on:input={event => handleTitleInput("primary", event)}
+                on:blur={event => handleTitleBlur("primary", event)}
+                aria-label="Note title"
+              />
+              <div class="chips-row" aria-label="Metadata chips"></div>
+            </div>
+
+            <div class="field field-body">
+              <span class="field-label">Content</span>
+              <TiptapEditor
+                content={paneStates.primary.editorContent}
+                ariaLabel="Note content"
+                dataTestId="note-body"
+                linkCandidates={wikiLinkCandidates}
+                onImagePaste={handleImagePaste}
+                onUpdate={payload => handleEditorUpdate("primary", payload)}
+              />
+            </div>
+          {/if}
+        </div>
+
+        <div
+          class="editor-pane"
+          data-pane="secondary"
+          data-active={activePane === "secondary"}
+          data-testid="editor-pane-secondary"
+          on:focusin={() => setActivePane("secondary")}
+          on:click={() => setActivePane("secondary")}
+          on:keydown={event => handlePaneKeydown(event, "secondary")}
+          on:dragover={event => handlePaneDragOver(event, "secondary")}
+          on:drop={event => void handlePaneDrop(event, "secondary")}
+          role="button"
+          tabindex="0"
+        >
+          {#if isLoading}
+            <div class="editor-empty">Preparing editor...</div>
+          {:else if !paneStates.secondary.note}
+            <div class="editor-empty">Select a note to start writing.</div>
+          {:else}
+            <div class="editor-header">
+              <input
+                class="title-input field-input"
+                data-testid="note-title-secondary"
+                type="text"
+                placeholder="Untitled"
+                bind:this={secondaryTitleInput}
+                value={paneStates.secondary.titleValue}
+                on:input={event => handleTitleInput("secondary", event)}
+                on:blur={event => handleTitleBlur("secondary", event)}
+                aria-label="Note title"
+              />
+              <div class="chips-row" aria-label="Metadata chips"></div>
+            </div>
+
+            <div class="field field-body">
+              <span class="field-label">Content</span>
+              <TiptapEditor
+                content={paneStates.secondary.editorContent}
+                ariaLabel="Note content"
+                dataTestId="note-body-secondary"
+                linkCandidates={wikiLinkCandidates}
+                onImagePaste={handleImagePaste}
+                onUpdate={payload => handleEditorUpdate("secondary", payload)}
+              />
+            </div>
+          {/if}
+        </div>
+      {:else}
         {#if isLoading}
           <div class="editor-empty">Preparing editor...</div>
         {:else if !paneStates.primary.note}
@@ -1592,86 +1730,6 @@
             />
           </div>
         {/if}
-      </div>
-
-      <div
-        class="editor-pane"
-        data-pane="secondary"
-        data-active={activePane === "secondary"}
-        data-testid="editor-pane-secondary"
-        on:focusin={() => setActivePane("secondary")}
-        on:click={() => setActivePane("secondary")}
-        on:keydown={event => handlePaneKeydown(event, "secondary")}
-        on:dragover={event => handlePaneDragOver(event, "secondary")}
-        on:drop={event => void handlePaneDrop(event, "secondary")}
-        role="button"
-        tabindex="0"
-      >
-        {#if isLoading}
-          <div class="editor-empty">Preparing editor...</div>
-        {:else if !paneStates.secondary.note}
-          <div class="editor-empty">Select a note to start writing.</div>
-        {:else}
-          <div class="editor-header">
-            <input
-              class="title-input field-input"
-              data-testid="note-title-secondary"
-              type="text"
-              placeholder="Untitled"
-              bind:this={secondaryTitleInput}
-              value={paneStates.secondary.titleValue}
-              on:input={event => handleTitleInput("secondary", event)}
-              on:blur={event => handleTitleBlur("secondary", event)}
-              aria-label="Note title"
-            />
-            <div class="chips-row" aria-label="Metadata chips"></div>
-          </div>
-
-          <div class="field field-body">
-            <span class="field-label">Content</span>
-            <TiptapEditor
-              content={paneStates.secondary.editorContent}
-              ariaLabel="Note content"
-              dataTestId="note-body-secondary"
-              linkCandidates={wikiLinkCandidates}
-              onImagePaste={handleImagePaste}
-              onUpdate={payload => handleEditorUpdate("secondary", payload)}
-            />
-          </div>
-        {/if}
-      </div>
-    {:else}
-      {#if isLoading}
-        <div class="editor-empty">Preparing editor...</div>
-      {:else if !paneStates.primary.note}
-        <div class="editor-empty">Select a note to start writing.</div>
-      {:else}
-        <div class="editor-header">
-          <input
-            class="title-input field-input"
-            data-testid="note-title"
-            type="text"
-            placeholder="Untitled"
-            bind:this={primaryTitleInput}
-            value={paneStates.primary.titleValue}
-            on:input={event => handleTitleInput("primary", event)}
-            on:blur={event => handleTitleBlur("primary", event)}
-            aria-label="Note title"
-          />
-          <div class="chips-row" aria-label="Metadata chips"></div>
-        </div>
-
-        <div class="field field-body">
-          <span class="field-label">Content</span>
-          <TiptapEditor
-            content={paneStates.primary.editorContent}
-            ariaLabel="Note content"
-            dataTestId="note-body"
-            linkCandidates={wikiLinkCandidates}
-            onImagePaste={handleImagePaste}
-            onUpdate={payload => handleEditorUpdate("primary", payload)}
-          />
-        </div>
       {/if}
     {/if}
   </div>
@@ -1698,6 +1756,7 @@
     onProjectChange={switchProject}
     onToggleSplitView={toggleSplitView}
     onToggleRightPanel={handleRightPanelTabSelect}
+    onOpenGraph={openGraphView}
   />
 
   <div slot="bottom-nav" class="mobile-nav-content">
@@ -1734,10 +1793,11 @@
     </button>
     <button
       class="mobile-nav-button"
+      class:active={mobileView === "graph"}
       type="button"
       data-testid="mobile-nav-graph"
-      aria-disabled="true"
-      disabled
+      aria-pressed={mobileView === "graph"}
+      on:click={() => setMobileView("graph")}
     >
       Graph
     </button>
@@ -1889,6 +1949,35 @@
     min-height: 0;
   }
 
+  .sidebar-views {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .sidebar-view {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: var(--r-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-1);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .sidebar-view:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
+  .sidebar-view[data-active="true"] {
+    background: var(--accent-2);
+    color: var(--accent-0);
+    border-color: var(--accent-2);
+  }
+
   .note-list-content {
     display: flex;
     flex-direction: column;
@@ -1928,6 +2017,14 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0;
+  }
+
+  .graph-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
     min-height: 0;
   }
 
