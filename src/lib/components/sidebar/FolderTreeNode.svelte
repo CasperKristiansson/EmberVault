@@ -17,6 +17,9 @@
     () => {};
   export let onCommitRename: () => void = () => {};
   export let onCancelRename: () => void = () => {};
+  export let draggingNoteId: string | null = null;
+  export let onNoteDrop: (noteId: string, folderId: string) => void | Promise<void> =
+    async () => {};
 
   $: folder = folders[folderId];
   $: childFolderIds = getChildFolderIds(folderId, folders);
@@ -24,9 +27,13 @@
   $: isExpanded = expandedIds.has(folderId);
   $: isEditing = editingFolderId === folderId;
   $: isActive = activeFolderId === folderId;
+  $: if (!draggingNoteId && isDropTarget) {
+    isDropTarget = false;
+  }
 
   let renameInput: HTMLInputElement | null = null;
   let wasEditing = false;
+  let isDropTarget = false;
 
   afterUpdate(() => {
     if (isEditing && renameInput && !wasEditing) {
@@ -61,6 +68,38 @@
       handleSelect();
     }
   };
+
+  const handleDragOver = (event: DragEvent): void => {
+    if (!draggingNoteId) {
+      return;
+    }
+    event.preventDefault();
+    isDropTarget = true;
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+  };
+
+  const handleDragLeave = (): void => {
+    if (!draggingNoteId) {
+      return;
+    }
+    isDropTarget = false;
+  };
+
+  const handleDrop = async (event: DragEvent): Promise<void> => {
+    if (!draggingNoteId) {
+      return;
+    }
+    event.preventDefault();
+    const draggedId = event.dataTransfer?.getData("text/plain") ?? draggingNoteId;
+    if (!draggedId) {
+      isDropTarget = false;
+      return;
+    }
+    await onNoteDrop(draggedId, folderId);
+    isDropTarget = false;
+  };
 </script>
 
 {#if folder}
@@ -69,11 +108,15 @@
     class:active={isActive}
     style={`--depth:${depth}`}
     data-testid={`folder-row-${folderId}`}
+    data-drop-target={isDropTarget ? "true" : "false"}
     role="treeitem"
     aria-selected={isActive ? "true" : "false"}
     tabindex="0"
     on:click={handleSelect}
     on:keydown={handleRowKeydown}
+    on:dragover={handleDragOver}
+    on:dragleave={handleDragLeave}
+    on:drop={handleDrop}
     on:contextmenu|preventDefault|stopPropagation={event =>
       onContextMenu(folderId, event)}
   >
@@ -121,6 +164,8 @@
           {onContextMenu}
           {onCommitRename}
           {onCancelRename}
+          {draggingNoteId}
+          {onNoteDrop}
           depth={depth + 1}
         />
       {/each}
@@ -158,6 +203,21 @@
     width: 3px;
     background: var(--accent-0);
     border-radius: 3px;
+  }
+
+  .folder-row[data-drop-target="true"] {
+    background: var(--accent-2);
+  }
+
+  .folder-row[data-drop-target="true"]::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: 2px;
+    height: 2px;
+    background: var(--accent-0);
+    border-radius: 999px;
   }
 
   .folder-chevron {

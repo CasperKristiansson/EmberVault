@@ -16,7 +16,12 @@
     removeFolder,
     renameFolder as renameFolderEntry,
   } from "$lib/core/utils/folder-tree";
-  import { filterNotesByFolder } from "$lib/core/utils/notes-filter";
+  import {
+    orderNotesForFolder,
+    reorderNoteIds,
+    resolveFolderNoteOrder,
+    setFolderNoteOrder,
+  } from "$lib/core/utils/note-order";
   import { createUlid } from "$lib/core/utils/ulid";
   import { createDebouncedTask } from "$lib/core/utils/debounce";
   import { hashBlobSha256 } from "$lib/core/utils/hash";
@@ -85,6 +90,8 @@
   let draggingTabId: string | null = null;
   let draggingTabPane: PaneId | null = null;
   let dropTargetTabId: string | null = null;
+  let draggingNoteId: string | null = null;
+  let dropTargetNoteId: string | null = null;
   let primaryTitleInput: HTMLInputElement | null = null;
   let secondaryTitleInput: HTMLInputElement | null = null;
   let isLoading = true;
@@ -312,7 +319,9 @@
     activeFolderId && project
       ? project.folders[activeFolderId]?.name ?? null
       : null;
-  $: displayNotes = filterNotesByFolder(notes, activeFolderId);
+  $: displayNotes = project
+    ? orderNotesForFolder(notes, activeFolderId, project.folders)
+    : [];
   $: noteListTitle = project
     ? `${project.name} / ${activeFolderName ?? "All notes"}`
     : "Notes";
@@ -323,6 +332,10 @@
       return;
     }
     notes = sortNotes(await adapter.listNotes(projectId));
+    const storedProject = await adapter.readProject(projectId);
+    if (storedProject) {
+      project = storedProject;
+    }
   };
 
   const loadProjects = async (): Promise<void> => {
@@ -634,6 +647,186 @@
     dropTargetTabId = null;
   };
 
+  const resolveNoteDocument = async (
+    noteId: string
+  ): Promise<NoteDocumentFile | null> => {
+    if (paneStates.primary.note?.id === noteId) {
+      return paneStates.primary.note;
+    }
+    if (paneStates.secondary.note?.id === noteId) {
+      return paneStates.secondary.note;
+    }
+    return adapter.readNote(projectId, noteId);
+  };
+
+  const syncPaneNoteFolder = (
+    noteId: string,
+    note: NoteDocumentFile
+  ): void => {
+    if (paneStates.primary.note?.id === noteId) {
+      updatePaneState("primary", {
+        note,
+        titleValue: note.title ?? "",
+        editorContent: note.pmDoc ?? createEmptyDocument(),
+        editorPlainText: note.derived?.plainText ?? "",
+      });
+    }
+    if (paneStates.secondary.note?.id === noteId) {
+      updatePaneState("secondary", {
+        note,
+        titleValue: note.title ?? "",
+        editorContent: note.pmDoc ?? createEmptyDocument(),
+        editorPlainText: note.derived?.plainText ?? "",
+      });
+    }
+  };
+
+  const reorderNotesInActiveFolder = async (
+    fromId: string,
+    toId: string
+  ): Promise<void> => {
+    if (!project || !activeFolderId) {
+      return;
+    }
+    const currentOrder = resolveFolderNoteOrder(
+      notes,
+      activeFolderId,
+      project.folders
+    );
+    const nextOrder = reorderNoteIds(currentOrder, fromId, toId);
+    if (nextOrder === currentOrder) {
+      return;
+    }
+    const nextFolders = setFolderNoteOrder(
+      project.folders,
+      activeFolderId,
+      nextOrder
+    );
+    const updatedProject: Project = {
+      ...project,
+      folders: nextFolders,
+      updatedAt: Date.now(),
+    };
+    await persistProject(updatedProject);
+  };
+
+  const moveNoteToFolder = async (
+    noteId: string,
+    targetFolderId: string
+  ): Promise<void> => {
+    if (!project) {
+      return;
+    }
+    await flushPendingSaveForNote(noteId);
+    const noteDocument = await resolveNoteDocument(noteId);
+    if (!noteDocument) {
+      return;
+    }
+    const sourceFolderId = noteDocument.folderId ?? null;
+    if (sourceFolderId === targetFolderId) {
+      return;
+    }
+    const sourceOrder =
+      sourceFolderId && project
+        ? resolveFolderNoteOrder(notes, sourceFolderId, project.folders)
+        : [];
+    const targetOrder = resolveFolderNoteOrder(
+      notes,
+      targetFolderId,
+      project.folders
+    );
+    const nextSourceOrder = sourceFolderId
+      ? sourceOrder.filter((id) => id !== noteId)
+      : [];
+    const nextTargetOrder = [...targetOrder.filter((id) => id !== noteId), noteId];
+    const updatedNote: NoteDocumentFile = {
+      ...noteDocument,
+      folderId: targetFolderId,
+      updatedAt: Date.now(),
+    };
+    syncPaneNoteFolder(noteId, updatedNote);
+    await persistNote(updatedNote);
+
+    const storedProject = await adapter.readProject(projectId);
+    if (!storedProject) {
+      return;
+    }
+    let nextFolders = storedProject.folders;
+    if (sourceFolderId) {
+      nextFolders = setFolderNoteOrder(
+        nextFolders,
+        sourceFolderId,
+        nextSourceOrder
+      );
+    }
+    nextFolders = setFolderNoteOrder(
+      nextFolders,
+      targetFolderId,
+      nextTargetOrder
+    );
+    const updatedProject: Project = {
+      ...storedProject,
+      folders: nextFolders,
+      updatedAt: Date.now(),
+    };
+    await persistProject(updatedProject);
+    await loadNotes();
+  };
+
+  const handleFolderNoteDrop = async (
+    noteId: string,
+    folderId: string
+  ): Promise<void> => {
+    await moveNoteToFolder(noteId, folderId);
+    handleNoteDragEnd();
+  };
+
+  const handleNoteDragStart = (noteId: string, event: DragEvent): void => {
+    draggingNoteId = noteId;
+    dropTargetNoteId = null;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", noteId);
+    }
+  };
+
+  const handleNoteDragOver = (noteId: string, event: DragEvent): void => {
+    if (!activeFolderId) {
+      return;
+    }
+    if (!draggingNoteId || draggingNoteId === noteId) {
+      return;
+    }
+    event.preventDefault();
+    dropTargetNoteId = noteId;
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+  };
+
+  const handleNoteDrop = async (
+    noteId: string,
+    event: DragEvent
+  ): Promise<void> => {
+    if (!activeFolderId) {
+      return;
+    }
+    event.preventDefault();
+    const draggedId =
+      draggingNoteId || event.dataTransfer?.getData("text/plain") || "";
+    if (!draggedId || draggedId === noteId) {
+      dropTargetNoteId = null;
+      return;
+    }
+    await reorderNotesInActiveFolder(draggedId, noteId);
+    dropTargetNoteId = null;
+  };
+
+  const handleNoteDragEnd = (): void => {
+    draggingNoteId = null;
+    dropTargetNoteId = null;
+  };
+
   const moveTabToPane = async (
     noteId: string,
     sourcePane: PaneId,
@@ -848,6 +1041,25 @@
     scheduleUiStateWrite();
     await persistNote(note);
     await loadNotes();
+    if (activeFolderId && project?.folders[activeFolderId]?.noteIds) {
+      const currentOrder = resolveFolderNoteOrder(
+        notes,
+        activeFolderId,
+        project.folders
+      );
+      const nextOrder = [...currentOrder.filter((id) => id !== note.id), note.id];
+      const nextFolders = setFolderNoteOrder(
+        project.folders,
+        activeFolderId,
+        nextOrder
+      );
+      const updatedProject: Project = {
+        ...project,
+        folders: nextFolders,
+        updatedAt: Date.now(),
+      };
+      await persistProject(updatedProject);
+    }
     syncSaveState();
   };
 
@@ -1139,10 +1351,12 @@
       folders={project?.folders ?? {}}
       notesIndex={project?.notesIndex ?? {}}
       {activeFolderId}
+      {draggingNoteId}
       onSelect={selectFolder}
       onCreate={createFolder}
       onRename={renameFolder}
       onDelete={deleteFolder}
+      onNoteDrop={handleFolderNoteDrop}
     />
   </div>
 
@@ -1194,6 +1408,13 @@
         notes={displayNotes}
         activeNoteId={activeTabId}
         onSelect={noteId => void activateTab(noteId)}
+        draggable={true}
+        draggingNoteId={draggingNoteId}
+        dropTargetNoteId={dropTargetNoteId}
+        onDragStart={handleNoteDragStart}
+        onDragOver={handleNoteDragOver}
+        onDrop={handleNoteDrop}
+        onDragEnd={handleNoteDragEnd}
       />
     {/if}
   </div>

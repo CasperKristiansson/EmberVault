@@ -20,6 +20,9 @@
   export let onRename: (folderId: string, name: string) => Promise<void> =
     async () => {};
   export let onDelete: (folderId: string) => Promise<void> = async () => {};
+  export let draggingNoteId: string | null = null;
+  export let onNoteDrop: (noteId: string, folderId: string) => void | Promise<void> =
+    async () => {};
 
   let expandedIds = new SvelteSet<string>();
   let editingFolderId: string | null = null;
@@ -159,6 +162,8 @@
         {activeFolderId}
         {editingFolderId}
         bind:draftName={draftName}
+        {draggingNoteId}
+        {onNoteDrop}
         onToggle={toggleFolder}
         onContextMenu={openMenu}
         onCommitRename={commitRename}

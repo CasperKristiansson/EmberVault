@@ -6,6 +6,13 @@
   export let notes: Array<{ id: string }> = [];
   export let activeNoteId: string | null = null;
   export let onSelect: (noteId: string) => void | Promise<void> = async () => {};
+  export let onDragStart: (noteId: string, event: DragEvent) => void = () => {};
+  export let onDragOver: (noteId: string, event: DragEvent) => void = () => {};
+  export let onDrop: (noteId: string, event: DragEvent) => void = () => {};
+  export let onDragEnd: (noteId: string, event: DragEvent) => void = () => {};
+  export let draggingNoteId: string | null = null;
+  export let dropTargetNoteId: string | null = null;
+  export let draggable = false;
   export let overscan = 6;
   export let virtualizeThreshold = 100;
 
@@ -106,6 +113,13 @@
               note={note as NoteIndexEntry}
               active={note.id === activeNoteId}
               onSelect={noteId => void onSelect(noteId)}
+              draggable={draggable}
+              dragging={draggingNoteId === note.id}
+              dropTarget={dropTargetNoteId === note.id}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDrop={onDrop}
+              onDragEnd={onDragEnd}
             />
           </slot>
         {/each}
@@ -124,6 +138,13 @@
             note={note as NoteIndexEntry}
             active={note.id === activeNoteId}
             onSelect={noteId => void onSelect(noteId)}
+            draggable={draggable}
+            dragging={draggingNoteId === note.id}
+            dropTarget={dropTargetNoteId === note.id}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            onDragEnd={onDragEnd}
           />
         </slot>
       {/each}

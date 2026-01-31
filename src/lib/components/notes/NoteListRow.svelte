@@ -4,9 +4,32 @@
   export let note: NoteIndexEntry;
   export let active = false;
   export let onSelect: (noteId: string) => void = () => {};
+  export let draggable = false;
+  export let dragging = false;
+  export let dropTarget = false;
+  export let onDragStart: (noteId: string, event: DragEvent) => void = () => {};
+  export let onDragOver: (noteId: string, event: DragEvent) => void = () => {};
+  export let onDrop: (noteId: string, event: DragEvent) => void = () => {};
+  export let onDragEnd: (noteId: string, event: DragEvent) => void = () => {};
 
   const handleClick = (): void => {
     onSelect(note.id);
+  };
+
+  const handleDragStart = (event: DragEvent): void => {
+    onDragStart(note.id, event);
+  };
+
+  const handleDragOver = (event: DragEvent): void => {
+    onDragOver(note.id, event);
+  };
+
+  const handleDrop = (event: DragEvent): void => {
+    onDrop(note.id, event);
+  };
+
+  const handleDragEnd = (event: DragEvent): void => {
+    onDragEnd(note.id, event);
   };
 
   $: resolvedTitle = note.title?.trim() ? note.title : "Untitled";
@@ -18,6 +41,14 @@
   type="button"
   on:click={handleClick}
   data-testid={`note-row-${note.id}`}
+  data-note-id={note.id}
+  data-dragging={dragging ? "true" : "false"}
+  data-drop-target={dropTarget ? "true" : "false"}
+  draggable={draggable}
+  on:dragstart={handleDragStart}
+  on:dragover={handleDragOver}
+  on:drop={handleDrop}
+  on:dragend={handleDragEnd}
 >
   <span class="note-row-title">{resolvedTitle}</span>
   <span class="note-row-meta">{formattedDate}</span>
@@ -58,6 +89,15 @@
     width: 3px;
     background: var(--accent-0);
     border-radius: 3px;
+  }
+
+  .note-row[data-drop-target="true"] {
+    background: var(--bg-3);
+    border-color: var(--accent-0);
+  }
+
+  .note-row[data-dragging="true"] {
+    opacity: 0.6;
   }
 
   .note-row-title {
