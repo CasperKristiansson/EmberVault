@@ -48,7 +48,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Drag-drop image -> same behavior
 - [x] Image rendering with caption + lightbox modal (blur rules)
 - [x] Implement math nodes + KaTeX render (inline + block)
-- [ ] Unit tests for asset dedupe + math serialize/deserialize
+- [x] Unit tests for asset dedupe + math serialize/deserialize
 - [ ] E2E: paste image, reload; insert LaTeX, reload
 
 ## Milestone 5 — Search + command palette

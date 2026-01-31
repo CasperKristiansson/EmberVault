@@ -210,7 +210,12 @@ export const MathBlock = TiptapNode.create({
   marks: "",
   defining: true,
   parseHTML() {
-    return [{ tag: 'div[data-type="math-block"]' }];
+    return [
+      {
+        tag: 'div[data-type="math-block"]',
+        contentElement: "pre",
+      },
+    ];
   },
   renderHTML({ HTMLAttributes }) {
     return [
