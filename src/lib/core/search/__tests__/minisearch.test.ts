@@ -25,6 +25,28 @@ const createNoteDocument = (index: number): NoteDocumentFile => ({
   },
 });
 
+const createCustomNote = (input: {
+  id: string;
+  title: string;
+  content: string;
+  updatedAt: number;
+}): NoteDocumentFile => ({
+  id: input.id,
+  title: input.title,
+  createdAt: input.updatedAt - 10,
+  updatedAt: input.updatedAt,
+  folderId: null,
+  tagIds: [],
+  favorite: false,
+  deletedAt: null,
+  customFields: {},
+  pmDoc: { type: "doc", content: [] },
+  derived: {
+    plainText: input.content,
+    outgoingLinks: [],
+  },
+});
+
 describe("MiniSearch index build", () => {
   it("indexes 1k notes and returns stable ordering", () => {
     const notes: NoteDocumentFile[] = [];
@@ -76,5 +98,30 @@ describe("MiniSearch index build", () => {
     updateSearchIndex(index, { type: "remove", noteId: "note-2" });
     const removedResults = querySearchIndex(index, { query: "common" });
     expect(removedResults).toHaveLength(0);
+  });
+
+  it("matches fuzzy queries for note titles and content", () => {
+    const noteA = createCustomNote({
+      id: "note-a",
+      title: "Project Plan",
+      content: "Quarterly goals and deliverables.",
+      updatedAt: 12,
+    });
+    const noteB = createCustomNote({
+      id: "note-b",
+      title: "Meeting Notes",
+      content: "Sync agenda for the team.",
+      updatedAt: 8,
+    });
+
+    const index = buildSearchIndex([noteA, noteB]);
+
+    const results = querySearchIndex(index, {
+      query: "proejct",
+      fuzzy: 0.3,
+      prefix: true,
+    });
+
+    expect(results.map(({ id }) => id)).toEqual(["note-a"]);
   });
 });

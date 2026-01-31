@@ -4,6 +4,7 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/stores";
   import AppShell from "$lib/components/AppShell.svelte";
+  import ModalHost from "$lib/components/modals/ModalHost.svelte";
   import TiptapEditor from "$lib/components/editor/TiptapEditor.svelte";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
@@ -24,6 +25,7 @@
     hydrateSearchIndex,
     type SearchIndexState,
   } from "$lib/state/search.store";
+  import { openModal } from "$lib/state/ui.store";
   import {
     resolveMobileView,
     type MobileView,
@@ -150,6 +152,14 @@
 
   const setMobileView = (view: MobileView): void => {
     mobileView = resolveMobileView(view, Boolean(activeNote));
+  };
+
+  const openGlobalSearch = (): void => {
+    openModal("global-search");
+  };
+
+  const openCommandPalette = (): void => {
+    openModal("command-palette");
   };
 
   const sortNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] =>
@@ -432,6 +442,22 @@
     };
     void initialize();
 
+    const handleGlobalShortcut = (event: KeyboardEvent): void => {
+      if (!(event.metaKey || event.ctrlKey)) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "k" && !event.shiftKey) {
+        event.preventDefault();
+        openCommandPalette();
+        return;
+      }
+      if (key === "f" && event.shiftKey) {
+        event.preventDefault();
+        openGlobalSearch();
+      }
+    };
+
     const handleVisibilityChange = (): void => {
       if (document.visibilityState === "hidden") {
         void flushPendingSave();
@@ -444,10 +470,12 @@
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("keydown", handleGlobalShortcut);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("keydown", handleGlobalShortcut);
     };
   });
 
@@ -495,14 +523,37 @@
         <div class="note-list-title">{noteListTitle}</div>
         <div class="note-list-subtitle">{noteListCount} total</div>
       </div>
-      <button
-        class="button primary"
-        data-testid="new-note"
-        on:click={createNote}
-        disabled={isLoading}
-      >
-        New note
-      </button>
+      <div class="note-list-actions">
+        <button
+          class="icon-button"
+          type="button"
+          data-testid="open-global-search"
+          aria-label="Open global search"
+          on:click={openGlobalSearch}
+        >
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+        </button>
+        <button
+          class="button primary"
+          data-testid="new-note"
+          on:click={createNote}
+          disabled={isLoading}
+        >
+          New note
+        </button>
+      </div>
     </header>
 
     {#if isLoading}
@@ -557,6 +608,19 @@
       Panels will appear here as the editor grows.
     </p>
   </div>
+
+  <ModalHost
+    slot="modal"
+    {project}
+    {projects}
+    notes={notes}
+    activeNoteId={activeNote?.id ?? null}
+    {searchState}
+    onOpenNote={openNote}
+    onCreateNote={createNote}
+    onOpenGlobalSearch={openGlobalSearch}
+    onProjectChange={switchProject}
+  />
 
   <div slot="bottom-nav" class="mobile-nav-content">
     <button
@@ -668,6 +732,12 @@
     color: var(--text-0);
   }
 
+  .icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+  }
+
   .sidebar-content {
     display: flex;
     flex-direction: column;
@@ -690,6 +760,12 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
+  }
+
+  .note-list-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .note-list-title {

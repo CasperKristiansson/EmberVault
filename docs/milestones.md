@@ -55,9 +55,9 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 
 - [x] Implement MiniSearch index build + persistence
 - [x] Incremental indexing on note save/delete/restore
-- [ ] Global search modal with filters + fuzzy
-- [ ] Command palette (Cmd/Ctrl+K) with actions + note switching
-- [ ] Unit tests for fuzzy search correctness
+- [x] Global search modal with filters + fuzzy
+- [x] Command palette (Cmd/Ctrl+K) with actions + note switching
+- [x] Unit tests for fuzzy search correctness
 - [ ] E2E: search finds note by partial typo
 
 ## Milestone 6 — Tabs + split view + drag/drop

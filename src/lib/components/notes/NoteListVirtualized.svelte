@@ -3,7 +3,7 @@
   import type { NoteIndexEntry } from "$lib/core/storage/types";
   import NoteListRow from "$lib/components/notes/NoteListRow.svelte";
 
-  export let notes: NoteIndexEntry[] = [];
+  export let notes: Array<{ id: string }> = [];
   export let activeNoteId: string | null = null;
   export let onSelect: (noteId: string) => void | Promise<void> = async () => {};
   export let overscan = 6;
@@ -96,22 +96,36 @@
     <div class="note-list-spacer" style={`height: ${totalHeight}px;`}>
       <div class="note-list-items" style={`transform: translateY(${offsetY}px);`}>
         {#each visibleNotes as note (note.id)}
-          <NoteListRow
+          <slot
+            name="row"
             {note}
             active={note.id === activeNoteId}
-            onSelect={noteId => void onSelect(noteId)}
-          />
+            onSelect={onSelect}
+          >
+            <NoteListRow
+              note={note as NoteIndexEntry}
+              active={note.id === activeNoteId}
+              onSelect={noteId => void onSelect(noteId)}
+            />
+          </slot>
         {/each}
       </div>
     </div>
   {:else}
     <div class="note-list-items note-list-items-static">
       {#each notes as note (note.id)}
-        <NoteListRow
+        <slot
+          name="row"
           {note}
           active={note.id === activeNoteId}
-          onSelect={noteId => void onSelect(noteId)}
-        />
+          onSelect={onSelect}
+        >
+          <NoteListRow
+            note={note as NoteIndexEntry}
+            active={note.id === activeNoteId}
+            onSelect={noteId => void onSelect(noteId)}
+          />
+        </slot>
       {/each}
     </div>
   {/if}
