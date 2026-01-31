@@ -20,6 +20,11 @@
   import { createDebouncedTask } from "$lib/core/utils/debounce";
   import { hashBlobSha256 } from "$lib/core/utils/hash";
   import {
+    applySearchIndexChange,
+    hydrateSearchIndex,
+    type SearchIndexState,
+  } from "$lib/state/search.store";
+  import {
     resolveMobileView,
     type MobileView,
   } from "$lib/core/utils/mobile-view";
@@ -44,6 +49,7 @@
   let saveState: "idle" | "saving" | "saved" = "idle";
   let mobileView: MobileView = "notes";
   let activeFolderId: string | null = null;
+  let searchState: SearchIndexState | null = null;
 
   const saveDelay = 400;
   let saveToken = 0;
@@ -170,6 +176,55 @@
     projects = await adapter.listProjects();
   };
 
+  const loadNoteDocumentsForIndex = async (): Promise<NoteDocumentFile[]> => {
+    if (!projectId || notes.length === 0) {
+      return [];
+    }
+    const noteDocuments = await Promise.all(
+      notes.map(async (entry) => adapter.readNote(projectId, entry.id))
+    );
+    return noteDocuments.filter(
+      (note): note is NoteDocumentFile =>
+        note !== null && note.deletedAt === null
+    );
+  };
+
+  const loadSearchIndex = async (): Promise<void> => {
+    if (!projectId) {
+      return;
+    }
+    const noteDocuments = await loadNoteDocumentsForIndex();
+    searchState = await hydrateSearchIndex(
+      adapter,
+      projectId,
+      noteDocuments
+    );
+  };
+
+  const updateSearchIndexForNote = async (
+    note: NoteDocumentFile
+  ): Promise<void> => {
+    if (!projectId) {
+      return;
+    }
+    if (!searchState) {
+      await loadSearchIndex();
+    }
+    if (!searchState) {
+      return;
+    }
+    searchState = await applySearchIndexChange({
+      adapter,
+      projectId,
+      state: searchState,
+      change: {
+        type: "upsert",
+        note,
+      },
+    });
+  };
+
+
   const persistProject = async (nextProject: Project): Promise<void> => {
     project = nextProject;
     projects = projects.some(current => current.id === nextProject.id)
@@ -198,6 +253,7 @@
         note.derived?.plainText ?? ""
       ),
     });
+    await updateSearchIndexForNote(note);
   };
 
   const debouncedSave = createDebouncedTask(
@@ -367,6 +423,7 @@
       project = storedProject;
       await loadProjects();
       await loadNotes();
+      await loadSearchIndex();
       if (notes.length > 0) {
         await openNote(notes[0]?.id ?? "");
       }

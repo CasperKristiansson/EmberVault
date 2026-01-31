@@ -4,6 +4,7 @@ import {
   loadSearchIndex,
   querySearchIndex,
   serializeSearchIndex,
+  updateSearchIndex,
 } from "../minisearch";
 import type { NoteDocumentFile } from "../../storage/types";
 
@@ -48,5 +49,32 @@ describe("MiniSearch index build", () => {
     const results = querySearchIndex(restored, { query: "phrase" });
     expect(results).toHaveLength(2);
     expect(results.map(({ id }) => id)).toEqual(["note-2", "note-1"]);
+  });
+
+  it("updates results with incremental changes", () => {
+    const noteA = createNoteDocument(1);
+    const noteB = createNoteDocument(2);
+    const index = buildSearchIndex([noteA, noteB]);
+
+    const updatedNoteA: NoteDocumentFile = {
+      ...noteA,
+      updatedAt: 10,
+      derived: {
+        plainText: "Unique search phrase",
+        outgoingLinks: [],
+      },
+    };
+
+    updateSearchIndex(index, { type: "upsert", note: updatedNoteA });
+
+    const updatedResults = querySearchIndex(index, { query: "unique" });
+    expect(updatedResults.map(({ id }) => id)).toEqual(["note-1"]);
+
+    const oldResults = querySearchIndex(index, { query: "common" });
+    expect(oldResults.map(({ id }) => id)).toEqual(["note-2"]);
+
+    updateSearchIndex(index, { type: "remove", noteId: "note-2" });
+    const removedResults = querySearchIndex(index, { query: "common" });
+    expect(removedResults).toHaveLength(0);
   });
 });

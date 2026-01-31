@@ -84,7 +84,6 @@ export type AssetMeta = {
 };
 
 export type UIState = Record<string, unknown>;
-export type SearchIndexSnapshot = string;
 
 export type StorageAdapter = {
   init: () => Promise<void>;
@@ -116,9 +115,6 @@ export type StorageAdapter = {
   listAssets: (projectId: string) => Promise<string[]>;
   writeUIState: (state: UIState) => Promise<void>;
   readUIState: () => Promise<UIState | null>;
-  writeSearchIndex: (
-    projectId: string,
-    snapshot: SearchIndexSnapshot
-  ) => Promise<void>;
-  readSearchIndex: (projectId: string) => Promise<SearchIndexSnapshot | null>;
+  writeSearchIndex: (projectId: string, snapshot: string) => Promise<void>;
+  readSearchIndex: (projectId: string) => Promise<string | null>;
 };

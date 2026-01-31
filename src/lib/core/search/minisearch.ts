@@ -1,5 +1,5 @@
 import MiniSearch from "minisearch";
-import type { NoteDocumentFile, SearchIndexSnapshot } from "../storage/types";
+import type { NoteDocumentFile } from "../storage/types";
 
 export type SearchDocument = {
   id: string;
@@ -27,6 +27,16 @@ export type SearchResult = {
   terms: string[];
   match?: Record<string, string[]>;
 } & Partial<SearchDocument>;
+
+export type SearchIndexChange =
+  | {
+      type: "upsert";
+      note: NoteDocumentFile;
+    }
+  | {
+      type: "remove";
+      noteId: string;
+    };
 
 const searchFields: (keyof Pick<SearchDocument, "title" | "content">)[] = [
   "title",
@@ -83,11 +93,10 @@ export const buildSearchIndex = (
 
 export const serializeSearchIndex = (
   index: MiniSearch<SearchDocument>
-): SearchIndexSnapshot => JSON.stringify(index);
+): string => JSON.stringify(index);
 
-export const loadSearchIndex = (
-  snapshot: SearchIndexSnapshot
-): MiniSearch<SearchDocument> => MiniSearch.loadJSON(snapshot, searchOptions);
+export const loadSearchIndex = (snapshot: string): MiniSearch<SearchDocument> =>
+  MiniSearch.loadJSON(snapshot, searchOptions);
 
 const sortSearchResults = (results: SearchResult[]): SearchResult[] =>
   results.toSorted((first, second) => {
@@ -118,4 +127,26 @@ export const querySearchIndex = (
     filter: parameters.filter,
   }) as SearchResult[];
   return sortSearchResults(results);
+};
+
+export const updateSearchIndex = (
+  index: MiniSearch<SearchDocument>,
+  change: SearchIndexChange
+): MiniSearch<SearchDocument> => {
+  if (change.type === "remove") {
+    index.discard(change.noteId);
+    return index;
+  }
+  const { note } = change;
+  if (note.deletedAt) {
+    index.discard(note.id);
+    return index;
+  }
+  const document = toSearchDocument(note);
+  if (index.has(document.id)) {
+    index.replace(document);
+    return index;
+  }
+  index.add(document);
+  return index;
 };

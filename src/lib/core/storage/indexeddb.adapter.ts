@@ -5,7 +5,6 @@ import type {
   NoteDocumentFile,
   NoteIndexEntry,
   Project,
-  SearchIndexSnapshot,
   StorageAdapter,
   UIState,
 } from "./types";
@@ -52,7 +51,7 @@ type AssetRecord = {
 
 type SearchIndexRecord = {
   projectId: string;
-  snapshot: SearchIndexSnapshot;
+  snapshot: string;
 };
 
 const noteKeyPath: string[] = [projectIdKey, noteIdKey];
@@ -501,7 +500,7 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   public async writeSearchIndex(
     projectId: string,
-    snapshot: SearchIndexSnapshot
+    snapshot: string
   ): Promise<void> {
     const record: SearchIndexRecord = {
       projectId,
@@ -514,9 +513,7 @@ export class IndexedDBAdapter implements StorageAdapter {
     );
   }
 
-  public async readSearchIndex(
-    projectId: string
-  ): Promise<SearchIndexSnapshot | null> {
+  public async readSearchIndex(projectId: string): Promise<string | null> {
     const record = await this.withStore<SearchIndexRecord | undefined>(
       storeNames.searchIndex,
       "readonly",
