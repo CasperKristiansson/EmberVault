@@ -71,7 +71,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 
 ## Milestone 7 — Backlinks + graph view
 
-- [ ] Wiki link syntax [[...]] creation UI (autocomplete)
+- [x] Wiki link syntax [[...]] creation UI (autocomplete)
 - [ ] Backlinks panel (linked mentions)
 - [ ] Graph view (sigma.js) project graph + current note neighborhood
 - [ ] Graph interactions: click node opens note tab

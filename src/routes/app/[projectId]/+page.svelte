@@ -10,6 +10,8 @@
   import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
   import ProjectSwitcher from "$lib/components/sidebar/ProjectSwitcher.svelte";
   import { createEmptyDocument } from "$lib/core/editor/tiptap-config";
+  import { resolveOutgoingLinks } from "$lib/core/editor/links/parse";
+  import type { WikiLinkCandidate } from "$lib/core/editor/wiki-links";
   import {
     addFolder,
     isFolderEmpty,
@@ -99,6 +101,7 @@
   let mobileView: MobileView = "notes";
   let activeFolderId: string | null = null;
   let searchState: SearchIndexState | null = null;
+  let wikiLinkCandidates: WikiLinkCandidate[] = [];
 
   const saveDelay = 400;
   const uiStateDelay = 800;
@@ -114,6 +117,9 @@
   $: activeNote = activePaneState.note;
   $: activeTabId = activePaneState.activeTabId;
   $: activeTabs = activePaneState.tabs;
+  $: wikiLinkCandidates = notes
+    .filter((note) => note.deletedAt === null)
+    .map((note) => ({ id: note.id, title: note.title }));
 
   const toDerivedMarkdown = (title: string, body: string): string => {
     const trimmedTitle = title.trim();
@@ -900,16 +906,27 @@
   };
 
   const persistNote = async (note: NoteDocumentFile): Promise<void> => {
+    const activeNotes = notes.filter((entry) => entry.deletedAt === null);
+    const resolvedPlainText = note.derived?.plainText ?? "";
+    const outgoingLinks = resolveOutgoingLinks(resolvedPlainText, activeNotes);
+    const resolvedNote: NoteDocumentFile = {
+      ...note,
+      derived: {
+        ...(note.derived ?? {}),
+        plainText: resolvedPlainText,
+        outgoingLinks,
+      },
+    };
     await adapter.writeNote({
       projectId,
       noteId: note.id,
-      noteDocument: note,
+      noteDocument: resolvedNote,
       derivedMarkdown: toDerivedMarkdown(
         note.title,
-        note.derived?.plainText ?? ""
+        resolvedPlainText
       ),
     });
-    await updateSearchIndexForNote(note);
+    await updateSearchIndexForNote(resolvedNote);
   };
 
   const getSaveTask = (noteId: string): NoteSaveTask => {
@@ -1464,6 +1481,7 @@
               content={paneStates.primary.editorContent}
               ariaLabel="Note content"
               dataTestId="note-body"
+              linkCandidates={wikiLinkCandidates}
               onImagePaste={handleImagePaste}
               onUpdate={payload => handleEditorUpdate("primary", payload)}
             />
@@ -1510,6 +1528,7 @@
               content={paneStates.secondary.editorContent}
               ariaLabel="Note content"
               dataTestId="note-body-secondary"
+              linkCandidates={wikiLinkCandidates}
               onImagePaste={handleImagePaste}
               onUpdate={payload => handleEditorUpdate("secondary", payload)}
             />
@@ -1543,6 +1562,7 @@
             content={paneStates.primary.editorContent}
             ariaLabel="Note content"
             dataTestId="note-body"
+            linkCandidates={wikiLinkCandidates}
             onImagePaste={handleImagePaste}
             onUpdate={payload => handleEditorUpdate("primary", payload)}
           />

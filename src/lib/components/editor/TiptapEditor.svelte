@@ -9,6 +9,11 @@
     type SlashMenuItemId,
   } from "$lib/core/editor/slash-menu";
   import {
+    buildWikiLinkInsertText,
+    filterWikiLinkCandidates,
+    type WikiLinkCandidate,
+  } from "$lib/core/editor/wiki-links";
+  import {
     extractImageFromClipboard,
     extractImageFromDataTransfer,
   } from "$lib/core/editor/images/paste";
@@ -17,11 +22,13 @@
     createTiptapExtensions,
   } from "$lib/core/editor/tiptap-config";
   import SlashMenu from "./SlashMenu.svelte";
+  import WikiLinkMenu from "./WikiLinkMenu.svelte";
 
   export let content: Record<string, unknown> = createEmptyDocument();
   export let editable = true;
   export let ariaLabel = "Note content";
   export let dataTestId = "note-body";
+  export let linkCandidates: WikiLinkCandidate[] = [];
   export let onImagePaste: (file: File | Blob) => Promise<{
     assetId: string;
     src: string;
@@ -48,6 +55,14 @@
   let slashMenuSlashPosition: number | null = null;
   const slashMenuItems = getSlashMenuItems();
 
+  let wikiLinkOpen = false;
+  let wikiLinkPosition: { x: number; y: number } | null = null;
+  let wikiLinkSelectedIndex = 0;
+  let wikiLinkElement: HTMLDivElement | null = null;
+  let wikiLinkStartPos: number | null = null;
+  let wikiLinkQuery = "";
+  let wikiLinkItems: WikiLinkCandidate[] = [];
+
   let lightboxOpen = false;
   let lightboxSrc = "";
   let lightboxAlt = "";
@@ -57,6 +72,7 @@
   const menuWidth = 240;
   const menuHeight = 320;
   const menuMargin = 8;
+  const wikiMenuItemLimit = 12;
 
   const clamp = (value: number, min: number, max: number): number =>
     Math.min(Math.max(value, min), max);
@@ -85,6 +101,18 @@
     return startIndex;
   };
 
+  const getNextWikiLinkIndex = (
+    startIndex: number,
+    direction: 1 | -1
+  ): number => {
+    if (wikiLinkItems.length === 0) {
+      return 0;
+    }
+    return (
+      (startIndex + direction + wikiLinkItems.length) % wikiLinkItems.length
+    );
+  };
+
   const resolveMenuPosition = (coords: {
     left: number;
     bottom: number;
@@ -105,6 +133,7 @@
     if (!editor) {
       return;
     }
+    closeWikiLinkMenu();
     const coords = editor.view.coordsAtPos(editor.state.selection.from);
     slashMenuPosition = resolveMenuPosition({
       left: coords.left,
@@ -120,6 +149,67 @@
     slashMenuPosition = null;
     slashMenuSlashPosition = null;
   };
+
+  const openWikiLinkMenu = (startPos: number): void => {
+    if (!editor) {
+      return;
+    }
+    closeSlashMenu();
+    wikiLinkStartPos = startPos;
+    const coords = editor.view.coordsAtPos(editor.state.selection.from);
+    wikiLinkPosition = resolveMenuPosition({
+      left: coords.left,
+      bottom: coords.bottom,
+    });
+    wikiLinkQuery = "";
+    wikiLinkSelectedIndex = 0;
+    wikiLinkOpen = true;
+  };
+
+  const closeWikiLinkMenu = (): void => {
+    wikiLinkOpen = false;
+    wikiLinkPosition = null;
+    wikiLinkStartPos = null;
+    wikiLinkQuery = "";
+  };
+
+  const updateWikiLinkQuery = (): void => {
+    if (!editor || !wikiLinkOpen || wikiLinkStartPos === null) {
+      return;
+    }
+    const selectionPos = editor.state.selection.from;
+    if (selectionPos < wikiLinkStartPos + 2) {
+      closeWikiLinkMenu();
+      return;
+    }
+    const trigger = editor.state.doc.textBetween(
+      wikiLinkStartPos,
+      wikiLinkStartPos + 2,
+      "\0",
+      "\0"
+    );
+    if (trigger !== "[[") {
+      closeWikiLinkMenu();
+      return;
+    }
+    const activeText = editor.state.doc.textBetween(
+      wikiLinkStartPos,
+      selectionPos,
+      "\0",
+      "\0"
+    );
+    if (activeText.includes("]]")) {
+      closeWikiLinkMenu();
+      return;
+    }
+    wikiLinkQuery = editor.state.doc.textBetween(
+      wikiLinkStartPos + 2,
+      selectionPos,
+      "\0",
+      "\0"
+    );
+  };
+
 
   const deleteSlashIfPresent = (chain: SlashMenuChain): void => {
     if (!editor) {
@@ -158,6 +248,36 @@
       slashMenuSelectedIndex = index;
     }
   };
+
+  const selectWikiLinkItem = (item: WikiLinkCandidate): void => {
+    if (!editor || wikiLinkStartPos === null) {
+      return;
+    }
+    const from = wikiLinkStartPos;
+    const to = editor.state.selection.from;
+    const insertText = buildWikiLinkInsertText(item);
+    editor.chain().focus().insertContentAt({ from, to }, insertText).run();
+    closeWikiLinkMenu();
+  };
+
+  const handleWikiLinkHighlight = (index: number): void => {
+    if (wikiLinkItems[index]) {
+      wikiLinkSelectedIndex = index;
+    }
+  };
+
+  $: wikiLinkItems = filterWikiLinkCandidates(
+    linkCandidates,
+    wikiLinkQuery
+  ).slice(0, wikiMenuItemLimit);
+
+  $: if (wikiLinkOpen) {
+    if (wikiLinkItems.length === 0) {
+      wikiLinkSelectedIndex = 0;
+    } else if (wikiLinkSelectedIndex >= wikiLinkItems.length) {
+      wikiLinkSelectedIndex = 0;
+    }
+  }
 
   const handleImagePaste = async (file: File | Blob): Promise<void> => {
     if (!editor) {
@@ -288,6 +408,38 @@
           },
         },
         handleKeyDown: (_view, event) => {
+          if (wikiLinkOpen) {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              wikiLinkSelectedIndex = getNextWikiLinkIndex(
+                wikiLinkSelectedIndex,
+                1
+              );
+              return true;
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              wikiLinkSelectedIndex = getNextWikiLinkIndex(
+                wikiLinkSelectedIndex,
+                -1
+              );
+              return true;
+            }
+            if (event.key === "Enter") {
+              event.preventDefault();
+              const selected = wikiLinkItems[wikiLinkSelectedIndex];
+              if (selected) {
+                selectWikiLinkItem(selected);
+              }
+              return true;
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              closeWikiLinkMenu();
+              return true;
+            }
+          }
+
           if (slashMenuOpen) {
             if (event.key === "ArrowDown") {
               event.preventDefault();
@@ -355,6 +507,24 @@
             const slashPos = from;
             queueMicrotask(() => openSlashMenu(slashPos));
           }
+          if (
+            text === "[" &&
+            editor &&
+            !editor.isActive("codeBlock") &&
+            !wikiLinkOpen &&
+            from > 0
+          ) {
+            const previous = editor.state.doc.textBetween(
+              from - 1,
+              from,
+              "\0",
+              "\0"
+            );
+            if (previous === "[") {
+              const startPos = from - 1;
+              queueMicrotask(() => openWikiLinkMenu(startPos));
+            }
+          }
           return false;
         },
       },
@@ -362,6 +532,9 @@
       content: content as JSONContent,
       editable,
       onUpdate: ({ editor }) => {
+        if (wikiLinkOpen) {
+          updateWikiLinkQuery();
+        }
         onUpdate({
           json: editor.getJSON() as Record<string, unknown>,
           text: editor.getText(),
@@ -370,9 +543,17 @@
     });
     editor.on("transaction", ({ transaction }) => {
       if (!slashMenuOpen || slashMenuSlashPosition === null) {
+        if (wikiLinkOpen && wikiLinkStartPos !== null) {
+          wikiLinkStartPos = transaction.mapping.map(wikiLinkStartPos);
+          updateWikiLinkQuery();
+        }
         return;
       }
       slashMenuSlashPosition = transaction.mapping.map(slashMenuSlashPosition);
+      if (wikiLinkOpen && wikiLinkStartPos !== null) {
+        wikiLinkStartPos = transaction.mapping.map(wikiLinkStartPos);
+        updateWikiLinkQuery();
+      }
     });
     syntheticPasteHandler = (event: Event): void => {
       const file = resolveDetailFile(event);
@@ -403,13 +584,19 @@
   onMount(() => {
     initializeEditor();
     const handleClick = (event: MouseEvent) => {
-      if (!slashMenuOpen) {
-        return;
+      const target = event.target as Node;
+      if (slashMenuOpen) {
+        if (slashMenuElement && slashMenuElement.contains(target)) {
+          return;
+        }
+        closeSlashMenu();
       }
-      if (slashMenuElement && slashMenuElement.contains(event.target as Node)) {
-        return;
+      if (wikiLinkOpen) {
+        if (wikiLinkElement && wikiLinkElement.contains(target)) {
+          return;
+        }
+        closeWikiLinkMenu();
       }
-      closeSlashMenu();
     };
 
     const handleKeydown = (event: KeyboardEvent) => {
@@ -418,6 +605,10 @@
       }
       if (lightboxOpen) {
         closeLightbox();
+        return;
+      }
+      if (wikiLinkOpen) {
+        closeWikiLinkMenu();
         return;
       }
       if (slashMenuOpen) {
@@ -486,6 +677,16 @@
   bind:element={slashMenuElement}
   onSelect={selectSlashMenuItem}
   onHighlight={handleSlashMenuHighlight}
+/>
+
+<WikiLinkMenu
+  open={wikiLinkOpen}
+  position={wikiLinkPosition}
+  items={wikiLinkItems}
+  selectedIndex={wikiLinkSelectedIndex}
+  bind:element={wikiLinkElement}
+  onSelect={selectWikiLinkItem}
+  onHighlight={handleWikiLinkHighlight}
 />
 
 {#if lightboxOpen}
