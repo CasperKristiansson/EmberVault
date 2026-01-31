@@ -4,12 +4,19 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/stores";
   import AppShell from "$lib/components/AppShell.svelte";
+  import RightPanel from "$lib/components/rightpanel/RightPanel.svelte";
+  import RightPanelTabs from "$lib/components/rightpanel/RightPanelTabs.svelte";
   import ModalHost from "$lib/components/modals/ModalHost.svelte";
   import TiptapEditor from "$lib/components/editor/TiptapEditor.svelte";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
   import ProjectSwitcher from "$lib/components/sidebar/ProjectSwitcher.svelte";
   import { createEmptyDocument } from "$lib/core/editor/tiptap-config";
+  import {
+    buildBacklinkSnippet,
+    resolveLinkedMentions,
+    type BacklinkSnippet,
+  } from "$lib/core/editor/links/backlinks";
   import { resolveOutgoingLinks } from "$lib/core/editor/links/parse";
   import type { WikiLinkCandidate } from "$lib/core/editor/wiki-links";
   import {
@@ -66,6 +73,14 @@
     editorPlainText: string;
   };
 
+  type RightPanelTab = "outline" | "backlinks" | "metadata";
+
+  type BacklinkEntry = {
+    id: string;
+    title: string;
+    snippet: BacklinkSnippet | null;
+  };
+
   const createPaneState = (): PaneState => ({
     tabs: [],
     activeTabId: null,
@@ -102,9 +117,15 @@
   let activeFolderId: string | null = null;
   let searchState: SearchIndexState | null = null;
   let wikiLinkCandidates: WikiLinkCandidate[] = [];
+  let rightPanelTab: RightPanelTab = "outline";
+  let linkedMentions: BacklinkEntry[] = [];
+  let backlinksLoading = false;
+  let notesRevision = 0;
+  let backlinksKey = "";
 
   const saveDelay = 400;
   const uiStateDelay = 800;
+  const backlinksDelay = 200;
 
   type NoteSaveTask = ReturnType<typeof createDebouncedTask<[NoteDocumentFile]>>;
   const saveTasks: Record<string, NoteSaveTask> = {};
@@ -318,6 +339,74 @@
     openModal("command-palette");
   };
 
+  const handleRightPanelTabSelect = (tab: RightPanelTab): void => {
+    rightPanelTab = tab;
+  };
+
+  const resolveBacklinkTargets = (
+    targetId: string,
+    targetTitle: string | null
+  ): string[] => {
+    const targets: string[] = [];
+    if (targetTitle) {
+      const trimmedTitle = targetTitle.trim();
+      if (trimmedTitle) {
+        targets.push(trimmedTitle);
+      }
+    }
+    if (targetId) {
+      targets.push(targetId);
+    }
+    return targets;
+  };
+
+  let backlinkRequestId = 0;
+  const backlinksRefreshTask = createDebouncedTask(
+    async (targetId: string, targetTitle: string | null) => {
+      const requestId = (backlinkRequestId += 1);
+      if (!projectId || !targetId) {
+        linkedMentions = [];
+        backlinksLoading = false;
+        return;
+      }
+      backlinksLoading = true;
+      const candidates = resolveLinkedMentions(notes, targetId, targetTitle);
+      if (candidates.length === 0) {
+        if (requestId === backlinkRequestId) {
+          linkedMentions = [];
+          backlinksLoading = false;
+        }
+        return;
+      }
+      const targets = resolveBacklinkTargets(targetId, targetTitle);
+      const results = await Promise.all(
+        candidates.map(async (note) => {
+          const document = await adapter.readNote(projectId, note.id);
+          if (!document) {
+            return null;
+          }
+          const snippet = buildBacklinkSnippet(
+            document.derived?.plainText ?? "",
+            targets
+          );
+          return {
+            id: note.id,
+            title: note.title,
+            snippet,
+          };
+        })
+      );
+      if (requestId !== backlinkRequestId) {
+        return;
+      }
+      linkedMentions = results.filter(
+        (entry): entry is BacklinkEntry => entry !== null
+      );
+      backlinksLoading = false;
+    },
+    backlinksDelay
+  );
+
   const sortNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] =>
     [...list].sort((first, second) => second.updatedAt - first.updatedAt);
 
@@ -332,12 +421,27 @@
     ? `${project.name} / ${activeFolderName ?? "All notes"}`
     : "Notes";
   $: noteListCount = displayNotes.length;
+  $: {
+    const targetId = activeNote?.id ?? "";
+    const targetTitle = activeNote?.title ?? "";
+    const nextKey = `${targetId}:${targetTitle}:${notesRevision}`;
+    if (nextKey !== backlinksKey) {
+      backlinksKey = nextKey;
+      if (!targetId) {
+        linkedMentions = [];
+        backlinksLoading = false;
+      } else {
+        backlinksRefreshTask.schedule(targetId, targetTitle);
+      }
+    }
+  }
 
   const loadNotes = async (): Promise<void> => {
     if (!projectId) {
       return;
     }
     notes = sortNotes(await adapter.listNotes(projectId));
+    notesRevision += 1;
     const storedProject = await adapter.readProject(projectId);
     if (storedProject) {
       project = storedProject;
@@ -1352,9 +1456,10 @@
           <path d="M12 4v16" />
         </svg>
       </button>
-      <button class="icon-button" type="button">Outline</button>
-      <button class="icon-button" type="button">Backlinks</button>
-      <button class="icon-button" type="button">Metadata</button>
+      <RightPanelTabs
+        activeTab={rightPanelTab}
+        onSelect={handleRightPanelTabSelect}
+      />
     </div>
   </div>
 
@@ -1571,13 +1676,14 @@
     {/if}
   </div>
 
-  <div slot="right-panel" class="right-panel-content">
-    <div class="right-panel-title">Right panel</div>
-    <div class="right-panel-subtitle">Outline · Backlinks · Metadata</div>
-    <p class="right-panel-body">
-      Panels will appear here as the editor grows.
-    </p>
-  </div>
+  <RightPanel
+    slot="right-panel"
+    activeTab={rightPanelTab}
+    activeNoteId={activeNote?.id ?? null}
+    linkedMentions={linkedMentions}
+    backlinksLoading={backlinksLoading}
+    onOpenNote={activateTab}
+  />
 
   <ModalHost
     slot="modal"
@@ -1591,6 +1697,7 @@
     onOpenGlobalSearch={openGlobalSearch}
     onProjectChange={switchProject}
     onToggleSplitView={toggleSplitView}
+    onToggleRightPanel={handleRightPanelTabSelect}
   />
 
   <div slot="bottom-nav" class="mobile-nav-content">
@@ -1920,27 +2027,6 @@
   .button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-  }
-
-  .right-panel-content {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .right-panel-title {
-    font-weight: 500;
-  }
-
-  .right-panel-subtitle {
-    font-size: 12px;
-    color: var(--text-2);
-  }
-
-  .right-panel-body {
-    margin: 0;
-    font-size: 13px;
-    color: var(--text-1);
   }
 
   .mobile-nav-content {
