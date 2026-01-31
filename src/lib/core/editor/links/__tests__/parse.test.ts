@@ -52,4 +52,11 @@ describe("resolveOutgoingLinks", () => {
     ];
     expect(resolveOutgoingLinks("Link [[Shared]]", notes)).toEqual(["Shared"]);
   });
+
+  it("keeps unknown titles unresolved", () => {
+    const notes = [createNote("01HAAA", "Alpha")];
+    expect(resolveOutgoingLinks("Link [[Missing]]", notes)).toEqual([
+      "Missing",
+    ]);
+  });
 });

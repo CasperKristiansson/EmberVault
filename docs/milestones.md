@@ -75,7 +75,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Backlinks panel (linked mentions)
 - [x] Graph view (sigma.js) project graph + current note neighborhood
 - [x] Graph interactions: click node opens note tab
-- [ ] Unit tests for link parsing and graph edge generation
+- [x] Unit tests for link parsing and graph edge generation
 - [ ] E2E: create links, graph shows edge, click navigates
 
 ## Milestone 8 — Templates + metadata + favorites + trash polish
