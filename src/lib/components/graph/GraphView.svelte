@@ -127,6 +127,12 @@
         onNodeClick(nodeId);
         return true;
       },
+      hasEdge: (sourceId: string, targetId: string): boolean => {
+        if (!graph) {
+          return false;
+        }
+        return graph.hasEdge(`${sourceId}->${targetId}`);
+      },
     };
     const typedWindow = globalWindow as Window & {
       embervaultGraphTest?: typeof api;
