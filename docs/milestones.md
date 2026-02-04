@@ -82,7 +82,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 
 - [x] Templates manager + apply template on new note
 - [x] Favorites view + star toggles in list/editor
-- [ ] Metadata panel with custom fields CRUD
+- [x] Metadata panel with custom fields CRUD
 - [ ] Trash view polish with restore/permanent delete confirm
 - [ ] E2E: create template, new note from template, persists
 

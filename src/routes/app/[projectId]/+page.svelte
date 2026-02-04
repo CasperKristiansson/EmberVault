@@ -38,6 +38,7 @@
   import { createUlid } from "$lib/core/utils/ulid";
   import { createDebouncedTask } from "$lib/core/utils/debounce";
   import { hashBlobSha256 } from "$lib/core/utils/hash";
+  import { formatCustomFieldValue } from "$lib/core/utils/custom-fields";
   import {
     addTab,
     closeTabState,
@@ -58,6 +59,7 @@
   import { IndexedDBAdapter } from "$lib/core/storage/indexeddb.adapter";
   import type {
     AssetMeta,
+    CustomFieldValue,
     NoteDocumentFile,
     NoteIndexEntry,
     Project,
@@ -1381,6 +1383,54 @@
     }
   };
 
+  const updateCustomFieldsForNote = (
+    noteId: string,
+    fields: Record<string, CustomFieldValue>
+  ): void => {
+    const timestamp = Date.now();
+    let updatedNote: NoteDocumentFile | null = null;
+    (["primary", "secondary"] as PaneId[]).forEach((paneId) => {
+      const pane = getPaneState(paneId);
+      if (!pane.note || pane.note.id !== noteId) {
+        return;
+      }
+      const nextNote: NoteDocumentFile = {
+        ...pane.note,
+        customFields: fields,
+        updatedAt: timestamp,
+      };
+      updatedNote = nextNote;
+      updatePaneState(paneId, { note: nextNote });
+    });
+    if (updatedNote) {
+      scheduleSave(updatedNote);
+    }
+  };
+
+  const getCustomFieldChips = (
+    note: NoteDocumentFile | null
+  ): Array<{ key: string; label: string }> => {
+    if (!note) {
+      return [];
+    }
+    return Object.entries(note.customFields)
+      .slice(0, 3)
+      .map(([key, value]) => {
+        const trimmedKey = key.trim();
+        if (!trimmedKey) {
+          return null;
+        }
+        const formatted = formatCustomFieldValue(value);
+        return {
+          key: trimmedKey,
+          label: `${trimmedKey}: ${formatted || "—"}`,
+        };
+      })
+      .filter(
+        (entry): entry is { key: string; label: string } => entry !== null
+      );
+  };
+
   const toNoteIndexEntry = (note: NoteDocumentFile): NoteIndexEntry => {
     const hasCustomFields = Object.keys(note.customFields).length > 0;
     return {
@@ -2255,7 +2305,13 @@
                   </svg>
                 </button>
               </div>
-              <div class="chips-row" aria-label="Metadata chips"></div>
+              <div class="chips-row" aria-label="Metadata chips">
+                {#each getCustomFieldChips(paneStates.primary.note) as chip (
+                  chip.key
+                )}
+                  <span class="metadata-chip">{chip.label}</span>
+                {/each}
+              </div>
             </div>
 
             <div class="field field-body">
@@ -2332,7 +2388,13 @@
                   </svg>
                 </button>
               </div>
-              <div class="chips-row" aria-label="Metadata chips"></div>
+              <div class="chips-row" aria-label="Metadata chips">
+                {#each getCustomFieldChips(paneStates.secondary.note) as chip (
+                  chip.key
+                )}
+                  <span class="metadata-chip">{chip.label}</span>
+                {/each}
+              </div>
             </div>
 
             <div class="field field-body">
@@ -2396,7 +2458,13 @@
                 </svg>
               </button>
             </div>
-            <div class="chips-row" aria-label="Metadata chips"></div>
+            <div class="chips-row" aria-label="Metadata chips">
+              {#each getCustomFieldChips(paneStates.primary.note) as chip (
+                chip.key
+              )}
+                <span class="metadata-chip">{chip.label}</span>
+              {/each}
+            </div>
           </div>
 
           <div class="field field-body">
@@ -2419,9 +2487,12 @@
     slot="right-panel"
     activeTab={rightPanelTab}
     activeNoteId={activeNote?.id ?? null}
+    activeNote={activeNote}
+    {project}
     linkedMentions={linkedMentions}
     backlinksLoading={backlinksLoading}
     onOpenNote={activateTab}
+    onUpdateCustomFields={updateCustomFieldsForNote}
   />
 
   <ModalHost
@@ -2824,6 +2895,19 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+  }
+
+  .metadata-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-2);
+    color: var(--text-1);
+    font-size: 11px;
+    line-height: 1.2;
   }
 
   .editor-empty {

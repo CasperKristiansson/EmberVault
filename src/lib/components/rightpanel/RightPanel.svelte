@@ -3,6 +3,11 @@
   import BacklinksPanel from "$lib/components/rightpanel/BacklinksPanel.svelte";
   import OutlinePanel from "$lib/components/rightpanel/OutlinePanel.svelte";
   import MetadataPanel from "$lib/components/rightpanel/MetadataPanel.svelte";
+  import type {
+    CustomFieldValue,
+    NoteDocumentFile,
+    Project,
+  } from "$lib/core/storage/types";
 
   type RightPanelTab = "outline" | "backlinks" | "metadata";
 
@@ -14,9 +19,15 @@
 
   export let activeTab: RightPanelTab = "outline";
   export let activeNoteId: string | null = null;
+  export let activeNote: NoteDocumentFile | null = null;
+  export let project: Project | null = null;
   export let linkedMentions: BacklinkEntry[] = [];
   export let backlinksLoading = false;
   export let onOpenNote: (noteId: string) => void = () => {};
+  export let onUpdateCustomFields: (
+    noteId: string,
+    fields: Record<string, CustomFieldValue>
+  ) => void = () => {};
 </script>
 
 <div class="right-panel" data-testid="right-panel-content">
@@ -30,7 +41,11 @@
       onOpenNote={onOpenNote}
     />
   {:else}
-    <MetadataPanel {activeNoteId} />
+    <MetadataPanel
+      note={activeNote}
+      {project}
+      onUpdateCustomFields={onUpdateCustomFields}
+    />
   {/if}
 </div>
 
