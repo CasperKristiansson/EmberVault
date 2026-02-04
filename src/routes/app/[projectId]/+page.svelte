@@ -34,6 +34,7 @@
     resolveFolderNoteOrder,
     setFolderNoteOrder,
   } from "$lib/core/utils/note-order";
+  import { filterNotesByFavorites } from "$lib/core/utils/notes-filter";
   import { createUlid } from "$lib/core/utils/ulid";
   import { createDebouncedTask } from "$lib/core/utils/debounce";
   import { hashBlobSha256 } from "$lib/core/utils/hash";
@@ -111,9 +112,11 @@
   let project: Project | null = null;
   let projects: Project[] = [];
   let notes: NoteIndexEntry[] = [];
+  let filteredNotes: NoteIndexEntry[] = [];
   let templates: TemplateIndexEntry[] = [];
   let splitEnabled = false;
   let activePane: PaneId = "primary";
+  let favoriteOverrides: Record<string, boolean> = {};
   let paneStates: Record<PaneId, PaneState> = {
     primary: createPaneState(),
     secondary: createPaneState(),
@@ -136,6 +139,7 @@
   let mobileView: MobileView = "notes";
   let workspaceMode: "notes" | "graph" | "templates" = "notes";
   let activeFolderId: string | null = null;
+  let favoritesOnly = false;
   let searchState: SearchIndexState | null = null;
   let wikiLinkCandidates: WikiLinkCandidate[] = [];
   let rightPanelTab: RightPanelTab = "outline";
@@ -459,6 +463,10 @@
     }
   };
 
+  const toggleFavoritesFilter = (): void => {
+    favoritesOnly = !favoritesOnly;
+  };
+
   const openTemplatesView = (): void => {
     workspaceMode = "templates";
     if (mobileView === "graph") {
@@ -548,13 +556,14 @@
   $: displayNotes = project
     ? orderNotesForFolder(notes, activeFolderId, project.folders)
     : [];
+  $: filteredNotes = filterNotesByFavorites(displayNotes, favoritesOnly);
   $: displayTemplates = sortTemplates(
     templates.filter((template) => template.deletedAt === null)
   );
   $: noteListTitle = project
     ? `${project.name} / ${activeFolderName ?? "All notes"}`
     : "Notes";
-  $: noteListCount = displayNotes.length;
+  $: noteListCount = filteredNotes.length;
   $: templateListCount = displayTemplates.length;
   $: {
     const targetId = activeNote?.id ?? "";
@@ -575,7 +584,15 @@
     if (!projectId) {
       return;
     }
-    notes = sortNotes(await adapter.listNotes(projectId));
+    const loadedNotes = sortNotes(await adapter.listNotes(projectId));
+    if (Object.keys(favoriteOverrides).length > 0) {
+      notes = loadedNotes.map((note) => {
+        const override = favoriteOverrides[note.id];
+        return override === undefined ? note : { ...note, favorite: override };
+      });
+    } else {
+      notes = loadedNotes;
+    }
     notesRevision += 1;
     const storedProject = await adapter.readProject(projectId);
     if (storedProject) {
@@ -1364,6 +1381,111 @@
     }
   };
 
+  const toNoteIndexEntry = (note: NoteDocumentFile): NoteIndexEntry => {
+    const hasCustomFields = Object.keys(note.customFields).length > 0;
+    return {
+      id: note.id,
+      title: note.title,
+      folderId: note.folderId,
+      tagIds: note.tagIds,
+      favorite: note.favorite,
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt,
+      deletedAt: note.deletedAt,
+      isTemplate: note.isTemplate ?? false,
+      ...(hasCustomFields ? { customFields: note.customFields } : {}),
+      ...(note.derived?.outgoingLinks
+        ? { linkOutgoing: note.derived.outgoingLinks }
+        : {}),
+    };
+  };
+
+  const updateFavoriteInNotesIndex = (noteSnapshot: NoteDocumentFile): void => {
+    const exists = notes.some((note) => note.id === noteSnapshot.id);
+    if (exists) {
+      notes = notes.map((note) =>
+        note.id === noteSnapshot.id
+          ? { ...note, favorite: noteSnapshot.favorite }
+          : note
+      );
+      return;
+    }
+    notes = sortNotes([...notes, toNoteIndexEntry(noteSnapshot)]);
+  };
+
+  const updateFavoriteInPanes = (
+    noteId: string,
+    favorite: boolean
+  ): void => {
+    (["primary", "secondary"] as PaneId[]).forEach((paneId) => {
+      const pane = getPaneState(paneId);
+      if (!pane.note || pane.note.id !== noteId) {
+        return;
+      }
+      updatePaneState(paneId, {
+        note: {
+          ...pane.note,
+          favorite,
+        },
+      });
+    });
+  };
+
+  const resolveNoteSnapshot = async (
+    noteId: string,
+    favorite: boolean
+  ): Promise<NoteDocumentFile | null> => {
+    const primaryNote = paneStates.primary.note;
+    if (primaryNote?.id === noteId) {
+      return { ...primaryNote, favorite };
+    }
+    const secondaryNote = paneStates.secondary.note;
+    if (secondaryNote?.id === noteId) {
+      return { ...secondaryNote, favorite };
+    }
+    return adapter.readNote(projectId, noteId).then((note) =>
+      note ? { ...note, favorite } : null
+    );
+  };
+
+  const setNoteFavorite = async (
+    noteId: string,
+    favorite: boolean
+  ): Promise<void> => {
+    if (!projectId) {
+      return;
+    }
+    const noteSnapshot = await resolveNoteSnapshot(noteId, favorite);
+    if (!noteSnapshot) {
+      return;
+    }
+    favoriteOverrides = {
+      ...favoriteOverrides,
+      [noteId]: favorite,
+    };
+    updateFavoriteInNotesIndex(noteSnapshot);
+    updateFavoriteInPanes(noteId, favorite);
+    scheduleSave(noteSnapshot);
+    await flushPendingSaveForNote(noteSnapshot.id);
+    const { [noteId]: _removed, ...rest } = favoriteOverrides;
+    favoriteOverrides = rest;
+  };
+
+  const toggleFavoriteForPane = (paneId: PaneId): void => {
+    const pane = getPaneState(paneId);
+    if (!pane.note) {
+      return;
+    }
+    void setNoteFavorite(pane.note.id, !pane.note.favorite);
+  };
+
+  const handleFavoriteToggle = (
+    noteId: string,
+    nextFavorite: boolean
+  ): void => {
+    void setNoteFavorite(noteId, nextFavorite);
+  };
+
   const applyTemplateEdits = (updates: {
     title?: string;
     pmDoc?: Record<string, unknown>;
@@ -2001,15 +2123,39 @@
         </div>
       </header>
 
+      <div class="note-list-filters" aria-label="Note filters">
+        <button
+          class={`filter-chip${favoritesOnly ? " active" : ""}`}
+          type="button"
+          aria-pressed={favoritesOnly}
+          data-testid="filter-favorites"
+          on:click={toggleFavoritesFilter}
+        >
+          Favorites
+        </button>
+      </div>
+
       {#if isLoading}
         <div class="note-list-empty">Loading notes...</div>
-      {:else if displayNotes.length === 0}
-        <div class="note-list-empty">No notes yet.</div>
+      {:else if filteredNotes.length === 0}
+        <div class="note-list-empty">
+          <div>{favoritesOnly ? "No favorites yet." : "No notes yet."}</div>
+          {#if favoritesOnly}
+            <button
+              class="button secondary"
+              type="button"
+              on:click={() => (favoritesOnly = false)}
+            >
+              Clear filters
+            </button>
+          {/if}
+        </div>
       {:else}
         <NoteListVirtualized
-          notes={displayNotes}
+          notes={filteredNotes}
           activeNoteId={activeTabId}
           onSelect={noteId => void activateTab(noteId)}
+          onToggleFavorite={handleFavoriteToggle}
           draggable={true}
           draggingNoteId={draggingNoteId}
           dropTargetNoteId={dropTargetNoteId}
@@ -2068,17 +2214,47 @@
             <div class="editor-empty">Select a note to start writing.</div>
           {:else}
             <div class="editor-header">
-              <input
-                class="title-input field-input"
-                data-testid="note-title"
-                type="text"
-                placeholder="Untitled"
-                bind:this={primaryTitleInput}
-                value={paneStates.primary.titleValue}
-                on:input={event => handleTitleInput("primary", event)}
-                on:blur={event => handleTitleBlur("primary", event)}
-                aria-label="Note title"
-              />
+              <div class="editor-header-row">
+                <input
+                  class="title-input field-input"
+                  data-testid="note-title"
+                  type="text"
+                  placeholder="Untitled"
+                  bind:this={primaryTitleInput}
+                  value={paneStates.primary.titleValue}
+                  on:input={event => handleTitleInput("primary", event)}
+                  on:blur={event => handleTitleBlur("primary", event)}
+                  aria-label="Note title"
+                />
+                <button
+                  class="icon-button editor-favorite"
+                  type="button"
+                  aria-pressed={paneStates.primary.note?.favorite ?? false}
+                  aria-label={
+                    paneStates.primary.note?.favorite
+                      ? "Remove from favorites"
+                      : "Add to favorites"
+                  }
+                  data-active={paneStates.primary.note?.favorite ? "true" : "false"}
+                  data-testid="note-favorite-toggle"
+                  on:click={() => toggleFavoriteForPane("primary")}
+                >
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M11.48 3.5c.2-.4.76-.4.96 0l2.2 4.46c.08.17.25.28.43.3l4.93.72c.44.06.62.61.3.92l-3.56 3.47c-.13.13-.19.31-.16.49l.84 4.9c.08.44-.39.78-.78.58l-4.41-2.32a.5.5 0 0 0-.46 0l-4.41 2.32c-.39.2-.86-.14-.78-.58l.84-4.9a.5.5 0 0 0-.16-.49L3.7 9.9c-.32-.31-.14-.86.3-.92l4.93-.72a.5.5 0 0 0 .43-.3z"
+                    />
+                  </svg>
+                </button>
+              </div>
               <div class="chips-row" aria-label="Metadata chips"></div>
             </div>
 
@@ -2115,17 +2291,47 @@
             <div class="editor-empty">Select a note to start writing.</div>
           {:else}
             <div class="editor-header">
-              <input
-                class="title-input field-input"
-                data-testid="note-title-secondary"
-                type="text"
-                placeholder="Untitled"
-                bind:this={secondaryTitleInput}
-                value={paneStates.secondary.titleValue}
-                on:input={event => handleTitleInput("secondary", event)}
-                on:blur={event => handleTitleBlur("secondary", event)}
-                aria-label="Note title"
-              />
+              <div class="editor-header-row">
+                <input
+                  class="title-input field-input"
+                  data-testid="note-title-secondary"
+                  type="text"
+                  placeholder="Untitled"
+                  bind:this={secondaryTitleInput}
+                  value={paneStates.secondary.titleValue}
+                  on:input={event => handleTitleInput("secondary", event)}
+                  on:blur={event => handleTitleBlur("secondary", event)}
+                  aria-label="Note title"
+                />
+                <button
+                  class="icon-button editor-favorite"
+                  type="button"
+                  aria-pressed={paneStates.secondary.note?.favorite ?? false}
+                  aria-label={
+                    paneStates.secondary.note?.favorite
+                      ? "Remove from favorites"
+                      : "Add to favorites"
+                  }
+                  data-active={paneStates.secondary.note?.favorite ? "true" : "false"}
+                  data-testid="note-favorite-toggle-secondary"
+                  on:click={() => toggleFavoriteForPane("secondary")}
+                >
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M11.48 3.5c.2-.4.76-.4.96 0l2.2 4.46c.08.17.25.28.43.3l4.93.72c.44.06.62.61.3.92l-3.56 3.47c-.13.13-.19.31-.16.49l.84 4.9c.08.44-.39.78-.78.58l-4.41-2.32a.5.5 0 0 0-.46 0l-4.41 2.32c-.39.2-.86-.14-.78-.58l.84-4.9a.5.5 0 0 0-.16-.49L3.7 9.9c-.32-.31-.14-.86.3-.92l4.93-.72a.5.5 0 0 0 .43-.3z"
+                    />
+                  </svg>
+                </button>
+              </div>
               <div class="chips-row" aria-label="Metadata chips"></div>
             </div>
 
@@ -2149,17 +2355,47 @@
           <div class="editor-empty">Select a note to start writing.</div>
         {:else}
           <div class="editor-header">
-            <input
-              class="title-input field-input"
-              data-testid="note-title"
-              type="text"
-              placeholder="Untitled"
-              bind:this={primaryTitleInput}
-              value={paneStates.primary.titleValue}
-              on:input={event => handleTitleInput("primary", event)}
-              on:blur={event => handleTitleBlur("primary", event)}
-              aria-label="Note title"
-            />
+            <div class="editor-header-row">
+              <input
+                class="title-input field-input"
+                data-testid="note-title"
+                type="text"
+                placeholder="Untitled"
+                bind:this={primaryTitleInput}
+                value={paneStates.primary.titleValue}
+                on:input={event => handleTitleInput("primary", event)}
+                on:blur={event => handleTitleBlur("primary", event)}
+                aria-label="Note title"
+              />
+              <button
+                class="icon-button editor-favorite"
+                type="button"
+                aria-pressed={paneStates.primary.note?.favorite ?? false}
+                aria-label={
+                  paneStates.primary.note?.favorite
+                    ? "Remove from favorites"
+                    : "Add to favorites"
+                }
+                data-active={paneStates.primary.note?.favorite ? "true" : "false"}
+                data-testid="note-favorite-toggle"
+                on:click={() => toggleFavoriteForPane("primary")}
+              >
+                <svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M11.48 3.5c.2-.4.76-.4.96 0l2.2 4.46c.08.17.25.28.43.3l4.93.72c.44.06.62.61.3.92l-3.56 3.47c-.13.13-.19.31-.16.49l.84 4.9c.08.44-.39.78-.78.58l-4.41-2.32a.5.5 0 0 0-.46 0l-4.41 2.32c-.39.2-.86-.14-.78-.58l.84-4.9a.5.5 0 0 0-.16-.49L3.7 9.9c-.32-.31-.14-.86.3-.92l4.93-.72a.5.5 0 0 0 .43-.3z"
+                  />
+                </svg>
+              </button>
+            </div>
             <div class="chips-row" aria-label="Metadata chips"></div>
           </div>
 
@@ -2470,6 +2706,13 @@
     gap: 16px;
   }
 
+  .note-list-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
   .note-list-actions {
     display: flex;
     align-items: center;
@@ -2486,8 +2729,32 @@
   }
 
   .note-list-empty {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
     color: var(--text-2);
     font-size: 13px;
+  }
+
+  .filter-chip {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--stroke-0);
+    background: transparent;
+    color: var(--text-1);
+    cursor: pointer;
+  }
+
+  .filter-chip.active {
+    background: var(--accent-2);
+    color: var(--text-0);
+    border-color: transparent;
+  }
+
+  .filter-chip:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .editor-content {
@@ -2527,10 +2794,30 @@
     gap: 8px;
   }
 
+  .editor-header-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .editor-header-row .title-input {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+  }
+
   .title-input {
     font-size: 22px;
     font-weight: 500;
     line-height: 1.2;
+  }
+
+  .editor-favorite[data-active="true"] {
+    color: var(--accent-0);
+  }
+
+  .editor-favorite[data-active="true"] .icon {
+    fill: currentColor;
   }
 
   .chips-row {

@@ -1,6 +1,6 @@
 /* eslint-disable sonarjs/arrow-function-convention */
 import { describe, expect, it } from "vitest";
-import { filterNotesByFolder } from "../notes-filter";
+import { filterNotesByFavorites, filterNotesByFolder } from "../notes-filter";
 import type { NoteIndexEntry } from "$lib/core/storage/types";
 
 const createNote = (
@@ -40,5 +40,28 @@ describe("filterNotesByFolder", () => {
 
     const result = filterNotesByFolder(notes, "folder-1");
     expect(result.map((note) => note.id)).toEqual(["a"]);
+  });
+});
+
+describe("filterNotesByFavorites", () => {
+  it("returns all notes when favoritesOnly is false", () => {
+    const notes = [
+      { ...createNote("a", null), favorite: false },
+      { ...createNote("b", null), favorite: true },
+    ];
+
+    const result = filterNotesByFavorites(notes, false);
+    expect(result.map((note) => note.id)).toEqual(["a", "b"]);
+  });
+
+  it("returns only favorite notes when favoritesOnly is true", () => {
+    const notes = [
+      { ...createNote("a", null), favorite: false },
+      { ...createNote("b", null), favorite: true },
+      { ...createNote("c", null), favorite: true },
+    ];
+
+    const result = filterNotesByFavorites(notes, true);
+    expect(result.map((note) => note.id)).toEqual(["b", "c"]);
   });
 });

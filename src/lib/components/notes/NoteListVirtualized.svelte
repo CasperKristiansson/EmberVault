@@ -10,6 +10,10 @@
   export let onDragOver: (noteId: string, event: DragEvent) => void = () => {};
   export let onDrop: (noteId: string, event: DragEvent) => void = () => {};
   export let onDragEnd: (noteId: string, event: DragEvent) => void = () => {};
+  export let onToggleFavorite: (
+    noteId: string,
+    nextFavorite: boolean
+  ) => void | Promise<void> = () => {};
   export let draggingNoteId: string | null = null;
   export let dropTargetNoteId: string | null = null;
   export let draggable = false;
@@ -108,6 +112,7 @@
             {note}
             active={note.id === activeNoteId}
             onSelect={onSelect}
+            onToggleFavorite={onToggleFavorite}
           >
             <NoteListRow
               note={note as NoteIndexEntry}
@@ -120,6 +125,7 @@
               onDragOver={onDragOver}
               onDrop={onDrop}
               onDragEnd={onDragEnd}
+              onToggleFavorite={onToggleFavorite}
             />
           </slot>
         {/each}
@@ -133,6 +139,7 @@
           {note}
           active={note.id === activeNoteId}
           onSelect={onSelect}
+          onToggleFavorite={onToggleFavorite}
         >
           <NoteListRow
             note={note as NoteIndexEntry}
@@ -145,6 +152,7 @@
             onDragOver={onDragOver}
             onDrop={onDrop}
             onDragEnd={onDragEnd}
+            onToggleFavorite={onToggleFavorite}
           />
         </slot>
       {/each}

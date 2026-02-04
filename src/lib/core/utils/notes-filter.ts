@@ -11,3 +11,13 @@ export const filterNotesByFolder = (
   }
   return activeNotes.filter((note) => note.folderId === folderId);
 };
+
+export const filterNotesByFavorites = (
+  notes: NoteIndexEntry[],
+  favoritesOnly: boolean
+): NoteIndexEntry[] => {
+  if (!favoritesOnly) {
+    return notes;
+  }
+  return notes.filter((note) => note.favorite);
+};

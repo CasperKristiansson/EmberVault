@@ -153,8 +153,8 @@ describe("workspace tabs + split view", () => {
     const secondRow = container.querySelector(
       `[data-testid="note-row-${notes[1]?.id ?? ""}"]`
     );
-    if (!(secondRow instanceof HTMLButtonElement)) {
-      throw new TypeError("Expected note row button");
+    if (!(secondRow instanceof HTMLElement)) {
+      throw new TypeError("Expected note row element");
     }
 
     await fireEvent.click(secondRow);
