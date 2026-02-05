@@ -245,7 +245,7 @@
 
   .custom-field-row {
     display: grid;
-    grid-template-columns: minmax(0, 1.1fr) 96px minmax(0, 1fr) 28px;
+    grid-template-columns: minmax(0, 1.1fr) 96px minmax(0, 1fr) 32px;
     gap: 8px;
     align-items: center;
   }
@@ -301,12 +301,12 @@
   }
 
   .icon-button {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     display: grid;
     place-items: center;
-    border-radius: var(--r-sm);
-    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    border: none;
     background: transparent;
     color: var(--text-1);
     cursor: pointer;
@@ -315,6 +315,11 @@
   .icon-button:hover {
     background: var(--bg-3);
     color: var(--text-0);
+  }
+
+  .icon-button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .icon {

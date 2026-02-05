@@ -85,7 +85,7 @@
   }
 
   .search-row-tag {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-1);
     padding: 2px 8px;
     border-radius: 999px;

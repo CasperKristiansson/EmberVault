@@ -143,7 +143,7 @@
   }
 
   .note-row-meta {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-2);
   }
 
@@ -158,6 +158,12 @@
   .note-row:hover .note-row-actions,
   .note-row.active .note-row-actions {
     opacity: 1;
+  }
+
+  @media (max-width: 767px) {
+    .note-row-actions {
+      opacity: 1;
+    }
   }
 
   .note-row-action {

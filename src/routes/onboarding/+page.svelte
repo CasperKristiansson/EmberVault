@@ -93,6 +93,19 @@
 
     {#if supportsFileSystem}
       <div class="card">
+        <div class="card-icon" aria-hidden="true">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          </svg>
+        </div>
         <div class="card-copy">
           <h2>Use a folder on this device</h2>
           <p>Keep files in a folder you choose (best in Chrome/Edge).</p>
@@ -109,6 +122,21 @@
     {/if}
 
     <div class="card">
+      <div class="card-icon" aria-hidden="true">
+        <svg
+          class="icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <ellipse cx="12" cy="5" rx="9" ry="3" />
+          <path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5" />
+          <path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6" />
+        </svg>
+      </div>
       <div class="card-copy">
         <h2>Store in this browser</h2>
         <p>IndexedDB keeps everything local and works everywhere.</p>
@@ -167,6 +195,21 @@
     border-radius: var(--r-lg);
   }
 
+  .card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-sm);
+    background: var(--bg-2);
+    color: var(--accent-0);
+    display: grid;
+    place-items: center;
+  }
+
+  .card-icon .icon {
+    width: 16px;
+    height: 16px;
+  }
+
   .card-copy h2 {
     margin-bottom: 6px;
   }
@@ -191,6 +234,11 @@
 
   .button.primary:hover:enabled {
     background: var(--accent-1);
+  }
+
+  .button.primary:active:enabled {
+    transform: translateY(0.5px);
+    filter: brightness(0.96);
   }
 
   .button.primary:focus-visible {

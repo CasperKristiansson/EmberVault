@@ -48,7 +48,7 @@
 
   .project-select {
     width: 100%;
-    height: 44px;
+    height: 32px;
     padding: 0 12px;
     border-radius: var(--r-md);
     border: 1px solid var(--stroke-0);
@@ -58,6 +58,7 @@
   }
 
   .project-select:focus-visible {
+    border-color: rgba(255, 138, 42, 0.4);
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }

@@ -141,7 +141,7 @@
   }
 
   .template-row-meta {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-2);
   }
 
@@ -160,6 +160,11 @@
 
   .button.primary:hover:enabled {
     background: var(--accent-1);
+  }
+
+  .button.primary:active:enabled {
+    transform: translateY(0.5px);
+    filter: brightness(0.96);
   }
 
   .button.primary:focus-visible {

@@ -1,3 +1,4 @@
+import { IndexedDBAdapter } from "./indexeddb.adapter";
 import type {
   AssetMeta,
   NoteDocumentFile,
@@ -202,16 +203,31 @@ const resolveAssetExtension = (mime?: string): string => {
   return mimeToExtension[mime] ?? "bin";
 };
 
+const supportsIndexedDatabase = (): boolean => "indexedDB" in globalThis;
+
 export class FileSystemAdapter implements StorageAdapter {
   private readonly root: FileSystemDirectoryHandle;
+  private readonly cacheAdapter: IndexedDBAdapter | null;
+  private cacheReady = false;
 
   public constructor(rootHandle: FileSystemDirectoryHandle) {
     this.root = rootHandle;
+    this.cacheAdapter = supportsIndexedDatabase()
+      ? new IndexedDBAdapter()
+      : null;
   }
 
   public async init(): Promise<void> {
     await this.ensureVaultManifest();
     await this.getProjectsDirectory(true);
+    if (this.cacheAdapter) {
+      try {
+        await this.cacheAdapter.init();
+        this.cacheReady = true;
+      } catch {
+        this.cacheReady = false;
+      }
+    }
   }
 
   public async listProjects(): Promise<Project[]> {
@@ -624,6 +640,10 @@ export class FileSystemAdapter implements StorageAdapter {
   }
 
   public async writeUIState(state: UIState): Promise<void> {
+    if (this.cacheAdapter && this.cacheReady) {
+      await this.cacheAdapter.writeUIState(state);
+      return;
+    }
     const manifest = await this.readVaultManifest();
     await this.writeVaultManifest({
       ...manifest,
@@ -632,14 +652,28 @@ export class FileSystemAdapter implements StorageAdapter {
   }
 
   public async readUIState(): Promise<UIState | null> {
+    if (this.cacheAdapter && this.cacheReady) {
+      const cached = await this.cacheAdapter.readUIState();
+      if (cached) {
+        return cached;
+      }
+    }
     const manifest = await this.readVaultManifest();
-    return manifest.uiState ?? null;
+    const legacy = manifest.uiState ?? null;
+    if (legacy && this.cacheAdapter && this.cacheReady) {
+      await this.cacheAdapter.writeUIState(legacy);
+    }
+    return legacy;
   }
 
   public async writeSearchIndex(
     projectId: string,
     snapshot: string
   ): Promise<void> {
+    if (this.cacheAdapter && this.cacheReady) {
+      await this.cacheAdapter.writeSearchIndex(projectId, snapshot);
+      return;
+    }
     const manifest = await this.readVaultManifest();
     const searchIndex = manifest.searchIndex ?? {};
     await this.writeVaultManifest({
@@ -652,8 +686,18 @@ export class FileSystemAdapter implements StorageAdapter {
   }
 
   public async readSearchIndex(projectId: string): Promise<string | null> {
+    if (this.cacheAdapter && this.cacheReady) {
+      const cached = await this.cacheAdapter.readSearchIndex(projectId);
+      if (cached) {
+        return cached;
+      }
+    }
     const manifest = await this.readVaultManifest();
-    return manifest.searchIndex?.[projectId] ?? null;
+    const legacy = manifest.searchIndex?.[projectId] ?? null;
+    if (legacy && this.cacheAdapter && this.cacheReady) {
+      await this.cacheAdapter.writeSearchIndex(projectId, legacy);
+    }
+    return legacy;
   }
 
   private async ensureVaultManifest(): Promise<void> {

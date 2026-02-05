@@ -215,9 +215,9 @@
   }
 
   .button {
-    height: 28px;
-    padding: 0 12px;
-    border-radius: var(--r-sm);
+    height: 32px;
+    padding: 0 14px;
+    border-radius: var(--r-md);
     border: 1px solid var(--stroke-1);
     background: transparent;
     color: var(--text-0);
@@ -227,6 +227,10 @@
 
   .button:hover {
     background: var(--bg-3);
+  }
+
+  .button:active {
+    transform: translateY(0.5px);
   }
 
   .button:focus-visible {

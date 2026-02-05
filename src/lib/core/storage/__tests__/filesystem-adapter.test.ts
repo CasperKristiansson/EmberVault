@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import "fake-indexeddb/auto";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FileSystemAdapter } from "../filesystem.adapter";
+import { deleteIndexedDatabase, IndexedDBAdapter } from "../indexeddb.adapter";
 import type { NoteDocumentFile, Project } from "../types";
 
 type MemoryFileHandle = {
@@ -240,6 +242,7 @@ describe("FileSystemAdapter", () => {
   // eslint-disable-next-line @typescript-eslint/init-declarations
   let project: Project;
   beforeEach(async () => {
+    await deleteIndexedDatabase();
     root = createMemoryDirectoryHandle("root");
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const rootHandle = root as unknown as FileSystemDirectoryHandle;
@@ -247,6 +250,10 @@ describe("FileSystemAdapter", () => {
     await adapter.init();
     project = createProject();
     await adapter.createProject(project);
+  });
+
+  afterEach(async () => {
+    await deleteIndexedDatabase();
   });
 
   it("writes, reads, and lists notes with markdown snapshots", async () => {
@@ -325,7 +332,7 @@ describe("FileSystemAdapter", () => {
     expect(storedAsset).not.toBeNull();
   });
 
-  it("persists ui state and search index in vault manifest", async () => {
+  it("persists ui state and search index in the IDB cache", async () => {
     await adapter.writeUIState({ lastProjectId: project.id });
     await adapter.writeSearchIndex(project.id, "snapshot");
 
@@ -335,10 +342,11 @@ describe("FileSystemAdapter", () => {
     const snapshot = await adapter.readSearchIndex(project.id);
     expect(snapshot).toBe("snapshot");
 
-    const vaultHandle = await root.getFileHandle("vault.json");
-    const vaultFile = await vaultHandle.getFile();
-    const text = await vaultFile.text();
-    expect(text).toContain('"uiState"');
-    expect(text).toContain('"searchIndex"');
+    const cacheAdapter = new IndexedDBAdapter();
+    await cacheAdapter.init();
+    const cachedState = await cacheAdapter.readUIState();
+    expect(cachedState).toEqual({ lastProjectId: project.id });
+    const cachedSnapshot = await cacheAdapter.readSearchIndex(project.id);
+    expect(cachedSnapshot).toBe("snapshot");
   });
 });

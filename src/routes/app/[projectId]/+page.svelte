@@ -3219,13 +3219,17 @@
   }
 
   .icon-button {
+    width: 32px;
     height: 32px;
-    padding: 0 10px;
-    border-radius: var(--r-sm);
-    border: 1px solid transparent;
+    padding: 0;
+    border-radius: var(--r-md);
+    border: none;
     background: transparent;
     color: var(--text-1);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .icon-button:hover {
@@ -3235,8 +3239,12 @@
 
   .icon-button[aria-pressed="true"] {
     background: var(--bg-2);
-    border-color: var(--stroke-0);
     color: var(--text-0);
+  }
+
+  .icon-button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .icon {
@@ -3296,6 +3304,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
+    min-height: 44px;
   }
 
   .note-list-filters {
@@ -3431,7 +3440,7 @@
     border: 1px solid var(--stroke-0);
     background: var(--bg-2);
     color: var(--text-1);
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.2;
   }
 
@@ -3459,17 +3468,23 @@
   .field-input,
   .field-input {
     width: 100%;
+    height: 32px;
     background: var(--bg-2);
     border: 1px solid var(--stroke-0);
     border-radius: var(--r-md);
     color: var(--text-0);
-    padding: 8px 12px;
+    padding: 0 12px;
   }
 
   .field-input:focus,
   .field-input:focus {
+    border-color: rgba(255, 138, 42, 0.4);
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+
+  .field-input::placeholder {
+    color: var(--text-2);
   }
 
   .button {
@@ -3502,6 +3517,11 @@
 
   .button.primary:hover:enabled {
     background: var(--accent-1);
+  }
+
+  .button.primary:active:enabled {
+    transform: translateY(0.5px);
+    filter: brightness(0.96);
   }
 
   .button.primary:focus-visible {

@@ -92,12 +92,12 @@ Note: Implemented trash filter chip + trash view, trash row actions (restore/per
 - [x] FileSystemAdapter implementing disk layout in storage.md
 - [x] Onboarding option for folder vault (feature-detect)
 - [x] Permissions handling + recovery UI
-- [ ] Hybrid cache: store search index + uiState in IDB even for disk mode
-- [ ] E2E (Chromium): choose folder, create note, verify files exist (via adapter mocks if needed)
+- [x] Hybrid cache: store search index + uiState in IDB even for disk mode
+- [x] E2E (Chromium): choose folder, create note, verify files exist (via adapter mocks if needed)
 
 ## Milestone 10 — Visual perfection + accessibility + hardening
 
-- [ ] Implement all styling rules in brand.md and ui-spec.md (no drift)
+- [x] Implement all styling rules in brand.md and ui-spec.md (no drift)
 - [ ] Add motion per brand rules + reduced motion support
 - [ ] Add accessibility pass: focus order, ARIA labels, contrast checks
 - [ ] Add error boundaries + safe toasts for adapter failures

@@ -268,7 +268,19 @@
         aria-label="Close search"
         on:click={onClose}
       >
-        Close
+        <svg
+          class="icon"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
       </button>
     </header>
 
@@ -506,18 +518,32 @@
   }
 
   .icon-button {
+    width: 32px;
     height: 32px;
-    padding: 0 12px;
-    border-radius: var(--r-sm);
-    border: 1px solid transparent;
+    padding: 0;
+    border-radius: var(--r-md);
+    border: none;
     background: transparent;
     color: var(--text-1);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .icon-button:hover {
     background: var(--bg-3);
     color: var(--text-0);
+  }
+
+  .icon-button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .icon {
+    width: 16px;
+    height: 16px;
   }
 
   .search-input-row {
@@ -539,6 +565,7 @@
   }
 
   .search-input:focus {
+    border-color: rgba(255, 138, 42, 0.4);
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
@@ -577,6 +604,7 @@
 
   .filter-select:focus,
   .filter-input:focus {
+    border-color: rgba(255, 138, 42, 0.4);
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }

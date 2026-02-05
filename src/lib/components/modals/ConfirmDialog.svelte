@@ -104,6 +104,11 @@
     background: var(--accent-1);
   }
 
+  .button.primary:active {
+    transform: translateY(0.5px);
+    filter: brightness(0.96);
+  }
+
   .button.secondary {
     background: transparent;
     border-color: var(--stroke-1);

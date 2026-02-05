@@ -95,8 +95,8 @@
   }
 
   .graph-mode-button {
-    height: 28px;
-    padding: 0 10px;
+    height: 32px;
+    padding: 0 12px;
     border-radius: var(--r-sm);
     border: 1px solid transparent;
     background: transparent;
@@ -118,18 +118,22 @@
   }
 
   .graph-label {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-2);
   }
 
   .graph-input,
   .graph-select {
-    height: 30px;
-    padding: 0 10px;
+    height: 32px;
+    padding: 0 12px;
     border-radius: var(--r-md);
     border: 1px solid var(--stroke-0);
-    background: var(--bg-1);
+    background: var(--bg-2);
     color: var(--text-0);
+  }
+
+  .graph-input::placeholder {
+    color: var(--text-2);
   }
 
   .graph-input:focus-visible,
@@ -137,6 +141,7 @@
   .graph-slider:focus-visible,
   .graph-recenter:focus-visible,
   .graph-mode-button:focus-visible {
+    border-color: rgba(255, 138, 42, 0.4);
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
@@ -160,10 +165,10 @@
   }
 
   .graph-recenter {
-    height: 30px;
-    padding: 0 12px;
+    height: 32px;
+    padding: 0 14px;
     border-radius: var(--r-md);
-    border: 1px solid var(--stroke-0);
+    border: 1px solid var(--stroke-1);
     background: transparent;
     color: var(--text-0);
     font-size: 12px;
