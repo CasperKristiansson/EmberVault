@@ -53,24 +53,46 @@
     hydrateSearchIndex,
     type SearchIndexState,
   } from "$lib/state/search.store";
-  import { openModal } from "$lib/state/ui.store";
+  import { modalStackStore, openModal } from "$lib/state/ui.store";
   import {
     resolveMobileView,
     type MobileView,
   } from "$lib/core/utils/mobile-view";
-  import { adapter as adapterStore } from "$lib/state/adapter.store";
+  import {
+    adapter as adapterStore,
+    initAdapter,
+    storageMode as storageModeStore,
+    type StorageMode,
+  } from "$lib/state/adapter.store";
+  import { createDefaultProject } from "$lib/core/storage/indexeddb.adapter";
   import type {
     AssetMeta,
     CustomFieldValue,
     NoteDocumentFile,
     NoteIndexEntry,
     Project,
+    StorageAdapter,
     TemplateIndexEntry,
     UIState,
   } from "$lib/core/storage/types";
   let adapter = get(adapterStore);
   const adapterUnsubscribe = adapterStore.subscribe((value) => {
     adapter = value;
+  });
+  let activeStorageMode: StorageMode = get(storageModeStore);
+  const storageModeUnsubscribe = storageModeStore.subscribe((value) => {
+    activeStorageMode = value;
+  });
+  let permissionModalId: string | null = null;
+  let modalStackEntries: { id: string }[] = [];
+  const modalStackUnsubscribe = modalStackStore.subscribe((stack) => {
+    modalStackEntries = stack;
+    if (
+      permissionModalId &&
+      !modalStackEntries.some((entry) => entry.id === permissionModalId)
+    ) {
+      permissionModalId = null;
+    }
   });
 
   type PaneId = "primary" | "secondary";
@@ -162,6 +184,8 @@
   const saveDelay = 400;
   const uiStateDelay = 800;
   const backlinksDelay = 200;
+  const permissionErrorNames = new Set(["NotAllowedError", "SecurityError"]);
+  let isRecoveringStorage = false;
 
   type NoteSaveTask = ReturnType<typeof createDebouncedTask<[NoteDocumentFile]>>;
   const saveTasks: Record<string, NoteSaveTask> = {};
@@ -190,6 +214,71 @@
   $: wikiLinkCandidates = notes
     .filter((note) => note.deletedAt === null)
     .map((note) => ({ id: note.id, title: note.title }));
+
+  const isPermissionError = (error: unknown): boolean =>
+    error instanceof Error && permissionErrorNames.has(error.name);
+
+  const openPermissionRecovery = (): void => {
+    if (permissionModalId) {
+      return;
+    }
+    permissionModalId = openModal("confirm", {
+      title: "Folder access lost",
+      message:
+        "EmberVault can't access the vault folder. Retry access or switch to browser storage.",
+      confirmLabel: "Retry access",
+      cancelLabel: "Switch to browser storage",
+      onConfirm: async () => {
+        permissionModalId = null;
+        await retryFolderAccess();
+      },
+      onCancel: async () => {
+        permissionModalId = null;
+        await switchToBrowserStorage();
+      },
+    });
+  };
+
+  const handleAdapterError = async (error: unknown): Promise<boolean> => {
+    if (activeStorageMode !== "filesystem") {
+      return false;
+    }
+    if (!isPermissionError(error)) {
+      return false;
+    }
+    openPermissionRecovery();
+    return true;
+  };
+
+  const runAdapterTask = async function runAdapterTask<T>(
+    operation: () => Promise<T>,
+    fallback: T
+  ): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      const handled = await handleAdapterError(error);
+      if (handled) {
+        return fallback;
+      }
+      throw error;
+    }
+  };
+
+  const runAdapterVoid = async (
+    operation: () => Promise<void>
+  ): Promise<boolean> => {
+    try {
+      await operation();
+      return true;
+    } catch (error) {
+      const handled = await handleAdapterError(error);
+      if (handled) {
+        return false;
+      }
+      throw error;
+    }
+  };
 
   const toDerivedMarkdown = (title: string, body: string): string => {
     const trimmedTitle = title.trim();
@@ -244,6 +333,82 @@
     };
   };
 
+  const ensureProjectForAdapter = async (
+    activeAdapter: StorageAdapter
+  ): Promise<Project> => {
+    const projects = await runAdapterTask(
+      () => activeAdapter.listProjects(),
+      []
+    );
+    if (projects.length > 0) {
+      return projects[0] ?? createDefaultProject();
+    }
+    const project = createDefaultProject();
+    await runAdapterVoid(() => activeAdapter.createProject(project));
+    return project;
+  };
+
+  const retryFolderAccess = async (): Promise<void> => {
+    if (
+      isRecoveringStorage ||
+      typeof window === "undefined" ||
+      typeof window.showDirectoryPicker !== "function"
+    ) {
+      return;
+    }
+    isRecoveringStorage = true;
+    isLoading = true;
+    try {
+      const handle = await window.showDirectoryPicker();
+      const nextAdapter = initAdapter("filesystem", {
+        directoryHandle: handle,
+      });
+      const ready = await runAdapterVoid(() => nextAdapter.init());
+      if (!ready) {
+        return;
+      }
+      const project = await ensureProjectForAdapter(nextAdapter);
+      await runAdapterVoid(() =>
+        nextAdapter.writeUIState({ lastProjectId: project.id })
+      );
+      if (project.id !== projectId) {
+        await goto(resolve("/app/[projectId]", { projectId: project.id }));
+        return;
+      }
+      await initializeWorkspace();
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "AbortError")) {
+        await handleAdapterError(error);
+      }
+    } finally {
+      isRecoveringStorage = false;
+      isLoading = false;
+    }
+  };
+
+  const switchToBrowserStorage = async (): Promise<void> => {
+    if (isRecoveringStorage) {
+      return;
+    }
+    isRecoveringStorage = true;
+    isLoading = true;
+    try {
+      const nextAdapter = initAdapter("idb");
+      const ready = await runAdapterVoid(() => nextAdapter.init());
+      if (!ready) {
+        return;
+      }
+      const project = await ensureProjectForAdapter(nextAdapter);
+      await runAdapterVoid(() =>
+        nextAdapter.writeUIState({ lastProjectId: project.id })
+      );
+      await goto(resolve("/app/[projectId]", { projectId: project.id }));
+    } finally {
+      isRecoveringStorage = false;
+      isLoading = false;
+    }
+  };
+
   const readImageMeta = async (file: Blob): Promise<AssetMeta> => {
     const meta: AssetMeta = {
       mime: file.type,
@@ -278,12 +443,14 @@
     }
     const assetId = await hashBlobSha256(file);
     const meta = await readImageMeta(file);
-    await adapter.writeAsset({
-      projectId,
-      assetId,
-      blob: file,
-      meta,
-    });
+    await runAdapterVoid(() =>
+      adapter.writeAsset({
+        projectId,
+        assetId,
+        blob: file,
+        meta,
+      })
+    );
     const src = URL.createObjectURL(file);
     const altText = file instanceof File ? file.name : "Pasted image";
     return {
@@ -397,11 +564,14 @@
 
   const uiStateWriter = createDebouncedTask(
     async (state: UIState) => {
-      const currentState = (await adapter.readUIState()) ?? {};
-      await adapter.writeUIState({
-        ...currentState,
-        ...state,
-      });
+      const currentState =
+        (await runAdapterTask(() => adapter.readUIState(), null)) ?? {};
+      await runAdapterVoid(() =>
+        adapter.writeUIState({
+          ...currentState,
+          ...state,
+        })
+      );
     },
     uiStateDelay
   );
@@ -544,7 +714,10 @@
       const targets = resolveBacklinkTargets(targetId, targetTitle);
       const results = await Promise.all(
         candidates.map(async (note) => {
-          const document = await adapter.readNote(projectId, note.id);
+          const document = await runAdapterTask(
+            () => adapter.readNote(projectId, note.id),
+            null
+          );
           if (!document) {
             return null;
           }
@@ -629,7 +802,9 @@
     if (!projectId) {
       return;
     }
-    const loadedNotes = sortNotes(await adapter.listNotes(projectId));
+    const loadedNotes = sortNotes(
+      await runAdapterTask(() => adapter.listNotes(projectId), [])
+    );
     if (Object.keys(favoriteOverrides).length > 0) {
       notes = loadedNotes.map((note) => {
         const override = favoriteOverrides[note.id];
@@ -639,7 +814,10 @@
       notes = loadedNotes;
     }
     notesRevision += 1;
-    const storedProject = await adapter.readProject(projectId);
+    const storedProject = await runAdapterTask(
+      () => adapter.readProject(projectId),
+      null
+    );
     if (storedProject) {
       project = storedProject;
     }
@@ -649,15 +827,20 @@
     if (!projectId) {
       return;
     }
-    templates = sortTemplates(await adapter.listTemplates(projectId));
-    const storedProject = await adapter.readProject(projectId);
+    templates = sortTemplates(
+      await runAdapterTask(() => adapter.listTemplates(projectId), [])
+    );
+    const storedProject = await runAdapterTask(
+      () => adapter.readProject(projectId),
+      null
+    );
     if (storedProject) {
       project = storedProject;
     }
   };
 
   const loadProjects = async (): Promise<void> => {
-    projects = await adapter.listProjects();
+    projects = await runAdapterTask(() => adapter.listProjects(), []);
   };
 
   const readWorkspaceState = (state: UIState | null): Record<string, unknown> => {
@@ -708,7 +891,9 @@
       return;
     }
 
-    const storedState = readWorkspaceState(await adapter.readUIState());
+    const storedState = readWorkspaceState(
+      await runAdapterTask(() => adapter.readUIState(), null)
+    );
     const storedProjectId = storedState.projectId;
     lastUsedTemplateId =
       typeof storedState.lastUsedTemplateId === "string"
@@ -788,7 +973,9 @@
       return [];
     }
     const noteDocuments = await Promise.all(
-      notes.map(async (entry) => adapter.readNote(projectId, entry.id))
+      notes.map(async (entry) =>
+        runAdapterTask(() => adapter.readNote(projectId, entry.id), null)
+      )
     );
     return noteDocuments.filter(
       (note): note is NoteDocumentFile =>
@@ -803,7 +990,9 @@
       return [];
     }
     const templateDocuments = await Promise.all(
-      templates.map(async (entry) => adapter.readTemplate(projectId, entry.id))
+      templates.map(async (entry) =>
+        runAdapterTask(() => adapter.readTemplate(projectId, entry.id), null)
+      )
     );
     return templateDocuments.filter(
       (template): template is NoteDocumentFile =>
@@ -817,10 +1006,13 @@
     }
     const noteDocuments = await loadNoteDocumentsForIndex();
     const templateDocuments = await loadTemplateDocumentsForIndex();
-    searchState = await hydrateSearchIndex(
-      adapter,
-      projectId,
-      [...noteDocuments, ...templateDocuments]
+    searchState = await runAdapterTask(
+      () =>
+        hydrateSearchIndex(adapter, projectId, [
+          ...noteDocuments,
+          ...templateDocuments,
+        ]),
+      null
     );
   };
 
@@ -836,15 +1028,20 @@
     if (!searchState) {
       return;
     }
-    searchState = await applySearchIndexChange({
-      adapter,
-      projectId,
-      state: searchState,
-      change: {
-        type: "upsert",
-        note: document,
-      },
-    });
+    const currentSearchState = searchState;
+    searchState = await runAdapterTask(
+      () =>
+        applySearchIndexChange({
+          adapter,
+          projectId,
+          state: currentSearchState,
+          change: {
+            type: "upsert",
+            note: document,
+          },
+        }),
+      currentSearchState
+    );
   };
 
 
@@ -855,14 +1052,19 @@
           current.id === nextProject.id ? nextProject : current
         )
       : [...projects, nextProject];
-    await adapter.writeProject(nextProject.id, nextProject);
+    await runAdapterVoid(() =>
+      adapter.writeProject(nextProject.id, nextProject)
+    );
   };
 
   const loadNote = async (
     noteId: string,
     paneId: PaneId
   ): Promise<void> => {
-    const note = await adapter.readNote(projectId, noteId);
+    const note = await runAdapterTask(
+      () => adapter.readNote(projectId, noteId),
+      null
+    );
     if (note) {
       setPaneNote(paneId, note);
       tabTitles = { ...tabTitles, [note.id]: note.title ?? "" };
@@ -995,7 +1197,7 @@
     if (paneStates.secondary.note?.id === noteId) {
       return paneStates.secondary.note;
     }
-    return adapter.readNote(projectId, noteId);
+    return runAdapterTask(() => adapter.readNote(projectId, noteId), null);
   };
 
   const syncPaneNoteFolder = (
@@ -1086,7 +1288,10 @@
     syncPaneNoteFolder(noteId, updatedNote);
     await persistNote(updatedNote);
 
-    const storedProject = await adapter.readProject(projectId);
+    const storedProject = await runAdapterTask(
+      () => adapter.readProject(projectId),
+      null
+    );
     if (!storedProject) {
       return;
     }
@@ -1250,15 +1455,14 @@
         outgoingLinks,
       },
     };
-    await adapter.writeNote({
-      projectId,
-      noteId: note.id,
-      noteDocument: resolvedNote,
-      derivedMarkdown: toDerivedMarkdown(
-        note.title,
-        resolvedPlainText
-      ),
-    });
+    await runAdapterVoid(() =>
+      adapter.writeNote({
+        projectId,
+        noteId: note.id,
+        noteDocument: resolvedNote,
+        derivedMarkdown: toDerivedMarkdown(note.title, resolvedPlainText),
+      })
+    );
     await updateSearchIndexForDocument(resolvedNote);
   };
 
@@ -1275,15 +1479,17 @@
         outgoingLinks: template.derived?.outgoingLinks ?? [],
       },
     };
-    await adapter.writeTemplate({
-      projectId,
-      templateId: resolvedTemplate.id,
-      noteDocument: resolvedTemplate,
-      derivedMarkdown: toDerivedMarkdown(
-        resolvedTemplate.title,
-        resolvedPlainText
-      ),
-    });
+    await runAdapterVoid(() =>
+      adapter.writeTemplate({
+        projectId,
+        templateId: resolvedTemplate.id,
+        noteDocument: resolvedTemplate,
+        derivedMarkdown: toDerivedMarkdown(
+          resolvedTemplate.title,
+          resolvedPlainText
+        ),
+      })
+    );
     await updateSearchIndexForDocument(resolvedTemplate);
   };
 
@@ -1478,8 +1684,11 @@
     }
     await flushPendingSaveForNote(noteId);
     await removeNoteFromTabs(noteId);
-    await adapter.deleteNoteSoft(projectId, noteId);
-    const updatedNote = await adapter.readNote(projectId, noteId);
+    await runAdapterVoid(() => adapter.deleteNoteSoft(projectId, noteId));
+    const updatedNote = await runAdapterTask(
+      () => adapter.readNote(projectId, noteId),
+      null
+    );
     if (updatedNote) {
       await updateSearchIndexForDocument(updatedNote);
     }
@@ -1490,8 +1699,11 @@
     if (!projectId) {
       return;
     }
-    await adapter.restoreNote(projectId, noteId);
-    const restoredNote = await adapter.readNote(projectId, noteId);
+    await runAdapterVoid(() => adapter.restoreNote(projectId, noteId));
+    const restoredNote = await runAdapterTask(
+      () => adapter.readNote(projectId, noteId),
+      null
+    );
     if (restoredNote) {
       await updateSearchIndexForDocument(restoredNote);
     }
@@ -1505,20 +1717,27 @@
     removeNoteFromLocalState(noteId);
     await flushPendingSaveForNote(noteId);
     await removeNoteFromTabs(noteId);
-    await adapter.deleteNotePermanent(projectId, noteId);
+    await runAdapterVoid(() =>
+      adapter.deleteNotePermanent(projectId, noteId)
+    );
     if (!searchState) {
       await loadSearchIndex();
     }
-    if (searchState) {
-      searchState = await applySearchIndexChange({
-        adapter,
-        projectId,
-        state: searchState,
-        change: {
-          type: "remove",
-          noteId,
-        },
-      });
+    const currentSearchState = searchState;
+    if (currentSearchState) {
+      searchState = await runAdapterTask(
+        () =>
+          applySearchIndexChange({
+            adapter,
+            projectId,
+            state: currentSearchState,
+            change: {
+              type: "remove",
+              noteId,
+            },
+          }),
+        currentSearchState
+      );
     }
     await loadNotes();
   };
@@ -1656,9 +1875,11 @@
     if (secondaryNote?.id === noteId) {
       return { ...secondaryNote, favorite };
     }
-    return adapter.readNote(projectId, noteId).then((note) =>
-      note ? { ...note, favorite } : null
+    const note = await runAdapterTask(
+      () => adapter.readNote(projectId, noteId),
+      null
     );
+    return note ? { ...note, favorite } : null;
   };
 
   const setNoteFavorite = async (
@@ -1782,7 +2003,10 @@
     if (!templateId) {
       return;
     }
-    const template = await adapter.readTemplate(projectId, templateId);
+    const template = await runAdapterTask(
+      () => adapter.readTemplate(projectId, templateId),
+      null
+    );
     if (template) {
       setTemplate(template);
     }
@@ -1855,7 +2079,10 @@
     const template =
       activeTemplateId === templateId && activeTemplate
         ? activeTemplate
-        : await adapter.readTemplate(projectId, templateId);
+        : await runAdapterTask(
+            () => adapter.readTemplate(projectId, templateId),
+            null
+          );
     if (!template) {
       await createNote();
       return;
@@ -2017,12 +2244,15 @@
     }
     await flushPendingSave();
     await flushUiStateWrite();
-    const currentState = (await adapter.readUIState()) ?? {};
-    await adapter.writeUIState({
-      ...currentState,
-      ...buildWorkspaceUiState(),
-      lastProjectId: nextProjectId,
-    });
+    const currentState =
+      (await runAdapterTask(() => adapter.readUIState(), null)) ?? {};
+    await runAdapterVoid(() =>
+      adapter.writeUIState({
+        ...currentState,
+        ...buildWorkspaceUiState(),
+        lastProjectId: nextProjectId,
+      })
+    );
     activeFolderId = null;
     await goto(resolve("/app/[projectId]", { projectId: nextProjectId }));
   };
@@ -2032,28 +2262,40 @@
     activeFolderId = folderId;
   };
 
-  onMount(() => {
-    const initialize = async (): Promise<void> => {
-      await adapter.init();
-      if (!projectId) {
-        isLoading = false;
-        return;
-      }
-      const storedProject = await adapter.readProject(projectId);
-      if (!storedProject) {
-        await goto(resolve("/onboarding"));
-        return;
-      }
-      project = storedProject;
-      await loadProjects();
-      await loadNotes();
-      await loadTemplates();
-      await loadSearchIndex();
-      await restoreWorkspaceState();
-      activeFolderId = null;
+  const initializeWorkspace = async (): Promise<void> => {
+    isLoading = true;
+    const ready = await runAdapterVoid(() => adapter.init());
+    if (!ready) {
       isLoading = false;
-    };
-    void initialize();
+      return;
+    }
+    if (!projectId) {
+      isLoading = false;
+      return;
+    }
+    const storedProject = await runAdapterTask(
+      () => adapter.readProject(projectId),
+      null
+    );
+    if (!storedProject) {
+      if (!permissionModalId) {
+        await goto(resolve("/onboarding"));
+      }
+      isLoading = false;
+      return;
+    }
+    project = storedProject;
+    await loadProjects();
+    await loadNotes();
+    await loadTemplates();
+    await loadSearchIndex();
+    await restoreWorkspaceState();
+    activeFolderId = null;
+    isLoading = false;
+  };
+
+  onMount(() => {
+    void initializeWorkspace();
 
     const handleGlobalShortcut = (event: KeyboardEvent): void => {
       if (!(event.metaKey || event.ctrlKey)) {
@@ -2116,6 +2358,8 @@
 
   onDestroy(() => {
     adapterUnsubscribe();
+    storageModeUnsubscribe();
+    modalStackUnsubscribe();
   });
 
   $: {

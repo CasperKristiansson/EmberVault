@@ -42,6 +42,7 @@
     cancelLabel?: string;
     destructive?: boolean;
     onConfirm?: () => void | Promise<void>;
+    onCancel?: () => void | Promise<void>;
   };
 
   let previousActiveElement: HTMLElement | null = null;
@@ -110,12 +111,18 @@
       cancelLabel: input.cancelLabel,
       destructive: input.destructive,
       onConfirm: input.onConfirm,
+      onCancel: input.onCancel,
     };
   };
 
   const handleConfirm = async (data: ConfirmDialogData): Promise<void> => {
     handleClose();
     await data.onConfirm?.();
+  };
+
+  const handleCancel = async (data: ConfirmDialogData): Promise<void> => {
+    handleClose();
+    await data.onCancel?.();
   };
 
   $: confirmDialogData =
@@ -168,7 +175,7 @@
       cancelLabel={confirmDialogData.cancelLabel ?? "Cancel"}
       destructive={confirmDialogData.destructive ?? false}
       onConfirm={() => void handleConfirm(confirmDialogData)}
-      onCancel={handleClose}
+      onCancel={() => void handleCancel(confirmDialogData)}
     />
   {/if}
 {/if}
