@@ -1,24 +1,36 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import { createDefaultProject } from "$lib/core/storage/indexeddb.adapter";
   import {
-    createDefaultProject,
-    IndexedDBAdapter,
-  } from "$lib/core/storage/indexeddb.adapter";
+    initAdapter,
+    type StorageMode,
+  } from "$lib/state/adapter.store";
 
-  const supportsFileSystem = false;
+  let supportsFileSystem = false;
   let isBusy = false;
+  let activeMode: StorageMode | null = null;
   let errorMessage = "";
 
-  const adapter = new IndexedDBAdapter();
+  const isAbortError = (error: unknown): boolean =>
+    error instanceof Error && error.name === "AbortError";
 
-  const initBrowserStorage = async () => {
+  onMount(() => {
+    supportsFileSystem =
+      typeof window !== "undefined" &&
+      typeof window.showDirectoryPicker === "function";
+  });
+
+  const initBrowserStorage = async (): Promise<void> => {
     if (isBusy) {
       return;
     }
     isBusy = true;
+    activeMode = "idb";
     errorMessage = "";
     try {
+      const adapter = initAdapter("idb");
       await adapter.init();
       const projects = await adapter.listProjects();
       const project = projects[0] ?? createDefaultProject();
@@ -32,6 +44,36 @@
         error instanceof Error ? error.message : "Unable to set up storage.";
     } finally {
       isBusy = false;
+      activeMode = null;
+    }
+  };
+
+  const initFolderStorage = async (): Promise<void> => {
+    if (isBusy || !supportsFileSystem || !window.showDirectoryPicker) {
+      return;
+    }
+    isBusy = true;
+    activeMode = "filesystem";
+    errorMessage = "";
+    try {
+      const handle = await window.showDirectoryPicker();
+      const adapter = initAdapter("filesystem", { directoryHandle: handle });
+      await adapter.init();
+      const projects = await adapter.listProjects();
+      const project = projects[0] ?? createDefaultProject();
+      if (projects.length === 0) {
+        await adapter.createProject(project);
+      }
+      await adapter.writeUIState({ lastProjectId: project.id });
+      await goto(resolve("/app/[projectId]", { projectId: project.id }));
+    } catch (error) {
+      if (!isAbortError(error)) {
+        errorMessage =
+          error instanceof Error ? error.message : "Unable to access folder.";
+      }
+    } finally {
+      isBusy = false;
+      activeMode = null;
     }
   };
 </script>
@@ -49,6 +91,23 @@
       </div>
     {/if}
 
+    {#if supportsFileSystem}
+      <div class="card">
+        <div class="card-copy">
+          <h2>Use a folder on this device</h2>
+          <p>Keep files in a folder you choose (best in Chrome/Edge).</p>
+        </div>
+        <button
+          class="button primary"
+          data-testid="use-folder-storage"
+          on:click={initFolderStorage}
+          disabled={isBusy}
+        >
+          {activeMode === "filesystem" ? "Opening folder..." : "Choose folder"}
+        </button>
+      </div>
+    {/if}
+
     <div class="card">
       <div class="card-copy">
         <h2>Store in this browser</h2>
@@ -60,7 +119,7 @@
         on:click={initBrowserStorage}
         disabled={isBusy}
       >
-        {isBusy ? "Setting up..." : "Use browser storage"}
+        {activeMode === "idb" ? "Setting up..." : "Use browser storage"}
       </button>
     </div>
   </div>

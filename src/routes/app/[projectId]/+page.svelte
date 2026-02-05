@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/stores";
+  import { get } from "svelte/store";
   import AppShell from "$lib/components/AppShell.svelte";
   import GraphView from "$lib/components/graph/GraphView.svelte";
   import RightPanel from "$lib/components/rightpanel/RightPanel.svelte";
@@ -57,7 +58,7 @@
     resolveMobileView,
     type MobileView,
   } from "$lib/core/utils/mobile-view";
-  import { IndexedDBAdapter } from "$lib/core/storage/indexeddb.adapter";
+  import { adapter as adapterStore } from "$lib/state/adapter.store";
   import type {
     AssetMeta,
     CustomFieldValue,
@@ -67,8 +68,10 @@
     TemplateIndexEntry,
     UIState,
   } from "$lib/core/storage/types";
-
-  const adapter = new IndexedDBAdapter();
+  let adapter = get(adapterStore);
+  const adapterUnsubscribe = adapterStore.subscribe((value) => {
+    adapter = value;
+  });
 
   type PaneId = "primary" | "secondary";
 
@@ -2109,6 +2112,10 @@
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("keydown", handleGlobalShortcut);
     };
+  });
+
+  onDestroy(() => {
+    adapterUnsubscribe();
   });
 
   $: {
