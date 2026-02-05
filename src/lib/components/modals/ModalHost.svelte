@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import CommandPaletteModal from "$lib/components/modals/CommandPaletteModal.svelte";
   import ConfirmDialog from "$lib/components/modals/ConfirmDialog.svelte";
-  import GlobalSearchModal from "$lib/components/modals/GlobalSearchModal.svelte";
-  import TemplatePickerModal from "$lib/components/modals/TemplatePickerModal.svelte";
+  import type CommandPaletteModalType from "$lib/components/modals/CommandPaletteModal.svelte";
+  import type GlobalSearchModalType from "$lib/components/modals/GlobalSearchModal.svelte";
+  import type TemplatePickerModalType from "$lib/components/modals/TemplatePickerModal.svelte";
   import type {
     NoteIndexEntry,
     Project,
@@ -34,6 +34,34 @@
     | ((panel: "outline" | "backlinks" | "metadata") => void | Promise<void>)
     | null = null;
   export let onOpenSettings: (() => void | Promise<void>) | null = null;
+
+  let CommandPaletteModalComponent: typeof CommandPaletteModalType | null = null;
+  let GlobalSearchModalComponent: typeof GlobalSearchModalType | null = null;
+  let TemplatePickerModalComponent: typeof TemplatePickerModalType | null = null;
+
+  const ensureCommandPaletteLoaded = async (): Promise<void> => {
+    if (CommandPaletteModalComponent) {
+      return;
+    }
+    const module = await import("$lib/components/modals/CommandPaletteModal.svelte");
+    CommandPaletteModalComponent = module.default;
+  };
+
+  const ensureGlobalSearchLoaded = async (): Promise<void> => {
+    if (GlobalSearchModalComponent) {
+      return;
+    }
+    const module = await import("$lib/components/modals/GlobalSearchModal.svelte");
+    GlobalSearchModalComponent = module.default;
+  };
+
+  const ensureTemplatePickerLoaded = async (): Promise<void> => {
+    if (TemplatePickerModalComponent) {
+      return;
+    }
+    const module = await import("$lib/components/modals/TemplatePickerModal.svelte");
+    TemplatePickerModalComponent = module.default;
+  };
 
   type ConfirmDialogData = {
     title: string;
@@ -129,43 +157,64 @@
     $activeModal?.type === "confirm"
       ? resolveConfirmData($activeModal.data)
       : null;
+
+  $: if ($activeModal?.type === "global-search") {
+    void ensureGlobalSearchLoaded();
+  }
+
+  $: if ($activeModal?.type === "command-palette") {
+    void ensureCommandPaletteLoaded();
+  }
+
+  $: if ($activeModal?.type === "template-picker") {
+    void ensureTemplatePickerLoaded();
+  }
 </script>
 
 {#if $activeModal?.type === "global-search"}
-  <GlobalSearchModal
-    {project}
-    {projects}
-    {searchState}
-    onClose={handleClose}
-    onOpenNote={onOpenNote}
-    onProjectChange={onProjectChange}
-  />
+  {#if GlobalSearchModalComponent}
+    <svelte:component
+      this={GlobalSearchModalComponent}
+      {project}
+      {projects}
+      {searchState}
+      onClose={handleClose}
+      onOpenNote={onOpenNote}
+      onProjectChange={onProjectChange}
+    />
+  {/if}
 {:else if $activeModal?.type === "command-palette"}
-  <CommandPaletteModal
-    {project}
-    {projects}
-    {notes}
-    {activeNoteId}
-    onClose={handleClose}
-    onOpenNote={onOpenNote}
-    {onCreateNote}
-    {onOpenGlobalSearch}
-    {onProjectChange}
-    {onToggleSplitView}
-    {onOpenGraph}
-    {onOpenTemplates}
-    {onGoToTrash}
-    {onToggleRightPanel}
-    {onOpenSettings}
-  />
+  {#if CommandPaletteModalComponent}
+    <svelte:component
+      this={CommandPaletteModalComponent}
+      {project}
+      {projects}
+      {notes}
+      {activeNoteId}
+      onClose={handleClose}
+      onOpenNote={onOpenNote}
+      {onCreateNote}
+      {onOpenGlobalSearch}
+      {onProjectChange}
+      {onToggleSplitView}
+      {onOpenGraph}
+      {onOpenTemplates}
+      {onGoToTrash}
+      {onToggleRightPanel}
+      {onOpenSettings}
+    />
+  {/if}
 {:else if $activeModal?.type === "template-picker"}
-  <TemplatePickerModal
-    {templates}
-    {lastUsedTemplateId}
-    onClose={handleClose}
-    onCreateBlank={onCreateNote}
-    onCreateFromTemplate={onCreateNoteFromTemplate}
-  />
+  {#if TemplatePickerModalComponent}
+    <svelte:component
+      this={TemplatePickerModalComponent}
+      {templates}
+      {lastUsedTemplateId}
+      onClose={handleClose}
+      onCreateBlank={onCreateNote}
+      onCreateFromTemplate={onCreateNoteFromTemplate}
+    />
+  {/if}
 {:else if $activeModal?.type === "confirm"}
   {#if confirmDialogData}
     <ConfirmDialog

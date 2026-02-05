@@ -6,17 +6,17 @@
   import { get } from "svelte/store";
   import AppShell from "$lib/components/AppShell.svelte";
   import ToastHost from "$lib/components/ToastHost.svelte";
-  import GraphView from "$lib/components/graph/GraphView.svelte";
   import RightPanel from "$lib/components/rightpanel/RightPanel.svelte";
   import RightPanelTabs from "$lib/components/rightpanel/RightPanelTabs.svelte";
   import ModalHost from "$lib/components/modals/ModalHost.svelte";
-  import TemplateEditor from "$lib/components/templates/TemplateEditor.svelte";
-  import TemplateList from "$lib/components/templates/TemplateList.svelte";
   import TiptapEditor from "$lib/components/editor/TiptapEditor.svelte";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import TrashNoteRow from "$lib/components/notes/TrashNoteRow.svelte";
   import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
   import ProjectSwitcher from "$lib/components/sidebar/ProjectSwitcher.svelte";
+  import type GraphViewType from "$lib/components/graph/GraphView.svelte";
+  import type TemplateEditorType from "$lib/components/templates/TemplateEditor.svelte";
+  import type TemplateListType from "$lib/components/templates/TemplateList.svelte";
   import { createEmptyDocument } from "$lib/core/editor/tiptap-config";
   import {
     buildBacklinkSnippet,
@@ -182,6 +182,30 @@
   let lastUsedTemplateId: string | null = null;
   let templateTitleInput: HTMLInputElement | null = null;
 
+  let GraphViewComponent: typeof GraphViewType | null = null;
+  let TemplateEditorComponent: typeof TemplateEditorType | null = null;
+  let TemplateListComponent: typeof TemplateListType | null = null;
+
+  const ensureGraphViewLoaded = async (): Promise<void> => {
+    if (GraphViewComponent) {
+      return;
+    }
+    const module = await import("$lib/components/graph/GraphView.svelte");
+    GraphViewComponent = module.default;
+  };
+
+  const ensureTemplatesLoaded = async (): Promise<void> => {
+    if (TemplateEditorComponent && TemplateListComponent) {
+      return;
+    }
+    const [editorModule, listModule] = await Promise.all([
+      import("$lib/components/templates/TemplateEditor.svelte"),
+      import("$lib/components/templates/TemplateList.svelte"),
+    ]);
+    TemplateEditorComponent = editorModule.default;
+    TemplateListComponent = listModule.default;
+  };
+
   const saveDelay = 400;
   const uiStateDelay = 800;
   const backlinksDelay = 200;
@@ -212,6 +236,14 @@
     workspaceMode === "templates"
       ? Boolean(activeTemplate)
       : Boolean(activeNote);
+
+  $: if (workspaceMode === "graph") {
+    void ensureGraphViewLoaded();
+  }
+
+  $: if (workspaceMode === "templates") {
+    void ensureTemplatesLoaded();
+  }
   $: wikiLinkCandidates = notes
     .filter((note) => note.deletedAt === null)
     .map((note) => ({ id: note.id, title: note.title }));
@@ -2566,14 +2598,19 @@
 
   <div slot="note-list" class="note-list-content">
     {#if workspaceMode === "templates"}
-      <TemplateList
-        templates={displayTemplates}
-        activeTemplateId={activeTemplateId}
-        isLoading={isLoading}
-        totalCount={templateListCount}
-        onCreate={createTemplate}
-        onSelect={selectTemplate}
-      />
+      {#if TemplateListComponent}
+        <svelte:component
+          this={TemplateListComponent}
+          templates={displayTemplates}
+          {activeTemplateId}
+          {isLoading}
+          totalCount={templateListCount}
+          onCreate={createTemplate}
+          onSelect={selectTemplate}
+        />
+      {:else}
+        <div class="note-list-empty">Loading templates...</div>
+      {/if}
     {:else}
       <header class="note-list-header">
         <div>
@@ -2705,25 +2742,35 @@
     data-split={splitEnabled ? "true" : "false"}
   >
     {#if workspaceMode === "templates"}
-      <TemplateEditor
-        template={activeTemplate}
-        titleValue={templateState.titleValue}
-        editorContent={templateState.editorContent}
-        isLoading={isLoading}
-        bind:titleInput={templateTitleInput}
-        linkCandidates={wikiLinkCandidates}
-        onImagePaste={handleImagePaste}
-        onTitleInput={handleTemplateTitleInput}
-        onTitleBlur={handleTemplateTitleBlur}
-        onEditorUpdate={handleTemplateEditorUpdate}
-      />
+      {#if TemplateEditorComponent}
+        <svelte:component
+          this={TemplateEditorComponent}
+          template={activeTemplate}
+          titleValue={templateState.titleValue}
+          editorContent={templateState.editorContent}
+          {isLoading}
+          bind:titleInput={templateTitleInput}
+          linkCandidates={wikiLinkCandidates}
+          onImagePaste={handleImagePaste}
+          onTitleInput={handleTemplateTitleInput}
+          onTitleBlur={handleTemplateTitleBlur}
+          onEditorUpdate={handleTemplateEditorUpdate}
+        />
+      {:else}
+        <div class="editor-empty">Preparing editor...</div>
+      {/if}
     {:else if workspaceMode === "graph"}
-      <GraphView
-        notes={notes}
-        tags={project?.tags ?? {}}
-        activeNoteId={activeNote?.id ?? null}
-        onNodeClick={noteId => void activateTab(noteId)}
-      />
+      {#if GraphViewComponent}
+        <svelte:component
+          this={GraphViewComponent}
+          {notes}
+          tags={project?.tags ?? {}}
+          activeNoteId={activeNote?.id ?? null}
+          onNodeClick={noteId => void activateTab(noteId)}
+        />
+      {:else}
+        <div class="editor-empty">Loading graph...</div>
+      {/if}
     {:else}
       {#if splitEnabled}
         <div
