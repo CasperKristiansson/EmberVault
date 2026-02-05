@@ -83,8 +83,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Templates manager + apply template on new note
 - [x] Favorites view + star toggles in list/editor
 - [x] Metadata panel with custom fields CRUD
-- [x] Trash view polish with restore/permanent delete confirm
-Note: Implemented trash filter chip + trash view, trash row actions (restore/permanent delete), confirm dialog modal, and delete-to-trash button in editor; added unit/component tests and e2e trash flow. Resolved e2e flake in `tests/e2e/editor-reload-blocks.spec.ts` by reordering checklist insertion and stabilizing slash-menu input.
+- [x] Trash view polish with restore/permanent delete confirm Note: Implemented trash filter chip + trash view, trash row actions (restore/permanent delete), confirm dialog modal, and delete-to-trash button in editor; added unit/component tests and e2e trash flow. Resolved e2e flake in `tests/e2e/editor-reload-blocks.spec.ts` by reordering checklist insertion and stabilizing slash-menu input.
 - [x] E2E: create template, new note from template, persists
 
 ## Milestone 9 — File System Access (disk vault) + hybrid cache

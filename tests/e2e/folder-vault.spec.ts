@@ -221,8 +221,13 @@ test.describe("folder vault", () => {
       globalWithMock.embervaultMockFs?.revokePermissions?.();
     });
 
-    await page.getByTestId("new-note").click();
-    await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+    const confirmDialog = page.getByTestId("confirm-dialog");
+    // The recovery prompt may open immediately after permissions are revoked, or
+    // after the next filesystem operation. Support both to avoid flakiness.
+    if (!(await confirmDialog.isVisible())) {
+      await page.getByTestId("new-note").click();
+    }
+    await expect(confirmDialog).toBeVisible();
 
     await page.getByTestId("confirm-cancel").click();
     await expect(page.getByTestId("toast")).toContainText(

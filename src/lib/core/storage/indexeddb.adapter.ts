@@ -1,5 +1,10 @@
 /* eslint-disable sonarjs/arrow-function-convention */
-import { createUlid } from "../utils/ulid";
+import { toNoteIndexEntry, toTemplateIndexEntry } from "./index-entries";
+import { toArrayBuffer, toBlob } from "./indexeddb/asset-conversion";
+import { openIndexedDatabase } from "./indexeddb/database";
+import { requestToPromise, waitForTransaction } from "./indexeddb/requests";
+import { databaseName, storeNames, uiStateKey } from "./indexeddb/schema";
+import type { StoreName } from "./indexeddb/schema";
 import type {
   AssetMeta,
   NoteDocumentFile,
@@ -10,28 +15,18 @@ import type {
   UIState,
 } from "./types";
 
-export const databaseName = "local-notes";
-export const databaseVersion = 1;
-
-export const storeNames = {
-  projects: "projects",
-  notes: "notes",
-  templates: "templates",
-  assets: "assets",
-  uiState: "uiState",
-  searchIndex: "searchIndex",
-} as const;
-
-const projectIdKey = "projectId";
-const noteIdKey = "noteId";
-const templateIdKey = "templateId";
-const assetIdKey = "assetId";
-const primaryIdKey = "id";
-const uiStateKey = "ui";
-
-type StoreName = (typeof storeNames)[keyof typeof storeNames];
-
-type StoreKeyPath = string | string[] | null;
+export {
+  databaseName,
+  databaseVersion,
+  storeKeyPaths,
+  storeNames,
+  type StoreKeyPath,
+} from "./indexeddb/schema";
+export {
+  deleteIndexedDatabase,
+  openIndexedDatabase,
+} from "./indexeddb/database";
+export { createDefaultProject } from "./indexeddb/default-project";
 
 type IndexedDatabaseKey = IDBValidKey;
 
@@ -60,171 +55,6 @@ type AssetRecord = {
 type SearchIndexRecord = {
   projectId: string;
   snapshot: string;
-};
-
-const noteKeyPath: string[] = [projectIdKey, noteIdKey];
-const templateKeyPath: string[] = [projectIdKey, templateIdKey];
-const assetKeyPath: string[] = [projectIdKey, assetIdKey];
-
-export const storeKeyPaths: Record<StoreName, StoreKeyPath> = {
-  [storeNames.projects]: primaryIdKey,
-  [storeNames.notes]: noteKeyPath,
-  [storeNames.templates]: templateKeyPath,
-  [storeNames.assets]: assetKeyPath,
-  [storeNames.uiState]: null,
-  [storeNames.searchIndex]: projectIdKey,
-};
-
-const getDatabaseFactory = (): IDBFactory => globalThis.indexedDB;
-
-const ensureObjectStore = (
-  database: IDBDatabase,
-  storeName: StoreName,
-  keyPath: StoreKeyPath
-): void => {
-  if (database.objectStoreNames.contains(storeName)) {
-    return;
-  }
-  if (keyPath === null) {
-    database.createObjectStore(storeName);
-    return;
-  }
-  database.createObjectStore(storeName, { keyPath });
-};
-
-const createObjectStores = (database: IDBDatabase): void => {
-  const storeList: StoreName[] = [
-    storeNames.projects,
-    storeNames.notes,
-    storeNames.templates,
-    storeNames.assets,
-    storeNames.uiState,
-    storeNames.searchIndex,
-  ];
-
-  for (const storeName of storeList) {
-    ensureObjectStore(database, storeName, storeKeyPaths[storeName]);
-  }
-};
-
-const requestToPromise = async <T>(request: IDBRequest<T>): Promise<T> => {
-  // eslint-disable-next-line promise/avoid-new, compat/compat, sonarjs/prefer-immediate-return
-  const result = await new Promise<T>((resolve, reject) => {
-    request.addEventListener("success", () => {
-      resolve(request.result);
-    });
-    request.addEventListener("error", () => {
-      reject(new Error("IndexedDB request failed."));
-    });
-  });
-  return result;
-};
-
-const waitForTransaction = async (
-  transaction: IDBTransaction
-): Promise<void> => {
-  // eslint-disable-next-line promise/avoid-new, compat/compat
-  await new Promise<void>((resolve, reject) => {
-    transaction.addEventListener("complete", () => {
-      resolve();
-    });
-    transaction.addEventListener("abort", () => {
-      reject(new Error("IndexedDB transaction aborted."));
-    });
-    transaction.addEventListener("error", () => {
-      reject(new Error("IndexedDB transaction failed."));
-    });
-  });
-};
-
-export const openIndexedDatabase = async (): Promise<IDBDatabase> => {
-  const databaseFactory = getDatabaseFactory();
-  const request: IDBOpenDBRequest = databaseFactory.open(
-    databaseName,
-    databaseVersion
-  );
-  request.onupgradeneeded = () => {
-    createObjectStores(request.result);
-  };
-  return requestToPromise(request);
-};
-
-export const deleteIndexedDatabase = async (): Promise<void> => {
-  const databaseFactory = getDatabaseFactory();
-  const request: IDBOpenDBRequest =
-    databaseFactory.deleteDatabase(databaseName);
-  await requestToPromise(request);
-};
-
-const defaultProjectName = "Personal";
-
-export const createDefaultProject = (): Project => {
-  const timestamp = Date.now();
-  return {
-    id: createUlid(),
-    name: defaultProjectName,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    folders: {},
-    tags: {},
-    notesIndex: {},
-    templatesIndex: {},
-    settings: {},
-  };
-};
-
-const toNoteIndexEntry = (noteDocument: NoteDocumentFile): NoteIndexEntry => {
-  const hasCustomFields = Object.keys(noteDocument.customFields).length > 0;
-  return {
-    id: noteDocument.id,
-    title: noteDocument.title,
-    folderId: noteDocument.folderId,
-    tagIds: noteDocument.tagIds,
-    favorite: noteDocument.favorite,
-    createdAt: noteDocument.createdAt,
-    updatedAt: noteDocument.updatedAt,
-    deletedAt: noteDocument.deletedAt,
-    isTemplate: noteDocument.isTemplate ?? false,
-    ...(hasCustomFields ? { customFields: noteDocument.customFields } : {}),
-    ...(noteDocument.derived?.outgoingLinks
-      ? { linkOutgoing: noteDocument.derived.outgoingLinks }
-      : {}),
-  };
-};
-
-const toTemplateIndexEntry = (
-  templateDocument: NoteDocumentFile
-): TemplateIndexEntry => {
-  const base = toNoteIndexEntry(templateDocument);
-  return {
-    ...base,
-    isTemplate: true,
-  };
-};
-
-const toBlob = (value: unknown, meta?: AssetMeta): Blob => {
-  const options = meta?.mime ? { type: meta.mime } : undefined;
-  if (value instanceof Blob) {
-    return value;
-  }
-  if (value instanceof ArrayBuffer) {
-    return new Blob([value], options);
-  }
-  if (value instanceof Uint8Array) {
-    const copied = new Uint8Array(value);
-    return new Blob([copied.buffer], options);
-  }
-  if (typeof value === "string") {
-    return new Blob([value], options);
-  }
-  return new Blob([String(value)], options);
-};
-
-const toArrayBuffer = async (value: Blob): Promise<ArrayBuffer> => {
-  if (typeof value.arrayBuffer === "function") {
-    return value.arrayBuffer();
-  }
-  return new Response(value).arrayBuffer();
 };
 
 export class IndexedDBAdapter implements StorageAdapter {

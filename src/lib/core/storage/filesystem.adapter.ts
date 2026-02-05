@@ -1,4 +1,36 @@
 import { IndexedDBAdapter } from "./indexeddb.adapter";
+import { toNoteIndexEntry, toTemplateIndexEntry } from "./index-entries";
+import { findAssetHandle, resolveAssetExtension } from "./filesystem/assets";
+import {
+  assetsDirectoryName,
+  notesDirectoryName,
+  projectsDirectoryName,
+  templatesDirectoryName,
+  trashDirectoryName,
+  vaultFileName,
+} from "./filesystem/constants";
+import {
+  isDirectoryHandle,
+  isFileHandle,
+  isNotFoundError,
+  listDirectoryEntries,
+  removeEntryIfExists,
+} from "./filesystem/handles";
+import {
+  readJsonFile,
+  readTextFile,
+  writeBlobFile,
+  writeJsonFile,
+  writeTextFile,
+} from "./filesystem/file-io";
+import {
+  noteFileName,
+  noteMarkdownName,
+  templateFileName,
+  templateMarkdownName,
+} from "./filesystem/paths";
+import { readProjectFile, writeProjectFile } from "./filesystem/project-files";
+import type { ProjectDirectories, VaultManifest } from "./filesystem/types";
 import type {
   AssetMeta,
   NoteDocumentFile,
@@ -8,200 +40,6 @@ import type {
   TemplateIndexEntry,
   UIState,
 } from "./types";
-
-type VaultManifest = {
-  version: number;
-  uiState?: UIState;
-  searchIndex?: Record<string, string>;
-};
-
-type ProjectDirectories = {
-  project: FileSystemDirectoryHandle;
-  notes: FileSystemDirectoryHandle;
-  templates: FileSystemDirectoryHandle;
-  assets: FileSystemDirectoryHandle;
-  trash: FileSystemDirectoryHandle;
-};
-
-const vaultFileName = "vault.json";
-const projectsDirectoryName = "projects";
-const projectFileName = "project.json";
-const notesDirectoryName = "notes";
-const templatesDirectoryName = "templates";
-const assetsDirectoryName = "assets";
-const trashDirectoryName = "trash";
-
-const isNotFoundError = (error: unknown): boolean =>
-  error instanceof Error && error.name === "NotFoundError";
-
-const isDirectoryHandle = (
-  entry: FileSystemHandle
-): entry is FileSystemDirectoryHandle => entry.kind === "directory";
-
-const isFileHandle = (entry: FileSystemHandle): entry is FileSystemFileHandle =>
-  entry.kind === "file";
-
-const noteFileName = (noteId: string): string => `${noteId}.json`;
-const noteMarkdownName = (noteId: string): string => `${noteId}.md`;
-const templateFileName = (templateId: string): string => `${templateId}.json`;
-const templateMarkdownName = (templateId: string): string => `${templateId}.md`;
-
-const listDirectoryEntries = async (
-  directory: FileSystemDirectoryHandle
-): Promise<FileSystemHandle[]> => {
-  const entries: FileSystemHandle[] = [];
-  const iterator = directory.values();
-  for await (const entry of iterator) {
-    entries.push(entry);
-  }
-  return entries;
-};
-
-const readTextFile = async (
-  directory: FileSystemDirectoryHandle,
-  fileName: string
-): Promise<string | null> => {
-  try {
-    const handle = await directory.getFileHandle(fileName);
-    const file = await handle.getFile();
-    return await file.text();
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      return null;
-    }
-    throw error;
-  }
-};
-
-const writeTextFile = async (
-  directory: FileSystemDirectoryHandle,
-  fileName: string,
-  contents: string
-): Promise<void> => {
-  const handle = await directory.getFileHandle(fileName, { create: true });
-  const writable = await handle.createWritable();
-  await writable.write(contents);
-  await writable.close();
-};
-
-const writeBlobFile = async (
-  directory: FileSystemDirectoryHandle,
-  fileName: string,
-  blob: Blob
-): Promise<void> => {
-  const handle = await directory.getFileHandle(fileName, { create: true });
-  const writable = await handle.createWritable();
-  await writable.write(blob);
-  await writable.close();
-};
-
-const removeEntryIfExists = async (
-  directory: FileSystemDirectoryHandle,
-  name: string
-): Promise<void> => {
-  try {
-    await directory.removeEntry(name);
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      return;
-    }
-    throw error;
-  }
-};
-
-const readJsonFile = async <T>(
-  directory: FileSystemDirectoryHandle,
-  fileName: string
-): Promise<T | null> => {
-  const text = await readTextFile(directory, fileName);
-  if (text === null) {
-    return null;
-  }
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-  return JSON.parse(text) as T;
-};
-
-const writeJsonFile = async (
-  directory: FileSystemDirectoryHandle,
-  fileName: string,
-  payload: unknown
-): Promise<void> => {
-  const serialized = JSON.stringify(payload);
-  await writeTextFile(directory, fileName, serialized);
-};
-
-const readProjectFile = async (
-  projectDirectory: FileSystemDirectoryHandle
-): Promise<Project | null> =>
-  readJsonFile<Project>(projectDirectory, projectFileName);
-
-const writeProjectFile = async (
-  projectDirectory: FileSystemDirectoryHandle,
-  project: Project
-): Promise<void> => {
-  await writeJsonFile(projectDirectory, projectFileName, project);
-};
-
-const findAssetHandle = async (
-  assetsDirectory: FileSystemDirectoryHandle,
-  assetId: string
-): Promise<FileSystemFileHandle | null> => {
-  const entries = await listDirectoryEntries(assetsDirectory);
-  for (const entry of entries) {
-    if (isFileHandle(entry)) {
-      const { name } = entry;
-      if (name === assetId || name.startsWith(`${assetId}.`)) {
-        return entry;
-      }
-    }
-  }
-  return null;
-};
-
-const toNoteIndexEntry = (noteDocument: NoteDocumentFile): NoteIndexEntry => {
-  const hasCustomFields = Object.keys(noteDocument.customFields).length > 0;
-  return {
-    id: noteDocument.id,
-    title: noteDocument.title,
-    folderId: noteDocument.folderId,
-    tagIds: noteDocument.tagIds,
-    favorite: noteDocument.favorite,
-    createdAt: noteDocument.createdAt,
-    updatedAt: noteDocument.updatedAt,
-    deletedAt: noteDocument.deletedAt,
-    isTemplate: noteDocument.isTemplate ?? false,
-    ...(hasCustomFields ? { customFields: noteDocument.customFields } : {}),
-    ...(noteDocument.derived?.outgoingLinks
-      ? { linkOutgoing: noteDocument.derived.outgoingLinks }
-      : {}),
-  };
-};
-
-const toTemplateIndexEntry = (
-  templateDocument: NoteDocumentFile
-): TemplateIndexEntry => {
-  const base = toNoteIndexEntry(templateDocument);
-  return {
-    ...base,
-    isTemplate: true,
-  };
-};
-
-const mimeToExtension: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "image/svg+xml": "svg",
-};
-
-const resolveAssetExtension = (mime?: string): string => {
-  if (!mime) {
-    return "bin";
-  }
-  return mimeToExtension[mime] ?? "bin";
-};
 
 const supportsIndexedDatabase = (): boolean => "indexedDB" in globalThis;
 

@@ -22,5 +22,4 @@ AWS_PROFILE=Personal aws cloudfront create-invalidation \
 
 ## Notes
 
-The domain and hosted zone are hardcoded in `infra/index.ts`. To change them,
-edit that file and re-run `pulumi up`.
+The domain and hosted zone are hardcoded in `infra/index.ts`. To change them, edit that file and re-run `pulumi up`.
