@@ -199,6 +199,11 @@
     background: var(--bg-3);
   }
 
+  .folder-row:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
   .folder-row.active {
     background: var(--accent-2);
   }
@@ -242,6 +247,11 @@
   .folder-chevron:hover {
     background: var(--bg-3);
     color: var(--text-0);
+  }
+
+  .folder-chevron:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .folder-chevron.spacer {

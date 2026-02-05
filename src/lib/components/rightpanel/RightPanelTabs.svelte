@@ -65,6 +65,11 @@
     color: var(--text-0);
   }
 
+  .right-panel-tab:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
   .right-panel-tab[aria-pressed="true"] {
     background: var(--bg-2);
     border-color: var(--stroke-0);

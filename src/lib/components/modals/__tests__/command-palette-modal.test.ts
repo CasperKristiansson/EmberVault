@@ -1,6 +1,6 @@
 /* eslint-disable sonarjs/no-implicit-dependencies */
-import { fireEvent, render, waitFor } from "@testing-library/svelte";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import CommandPaletteModal from "$lib/components/modals/CommandPaletteModal.svelte";
 import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
 
@@ -36,6 +36,26 @@ const createNote = (input: {
 });
 
 describe("CommandPaletteModal", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("focuses the command input on mount", async () => {
+    const project = createProject("project-1", "Personal");
+    const { getByLabelText } = render(CommandPaletteModal, {
+      props: {
+        project,
+        projects: [project],
+        notes: [],
+      },
+    });
+
+    const input = getByLabelText("Command palette");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(input);
+    });
+  });
+
   it("navigates results with arrow keys and selects with enter", async () => {
     const project = createProject("project-1", "Personal");
     const projects = [project, createProject("project-2", "Work")];

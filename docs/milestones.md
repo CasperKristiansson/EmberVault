@@ -99,7 +99,7 @@ Note: Implemented trash filter chip + trash view, trash row actions (restore/per
 
 - [x] Implement all styling rules in brand.md and ui-spec.md (no drift)
 - [x] Add motion per brand rules + reduced motion support
-- [ ] Add accessibility pass: focus order, ARIA labels, contrast checks
+- [x] Add accessibility pass: focus order, ARIA labels, contrast checks
 - [ ] Add error boundaries + safe toasts for adapter failures
 - [ ] Add performance checks: list virtualization, search latency budget tests (synthetic)
 - [ ] Final E2E sweep on Chromium/Firefox/WebKit

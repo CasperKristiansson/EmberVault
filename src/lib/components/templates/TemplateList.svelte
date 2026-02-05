@@ -128,6 +128,11 @@
     background: var(--bg-3);
   }
 
+  .template-row:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
   .template-row.active {
     background: var(--accent-2);
     border-color: var(--accent-2);

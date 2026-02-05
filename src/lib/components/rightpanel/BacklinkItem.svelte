@@ -47,6 +47,11 @@
     background: var(--bg-3);
   }
 
+  .backlink-item:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
   .backlink-title {
     font-size: 13px;
     font-weight: 500;

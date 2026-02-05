@@ -24,6 +24,7 @@
   let items: PickerItem[] = [];
   let selectedIndex = 0;
   let panelElement: HTMLDivElement | null = null;
+  let closeButton: HTMLButtonElement | null = null;
 
   const resolveTitle = (template: TemplateIndexEntry): string =>
     template.title.trim() || "Untitled";
@@ -114,8 +115,20 @@
     }
   }
 
-  onMount(() => {
+  const focusInitialElement = (): void => {
+    const firstItem = panelElement?.querySelector<HTMLButtonElement>(
+      ".picker-item:not([disabled])"
+    );
+    if (firstItem) {
+      firstItem.focus();
+      return;
+    }
+    closeButton?.focus();
     panelElement?.focus();
+  };
+
+  onMount(() => {
+    focusInitialElement();
   });
 </script>
 
@@ -141,6 +154,7 @@
         type="button"
         aria-label="Close template picker"
         on:click={onClose}
+        bind:this={closeButton}
       >
         <svg
           class="icon"

@@ -221,6 +221,11 @@
     padding-right: 4px;
   }
 
+  .folder-tree:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
   .folder-empty {
     color: var(--text-2);
     font-size: 12px;
@@ -254,6 +259,11 @@
 
   .folder-menu-item:hover:enabled {
     background: var(--bg-3);
+  }
+
+  .folder-menu-item:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .folder-menu-item:disabled {

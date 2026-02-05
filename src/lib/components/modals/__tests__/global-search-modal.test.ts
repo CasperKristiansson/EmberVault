@@ -1,6 +1,6 @@
 /* eslint-disable sonarjs/no-implicit-dependencies */
-import { fireEvent, render, waitFor } from "@testing-library/svelte";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import GlobalSearchModal from "$lib/components/modals/GlobalSearchModal.svelte";
 import { buildSearchIndex } from "$lib/core/search/minisearch";
 import type { NoteDocumentFile, Project } from "$lib/core/storage/types";
@@ -67,6 +67,25 @@ const createProject = (): Project => {
 };
 
 describe("GlobalSearchModal", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("focuses the search input on mount", async () => {
+    const project = createProject();
+    const { getByLabelText } = render(GlobalSearchModal, {
+      props: {
+        project,
+        projects: [project],
+      },
+    });
+
+    const input = getByLabelText("Search notes");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(input);
+    });
+  });
+
   it("filters results by folder", async () => {
     vi.useFakeTimers();
 

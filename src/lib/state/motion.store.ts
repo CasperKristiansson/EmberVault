@@ -3,38 +3,37 @@ import { readable } from "svelte/store";
 export type MatchMediaSource = () => MediaQueryList | null;
 
 const defaultMatchMedia: MatchMediaSource = () => {
-  if (typeof window === "undefined" || !window.matchMedia) {
+  const { matchMedia } = globalThis;
+  if (typeof matchMedia !== "function") {
     return null;
   }
-  return window.matchMedia("(prefers-reduced-motion: reduce)");
+  return matchMedia("(prefers-reduced-motion: reduce)");
 };
 
 export const createReducedMotionStore = (
   source: MatchMediaSource = defaultMatchMedia
 ) => {
-  return readable(false, (set) => {
+  const handleReducedMotion = function handleReducedMotion(
+    set: (value: boolean) => void
+  ) {
     const media = source();
     if (!media) {
-      return;
+      return () => {
+        source();
+      };
     }
 
     const update = () => set(media.matches);
     update();
 
-    if (media.addEventListener) {
-      media.addEventListener("change", update);
-    } else if (media.addListener) {
-      media.addListener(update);
-    }
+    media.addEventListener("change", update);
 
     return () => {
-      if (media.removeEventListener) {
-        media.removeEventListener("change", update);
-      } else if (media.removeListener) {
-        media.removeListener(update);
-      }
+      media.removeEventListener("change", update);
     };
-  });
+  };
+
+  return readable(false, handleReducedMotion);
 };
 
 export const prefersReducedMotion = createReducedMotionStore();

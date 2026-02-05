@@ -3,7 +3,7 @@ import type { TransitionConfig } from "svelte/transition";
 
 export type MotionPreset = "modal" | "list" | "collapse" | "fade";
 
-export type MotionParams = {
+export type MotionParameters = {
   preset: MotionPreset;
   reducedMotion?: boolean;
   enabled?: boolean;
@@ -23,15 +23,11 @@ export const resolveMotionTiming = (
     return { duration: 80 };
   }
 
-  switch (preset) {
-    case "collapse":
-      return { duration: 160 };
-    case "modal":
-    case "list":
-    case "fade":
-    default:
-      return { duration: 120 };
+  if (preset === "collapse") {
+    return { duration: 160 };
   }
+
+  return { duration: 120 };
 };
 
 const resolveSize = (node: Element, axis: "x" | "y"): number => {
@@ -41,55 +37,83 @@ const resolveSize = (node: Element, axis: "x" | "y"): number => {
   return axis === "x" ? node.scrollWidth : node.scrollHeight;
 };
 
-export const motion = (node: Element, params?: MotionParams): TransitionConfig => {
-  const preset = params?.preset ?? "fade";
-  const reducedMotion = params?.reducedMotion ?? false;
-  const enabled = params?.enabled ?? true;
-  const axis = params?.axis ?? "y";
-  const offset = params?.offset ?? 4;
+const createDisabledTransition = (): TransitionConfig => ({
+  duration: 0,
+  css: () => "",
+});
+
+const createFadeTransition = (duration: number): TransitionConfig => ({
+  duration,
+  easing: cubicOut,
+  css(progress) {
+    return `opacity: ${progress};`;
+  },
+});
+
+const createListTransition = (
+  duration: number,
+  offset: number
+): TransitionConfig => ({
+  duration,
+  easing: cubicOut,
+  css(progress) {
+    return `opacity: ${progress}; transform: translateY(${(1 - progress) * offset}px);`;
+  },
+});
+
+const createModalTransition = (duration: number): TransitionConfig => {
+  const scaleStart = 0.98;
+  return {
+    duration,
+    easing: cubicOut,
+    css(progress) {
+      const scale = scaleStart + (1 - scaleStart) * progress;
+      return `opacity: ${progress}; transform: scale(${scale});`;
+    },
+  };
+};
+
+const createCollapseTransition = (
+  node: Element,
+  axis: "x" | "y",
+  duration: number
+): TransitionConfig => {
+  const size = resolveSize(node, axis);
+  const dimension = axis === "x" ? "width" : "height";
+  return {
+    duration,
+    easing: cubicOut,
+    css(progress) {
+      return `overflow: hidden; ${dimension}: ${size * progress}px;`;
+    },
+  };
+};
+
+export const motion = (
+  node: Element,
+  parameters?: MotionParameters
+): TransitionConfig => {
+  const preset = parameters?.preset ?? "fade";
+  const reducedMotion = parameters?.reducedMotion ?? false;
+  const enabled = parameters?.enabled ?? true;
+  const axis = parameters?.axis ?? "y";
+  const offset = parameters?.offset ?? 4;
   const timing = resolveMotionTiming(preset, reducedMotion);
 
   if (!enabled || timing.duration === 0) {
-    return {
-      duration: 0,
-      css: () => "",
-    };
+    return createDisabledTransition();
   }
 
-  if (preset === "collapse" && !reducedMotion) {
-    const size = resolveSize(node, axis);
-    const dimension = axis === "x" ? "width" : "height";
-    return {
-      duration: timing.duration,
-      easing: cubicOut,
-      css: (t) => `overflow: hidden; ${dimension}: ${size * t}px;`,
-    };
+  if (reducedMotion) {
+    return createFadeTransition(timing.duration);
   }
 
-  if (preset === "modal" && !reducedMotion) {
-    const scaleStart = 0.98;
-    return {
-      duration: timing.duration,
-      easing: cubicOut,
-      css: (t) => {
-        const scale = scaleStart + (1 - scaleStart) * t;
-        return `opacity: ${t}; transform: scale(${scale});`;
-      },
-    };
-  }
-
-  if (preset === "list" && !reducedMotion) {
-    return {
-      duration: timing.duration,
-      easing: cubicOut,
-      css: (t) =>
-        `opacity: ${t}; transform: translateY(${(1 - t) * offset}px);`,
-    };
-  }
-
-  return {
-    duration: timing.duration,
-    easing: cubicOut,
-    css: (t) => `opacity: ${t};`,
+  const transitionFactories: Record<MotionPreset, () => TransitionConfig> = {
+    collapse: () => createCollapseTransition(node, axis, timing.duration),
+    modal: () => createModalTransition(timing.duration),
+    list: () => createListTransition(timing.duration, offset),
+    fade: () => createFadeTransition(timing.duration),
   };
+
+  return transitionFactories[preset]();
 };

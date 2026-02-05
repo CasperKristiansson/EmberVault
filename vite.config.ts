@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "jsdom",
       include: ["src/**/*.{test,spec}.{js,ts}"],
+      setupFiles: ["src/test/setup.ts"],
     },
     preview: {
       host: "127.0.0.1",

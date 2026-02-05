@@ -53,6 +53,11 @@
     background: var(--bg-3);
   }
 
+  .search-row:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
   .search-row-main {
     display: flex;
     flex-direction: column;

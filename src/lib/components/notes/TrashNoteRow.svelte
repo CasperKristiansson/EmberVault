@@ -123,6 +123,11 @@
     background: var(--bg-3);
   }
 
+  .note-row:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
   .note-row.active {
     background: var(--accent-2);
     border-color: var(--accent-2);
@@ -189,6 +194,11 @@
   .note-row-action:hover {
     background: var(--bg-3);
     color: var(--text-0);
+  }
+
+  .note-row-action:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .note-row-action.danger:hover {

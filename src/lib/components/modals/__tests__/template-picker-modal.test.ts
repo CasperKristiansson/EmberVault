@@ -1,6 +1,6 @@
 /* eslint-disable sonarjs/no-implicit-dependencies */
-import { fireEvent, render } from "@testing-library/svelte";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import TemplatePickerModal from "$lib/components/modals/TemplatePickerModal.svelte";
 import type { TemplateIndexEntry } from "$lib/core/storage/types";
 
@@ -20,6 +20,25 @@ const createTemplate = (input: {
 });
 
 describe("TemplatePickerModal", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("focuses the first available action on mount", async () => {
+    const onCreateBlank = vi.fn();
+    const { getByTestId } = render(TemplatePickerModal, {
+      props: {
+        onCreateBlank,
+        templates: [],
+      },
+    });
+
+    const blankButton = getByTestId("template-picker-item-blank");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(blankButton);
+    });
+  });
+
   it("creates blank note or template-based note", async () => {
     const lastUsedId = "template-b";
     const templates = [

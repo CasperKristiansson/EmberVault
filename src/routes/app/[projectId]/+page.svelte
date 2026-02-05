@@ -3207,6 +3207,11 @@
     color: var(--text-0);
   }
 
+  .tab-close:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
   .tab-close-icon {
     width: 14px;
     height: 14px;
@@ -3284,6 +3289,11 @@
   .sidebar-view:hover {
     background: var(--bg-3);
     color: var(--text-0);
+  }
+
+  .sidebar-view:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .sidebar-view[data-active="true"] {
@@ -3556,6 +3566,11 @@
   .mobile-nav-button.active {
     background: var(--accent-2);
     color: var(--accent-0);
+  }
+
+  .mobile-nav-button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .mobile-nav-button:disabled {
