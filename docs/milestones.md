@@ -102,4 +102,5 @@ Note: Implemented trash filter chip + trash view, trash row actions (restore/per
 - [x] Add accessibility pass: focus order, ARIA labels, contrast checks
 - [x] Add error boundaries + safe toasts for adapter failures
 - [x] Add performance checks: list virtualization, search latency budget tests (synthetic)
+- [x] Add service worker app-shell caching (offline after first load) + e2e coverage (Chromium)
 - [x] Final E2E sweep on Chromium/Firefox/WebKit
