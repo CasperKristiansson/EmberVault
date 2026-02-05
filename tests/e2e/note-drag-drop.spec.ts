@@ -6,10 +6,12 @@ test("drags notes to folders and persists order", async ({ page }) => {
   const rootTitle = "Stay Root";
   const reorderTitle = "Second In Folder";
   const treeMenuOffset = 8;
+  const pollTimeoutMs = 10_000;
   const twoNotes = 2;
   const firstIndex = 0;
   const secondIndex = 1;
   const emptyCount = 0;
+  const singleMatch = 1;
   type NoteRowEntry = { id: string | null; title?: string };
 
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -89,13 +91,18 @@ test("drags notes to folders and persists order", async ({ page }) => {
   });
 
   await draggedRow.dispatchEvent("dragstart");
+  await expect(draggedRow).toHaveAttribute("data-dragging", "true");
   await folderRow.dispatchEvent("dragover");
   await folderRow.dispatchEvent("drop");
   await draggedRow.dispatchEvent("dragend");
 
   await folderRow.click();
   const noteList = page.getByTestId("note-list");
-  await expect(noteList.getByText(movedTitle, { exact: true })).toBeVisible();
+  await expect
+    .poll(() => noteList.getByText(movedTitle, { exact: true }).count(), {
+      timeout: pollTimeoutMs,
+    })
+    .toBe(singleMatch);
   await expect(noteList.getByText(rootTitle, { exact: true })).toHaveCount(
     emptyCount
   );
@@ -111,6 +118,7 @@ test("drags notes to folders and persists order", async ({ page }) => {
   const dropTarget = page.getByTestId(`note-row-${dropTargetId}`);
 
   await draggedReorder.dispatchEvent("dragstart");
+  await expect(draggedReorder).toHaveAttribute("data-dragging", "true");
   await dropTarget.dispatchEvent("dragover");
   await dropTarget.dispatchEvent("drop");
   await draggedReorder.dispatchEvent("dragend");

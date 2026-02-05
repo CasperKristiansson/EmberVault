@@ -5,6 +5,7 @@
   import { page } from "$app/stores";
   import { get } from "svelte/store";
   import AppShell from "$lib/components/AppShell.svelte";
+  import ToastHost from "$lib/components/ToastHost.svelte";
   import GraphView from "$lib/components/graph/GraphView.svelte";
   import RightPanel from "$lib/components/rightpanel/RightPanel.svelte";
   import RightPanelTabs from "$lib/components/rightpanel/RightPanelTabs.svelte";
@@ -53,7 +54,7 @@
     hydrateSearchIndex,
     type SearchIndexState,
   } from "$lib/state/search.store";
-  import { modalStackStore, openModal } from "$lib/state/ui.store";
+  import { modalStackStore, openModal, pushToast } from "$lib/state/ui.store";
   import {
     resolveMobileView,
     type MobileView,
@@ -218,6 +219,33 @@
   const isPermissionError = (error: unknown): boolean =>
     error instanceof Error && permissionErrorNames.has(error.name);
 
+  const isAbortError = (error: unknown): boolean =>
+    error instanceof Error && error.name === "AbortError";
+
+  const adapterErrorToastMessage = "Storage error. Please retry.";
+  const adapterFallbackToastMessage =
+    "Could not access folder, switched to browser storage.";
+  const adapterToastCooldownMs = 2500;
+  let lastAdapterToastAt = 0;
+
+  const notifyAdapterFailure = (
+    message: string = adapterErrorToastMessage
+  ): void => {
+    const now = Date.now();
+    if (now - lastAdapterToastAt < adapterToastCooldownMs) {
+      return;
+    }
+    lastAdapterToastAt = now;
+    pushToast(message, { tone: "error" });
+  };
+
+  const handleNonBlockingAdapterError = (error: unknown): void => {
+    if (isAbortError(error)) {
+      return;
+    }
+    notifyAdapterFailure();
+  };
+
   const openPermissionRecovery = (): void => {
     if (permissionModalId) {
       return;
@@ -261,7 +289,8 @@
       if (handled) {
         return fallback;
       }
-      throw error;
+      handleNonBlockingAdapterError(error);
+      return fallback;
     }
   };
 
@@ -276,7 +305,8 @@
       if (handled) {
         return false;
       }
-      throw error;
+      handleNonBlockingAdapterError(error);
+      return false;
     }
   };
 
@@ -377,8 +407,12 @@
       }
       await initializeWorkspace();
     } catch (error) {
-      if (!(error instanceof Error && error.name === "AbortError")) {
-        await handleAdapterError(error);
+      if (isAbortError(error)) {
+        return;
+      }
+      const handled = await handleAdapterError(error);
+      if (!handled) {
+        handleNonBlockingAdapterError(error);
       }
     } finally {
       isRecoveringStorage = false;
@@ -403,6 +437,7 @@
         nextAdapter.writeUIState({ lastProjectId: project.id })
       );
       await goto(resolve("/app/[projectId]", { projectId: project.id }));
+      notifyAdapterFailure(adapterFallbackToastMessage);
     } finally {
       isRecoveringStorage = false;
       isLoading = false;
@@ -3036,6 +3071,8 @@
     onOpenTemplates={openTemplatesView}
     onGoToTrash={openTrashView}
   />
+
+  <ToastHost slot="toast" />
 
   <div slot="bottom-nav" class="mobile-nav-content">
     <button

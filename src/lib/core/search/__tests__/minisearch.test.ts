@@ -47,6 +47,8 @@ const createCustomNote = (input: {
   },
 });
 
+const now = (): number => Date.now();
+
 describe("MiniSearch index build", () => {
   it("indexes 1k notes and returns stable ordering", () => {
     const notes: NoteDocumentFile[] = [];
@@ -60,6 +62,29 @@ describe("MiniSearch index build", () => {
     expect(results[0]?.id).toBe("note-999");
     expect(results[1]?.id).toBe("note-998");
     expect(results[2]?.id).toBe("note-997");
+  });
+
+  it("meets synthetic latency budgets for build and query", () => {
+    const notes: NoteDocumentFile[] = [];
+    for (let index = 0; index < 1000; index += 1) {
+      notes.push(createNoteDocument(index));
+    }
+
+    const buildStart = now();
+    const index = buildSearchIndex(notes);
+    const buildDuration = now() - buildStart;
+
+    const queries = ["common", "phrase", "note", "common phrase"];
+    let queryTotal = 0;
+    for (const query of queries) {
+      const queryStart = now();
+      querySearchIndex(index, { query, fuzzy: 0.3, prefix: true });
+      queryTotal += now() - queryStart;
+    }
+    const averageQueryDuration = queryTotal / queries.length;
+
+    expect(buildDuration).toBeLessThan(1000);
+    expect(averageQueryDuration).toBeLessThan(100);
   });
 
   it("serializes and hydrates search index", () => {

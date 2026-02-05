@@ -21,6 +21,7 @@ class AnimationStub extends EventTarget implements Animation {
   public replaceState: AnimationReplaceState = "active";
   public startTime: number | null = 0;
   public timeline: AnimationTimeline | null = null;
+  public committed = false;
 
   public constructor() {
     super();
@@ -30,7 +31,9 @@ class AnimationStub extends EventTarget implements Animation {
     this.playState = "idle";
   }
 
-  public commitStyles(): void {}
+  public commitStyles(): void {
+    this.committed = true;
+  }
 
   public finish(): void {
     this.playState = "finished";

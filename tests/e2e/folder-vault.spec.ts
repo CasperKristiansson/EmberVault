@@ -7,6 +7,20 @@ const createNotFoundError = (message) => {
   return error;
 };
 
+const createNotAllowedError = (message) => {
+  const error = new Error(message);
+  error.name = "NotAllowedError";
+  return error;
+};
+
+let permissionRevoked = false;
+
+const throwIfRevoked = () => {
+  if (permissionRevoked) {
+    throw createNotAllowedError("Permission denied");
+  }
+};
+
 const createAsyncIterator = (iterable) => {
   const iterator = iterable[Symbol.iterator]();
   return {
@@ -24,6 +38,7 @@ const createFileHandle = (name) => {
     kind: "file",
     name,
     getFile: async () => {
+      throwIfRevoked();
       let blob;
       if (data instanceof Blob) {
         blob = data;
@@ -38,6 +53,7 @@ const createFileHandle = (name) => {
     },
     createWritable: async () => ({
       write: async (input) => {
+        throwIfRevoked();
         if (input instanceof Blob) {
           data = input;
           mimeType = input.type || "application/octet-stream";
@@ -56,7 +72,10 @@ const createFileHandle = (name) => {
         data = String(input);
         mimeType = "text/plain";
       },
-      close: async () => undefined,
+      close: async () => {
+        throwIfRevoked();
+        return undefined;
+      },
     }),
   };
 };
@@ -67,6 +86,7 @@ const createDirectoryHandle = (name) => {
     kind: "directory",
     name,
     getDirectoryHandle: async (childName, options = {}) => {
+      throwIfRevoked();
       const existing = entries.get(childName);
       if (existing) {
         if (existing.kind !== "directory") {
@@ -84,6 +104,7 @@ const createDirectoryHandle = (name) => {
       );
     },
     getFileHandle: async (childName, options = {}) => {
+      throwIfRevoked();
       const existing = entries.get(childName);
       if (existing) {
         if (existing.kind !== "file") {
@@ -99,11 +120,15 @@ const createDirectoryHandle = (name) => {
       throw createNotFoundError("File " + childName + " not found.");
     },
     removeEntry: async (childName) => {
+      throwIfRevoked();
       if (!entries.delete(childName)) {
         throw createNotFoundError("Entry " + childName + " not found.");
       }
     },
-    values: () => createAsyncIterator(entries.values()),
+    values: () => {
+      throwIfRevoked();
+      return createAsyncIterator(entries.values());
+    },
     _entries: entries,
   };
 };
@@ -125,7 +150,16 @@ const listPaths = () => {
   return paths;
 };
 
-globalThis.embervaultMockFs = { root, listPaths };
+globalThis.embervaultMockFs = {
+  root,
+  listPaths,
+  revokePermissions: () => {
+    permissionRevoked = true;
+  },
+  restorePermissions: () => {
+    permissionRevoked = false;
+  },
+};
 globalThis.showDirectoryPicker = async () => root;
 `;
 
@@ -170,6 +204,29 @@ test.describe("folder vault", () => {
     );
     expect(hasPathMatch(paths, /projects\/[^/]+\/notes\/[^/]+\.md$/)).toBe(
       true
+    );
+  });
+
+  test("revoked permission can switch to browser storage", async ({ page }) => {
+    await page.addInitScript({ content: folderVaultInitScript });
+
+    await page.goto("/onboarding");
+    await page.getByTestId("use-folder-storage").click();
+    await page.waitForURL(/\/app\/.+/);
+
+    await page.evaluate(() => {
+      const globalWithMock = globalThis as typeof globalThis & {
+        embervaultMockFs?: { revokePermissions?: () => void };
+      };
+      globalWithMock.embervaultMockFs?.revokePermissions?.();
+    });
+
+    await page.getByTestId("new-note").click();
+    await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+
+    await page.getByTestId("confirm-cancel").click();
+    await expect(page.getByTestId("toast")).toContainText(
+      "Could not access folder, switched to browser storage."
     );
   });
 });

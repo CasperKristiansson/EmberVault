@@ -114,4 +114,23 @@ describe("NoteListVirtualized", () => {
 
     expect(queryByTestId(`note-row-${lastId}`)).toBeTruthy();
   });
+
+  it("limits rendered rows for large lists", () => {
+    const notes = buildNotes(400);
+    const { container, getByTestId } = render(NoteListVirtualized, {
+      props: {
+        notes,
+        activeNoteId: notes[0]?.id ?? null,
+        virtualizeThreshold: 100,
+      },
+    });
+
+    const list = getByTestId("note-list");
+    expect(list.getAttribute("data-virtualized")).toBe("true");
+
+    const renderedRows = container.querySelectorAll(
+      '[data-testid^="note-row-"]'
+    );
+    expect(renderedRows.length).toBeLessThan(50);
+  });
 });
