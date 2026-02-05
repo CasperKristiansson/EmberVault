@@ -12,6 +12,7 @@
   import TemplateList from "$lib/components/templates/TemplateList.svelte";
   import TiptapEditor from "$lib/components/editor/TiptapEditor.svelte";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
+  import TrashNoteRow from "$lib/components/notes/TrashNoteRow.svelte";
   import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
   import ProjectSwitcher from "$lib/components/sidebar/ProjectSwitcher.svelte";
   import { createEmptyDocument } from "$lib/core/editor/tiptap-config";
@@ -142,6 +143,7 @@
   let workspaceMode: "notes" | "graph" | "templates" = "notes";
   let activeFolderId: string | null = null;
   let favoritesOnly = false;
+  let trashOnly = false;
   let searchState: SearchIndexState | null = null;
   let wikiLinkCandidates: WikiLinkCandidate[] = [];
   let rightPanelTab: RightPanelTab = "outline";
@@ -466,7 +468,28 @@
   };
 
   const toggleFavoritesFilter = (): void => {
-    favoritesOnly = !favoritesOnly;
+    const next = !favoritesOnly;
+    favoritesOnly = next;
+    if (next) {
+      trashOnly = false;
+    }
+  };
+
+  const toggleTrashFilter = (): void => {
+    const next = !trashOnly;
+    trashOnly = next;
+    if (next) {
+      favoritesOnly = false;
+      activeFolderId = null;
+    }
+  };
+
+  const openTrashView = (): void => {
+    openNotesView();
+    mobileView = "notes";
+    trashOnly = true;
+    favoritesOnly = false;
+    activeFolderId = null;
   };
 
   const openTemplatesView = (): void => {
@@ -551,6 +574,11 @@
   ): TemplateIndexEntry[] =>
     [...list].sort((first, second) => second.updatedAt - first.updatedAt);
 
+  const sortTrashNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] =>
+    [...list].sort(
+      (first, second) => (second.deletedAt ?? 0) - (first.deletedAt ?? 0)
+    );
+
   $: activeFolderName =
     activeFolderId && project
       ? project.folders[activeFolderId]?.name ?? null
@@ -558,14 +586,26 @@
   $: displayNotes = project
     ? orderNotesForFolder(notes, activeFolderId, project.folders)
     : [];
-  $: filteredNotes = filterNotesByFavorites(displayNotes, favoritesOnly);
+  $: trashedNotes = sortTrashNotes(
+    notes.filter((note) => note.deletedAt !== null)
+  );
+  $: filteredNotes = trashOnly
+    ? trashedNotes
+    : filterNotesByFavorites(displayNotes, favoritesOnly);
   $: displayTemplates = sortTemplates(
     templates.filter((template) => template.deletedAt === null)
   );
   $: noteListTitle = project
-    ? `${project.name} / ${activeFolderName ?? "All notes"}`
+    ? trashOnly
+      ? `${project.name} / Trash`
+      : `${project.name} / ${activeFolderName ?? "All notes"}`
     : "Notes";
   $: noteListCount = filteredNotes.length;
+  $: noteListEmptyMessage = trashOnly
+    ? "Trash is empty."
+    : favoritesOnly
+      ? "No favorites yet."
+      : "No notes yet.";
   $: templateListCount = displayTemplates.length;
   $: {
     const targetId = activeNote?.id ?? "";
@@ -1383,6 +1423,126 @@
     }
   };
 
+  const removeNoteFromTabs = async (noteId: string): Promise<void> => {
+    const panes: PaneId[] = ["primary", "secondary"];
+    for (const paneId of panes) {
+      const pane = getPaneState(paneId);
+      if (!pane.tabs.includes(noteId)) {
+        continue;
+      }
+      const wasActive = pane.activeTabId === noteId;
+      const nextState = closeTabState(
+        { tabs: pane.tabs, activeTabId: pane.activeTabId },
+        noteId
+      );
+      updatePaneState(paneId, nextState);
+      if (wasActive) {
+        await flushPendingSaveForNote(noteId);
+        if (nextState.activeTabId) {
+          await loadNote(nextState.activeTabId, paneId);
+        } else {
+          setPaneNote(paneId, null);
+        }
+      }
+    }
+    const { [noteId]: _removed, ...rest } = tabTitles;
+    tabTitles = rest;
+    const { [noteId]: _favorite, ...nextFavorites } = favoriteOverrides;
+    favoriteOverrides = nextFavorites;
+  };
+
+  const removeNoteFromLocalState = (noteId: string): void => {
+    notes = notes.filter((note) => note.id !== noteId);
+    notesRevision += 1;
+    if (!project || !Object.hasOwn(project.notesIndex, noteId)) {
+      return;
+    }
+    const { [noteId]: _removed, ...remainingNotes } = project.notesIndex;
+    const updatedProject: Project = {
+      ...project,
+      notesIndex: remainingNotes,
+      updatedAt: Math.max(project.updatedAt, Date.now()),
+    };
+    project = updatedProject;
+    projects = projects.map((entry) =>
+      entry.id === updatedProject.id ? updatedProject : entry
+    );
+  };
+
+  const deleteNoteToTrash = async (noteId: string): Promise<void> => {
+    if (!projectId) {
+      return;
+    }
+    await flushPendingSaveForNote(noteId);
+    await removeNoteFromTabs(noteId);
+    await adapter.deleteNoteSoft(projectId, noteId);
+    const updatedNote = await adapter.readNote(projectId, noteId);
+    if (updatedNote) {
+      await updateSearchIndexForDocument(updatedNote);
+    }
+    await loadNotes();
+  };
+
+  const restoreTrashedNote = async (noteId: string): Promise<void> => {
+    if (!projectId) {
+      return;
+    }
+    await adapter.restoreNote(projectId, noteId);
+    const restoredNote = await adapter.readNote(projectId, noteId);
+    if (restoredNote) {
+      await updateSearchIndexForDocument(restoredNote);
+    }
+    await loadNotes();
+  };
+
+  const deleteNotePermanently = async (noteId: string): Promise<void> => {
+    if (!projectId) {
+      return;
+    }
+    removeNoteFromLocalState(noteId);
+    await flushPendingSaveForNote(noteId);
+    await removeNoteFromTabs(noteId);
+    await adapter.deleteNotePermanent(projectId, noteId);
+    if (!searchState) {
+      await loadSearchIndex();
+    }
+    if (searchState) {
+      searchState = await applySearchIndexChange({
+        adapter,
+        projectId,
+        state: searchState,
+        change: {
+          type: "remove",
+          noteId,
+        },
+      });
+    }
+    await loadNotes();
+  };
+
+  const openPermanentDeleteConfirm = (noteId: string): void => {
+    const note = notes.find((entry) => entry.id === noteId);
+    const title = note?.title?.trim() || "Untitled";
+    openModal("confirm", {
+      title: "Delete permanently?",
+      message: `This will permanently delete "${title}". This cannot be undone.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      destructive: true,
+      onConfirm: async () => {
+        await deleteNotePermanently(noteId);
+      },
+    });
+  };
+
+  const deleteNoteFromPane = (paneId: PaneId): void => {
+    const pane = getPaneState(paneId);
+    if (!pane.note || pane.note.deletedAt !== null) {
+      return;
+    }
+    void deleteNoteToTrash(pane.note.id);
+  };
+
   const updateCustomFieldsForNote = (
     noteId: string,
     fields: Record<string, CustomFieldValue>
@@ -1643,6 +1803,7 @@
   };
 
   const createNote = async (): Promise<void> => {
+    trashOnly = false;
     await flushPendingSave();
     openNotesView();
     const note = createNoteDocument();
@@ -1682,6 +1843,7 @@
   const createNoteFromTemplate = async (
     templateId: string
   ): Promise<void> => {
+    trashOnly = false;
     if (!templateId) {
       await createNote();
       return;
@@ -1863,6 +2025,7 @@
   };
 
   const selectFolder = (folderId: string): void => {
+    trashOnly = false;
     activeFolderId = folderId;
   };
 
@@ -2183,37 +2346,68 @@
         >
           Favorites
         </button>
+        <button
+          class={`filter-chip${trashOnly ? " active" : ""}`}
+          type="button"
+          aria-pressed={trashOnly}
+          data-testid="filter-trash"
+          on:click={toggleTrashFilter}
+        >
+          Trash
+        </button>
       </div>
 
       {#if isLoading}
         <div class="note-list-empty">Loading notes...</div>
       {:else if filteredNotes.length === 0}
         <div class="note-list-empty">
-          <div>{favoritesOnly ? "No favorites yet." : "No notes yet."}</div>
-          {#if favoritesOnly}
+          <div>{noteListEmptyMessage}</div>
+          {#if favoritesOnly || trashOnly}
             <button
               class="button secondary"
               type="button"
-              on:click={() => (favoritesOnly = false)}
+              on:click={() => {
+                favoritesOnly = false;
+                trashOnly = false;
+              }}
             >
               Clear filters
             </button>
           {/if}
         </div>
       {:else}
-        <NoteListVirtualized
-          notes={filteredNotes}
-          activeNoteId={activeTabId}
-          onSelect={noteId => void activateTab(noteId)}
-          onToggleFavorite={handleFavoriteToggle}
-          draggable={true}
-          draggingNoteId={draggingNoteId}
-          dropTargetNoteId={dropTargetNoteId}
-          onDragStart={handleNoteDragStart}
-          onDragOver={handleNoteDragOver}
-          onDrop={handleNoteDrop}
-          onDragEnd={handleNoteDragEnd}
-        />
+        {#if trashOnly}
+          <NoteListVirtualized
+            notes={filteredNotes}
+            activeNoteId={activeTabId}
+            onSelect={noteId => void activateTab(noteId)}
+            draggable={false}
+          >
+            <svelte:fragment slot="row" let:note let:active>
+              <TrashNoteRow
+                note={note as NoteIndexEntry}
+                {active}
+                onSelect={noteId => void activateTab(noteId)}
+                onRestore={noteId => void restoreTrashedNote(noteId)}
+                onDeletePermanent={openPermanentDeleteConfirm}
+              />
+            </svelte:fragment>
+          </NoteListVirtualized>
+        {:else}
+          <NoteListVirtualized
+            notes={filteredNotes}
+            activeNoteId={activeTabId}
+            onSelect={noteId => void activateTab(noteId)}
+            onToggleFavorite={handleFavoriteToggle}
+            draggable={true}
+            draggingNoteId={draggingNoteId}
+            dropTargetNoteId={dropTargetNoteId}
+            onDragStart={handleNoteDragStart}
+            onDragOver={handleNoteDragOver}
+            onDrop={handleNoteDrop}
+            onDragEnd={handleNoteDragEnd}
+          />
+        {/if}
       {/if}
     {/if}
   </div>
@@ -2304,6 +2498,31 @@
                     />
                   </svg>
                 </button>
+                {#if paneStates.primary.note?.deletedAt === null}
+                  <button
+                    class="icon-button note-delete"
+                    type="button"
+                    aria-label="Move note to trash"
+                    data-testid="note-delete"
+                    on:click={() => deleteNoteFromPane("primary")}
+                  >
+                    <svg
+                      class="icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M8 6v12" />
+                      <path d="M16 6v12" />
+                      <path d="M10 6V4h4v2" />
+                    </svg>
+                  </button>
+                {/if}
               </div>
               <div class="chips-row" aria-label="Metadata chips">
                 {#each getCustomFieldChips(paneStates.primary.note) as chip (
@@ -2387,6 +2606,31 @@
                     />
                   </svg>
                 </button>
+                {#if paneStates.secondary.note?.deletedAt === null}
+                  <button
+                    class="icon-button note-delete"
+                    type="button"
+                    aria-label="Move note to trash"
+                    data-testid="note-delete-secondary"
+                    on:click={() => deleteNoteFromPane("secondary")}
+                  >
+                    <svg
+                      class="icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M8 6v12" />
+                      <path d="M16 6v12" />
+                      <path d="M10 6V4h4v2" />
+                    </svg>
+                  </button>
+                {/if}
               </div>
               <div class="chips-row" aria-label="Metadata chips">
                 {#each getCustomFieldChips(paneStates.secondary.note) as chip (
@@ -2457,6 +2701,31 @@
                   />
                 </svg>
               </button>
+              {#if paneStates.primary.note?.deletedAt === null}
+                <button
+                  class="icon-button note-delete"
+                  type="button"
+                  aria-label="Move note to trash"
+                  data-testid="note-delete"
+                  on:click={() => deleteNoteFromPane("primary")}
+                >
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M8 6v12" />
+                    <path d="M16 6v12" />
+                    <path d="M10 6V4h4v2" />
+                  </svg>
+                </button>
+              {/if}
             </div>
             <div class="chips-row" aria-label="Metadata chips">
               {#each getCustomFieldChips(paneStates.primary.note) as chip (
@@ -2513,6 +2782,7 @@
     onToggleRightPanel={handleRightPanelTabSelect}
     onOpenGraph={openGraphView}
     onOpenTemplates={openTemplatesView}
+    onGoToTrash={openTrashView}
   />
 
   <div slot="bottom-nav" class="mobile-nav-content">
@@ -2889,6 +3159,10 @@
 
   .editor-favorite[data-active="true"] .icon {
     fill: currentColor;
+  }
+
+  .note-delete:hover {
+    color: var(--danger);
   }
 
   .chips-row {

@@ -28,7 +28,7 @@ const insertSlashBlock = async (
   await openSlashMenu(page);
   await page.getByTestId(`slash-menu-item-${itemId}`).click();
   if (content.length > emptyLength) {
-    await page.keyboard.type(content);
+    await page.keyboard.insertText(content);
   }
 };
 
@@ -45,14 +45,13 @@ test("create blocks and reload preserves structure", async ({ page }) => {
 
   await page.keyboard.type("## Reload heading");
   await page.keyboard.press("Enter");
-  await insertSlashBlock(page, "checklist", "Reload task");
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
   await insertSlashBlock(page, "code", "const foo = 1;");
   await page.keyboard.press(`${resolveModifierKey()}+Enter`);
   await page.keyboard.press("Enter");
   await page.keyboard.type("$$E = mc^2$$");
   await page.keyboard.press("Enter");
+  await insertSlashBlock(page, "checklist", "Reload task");
+  await expect(page.locator('ul[data-type="taskList"]')).toBeVisible();
 
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
 

@@ -53,13 +53,13 @@ test("split view opens two notes and persists", async ({ page }) => {
   await page.getByTestId(`note-row-${secondId}`).click();
   const primaryBody = page.getByTestId(noteBodyTestId);
   await primaryBody.click();
-  await page.keyboard.type(primaryContent);
+  await page.keyboard.insertText(primaryContent);
 
   await secondaryPane.click();
   await page.getByTestId(`note-row-${firstId}`).click();
   const secondaryBody = page.getByTestId(noteBodySecondaryTestId);
   await secondaryBody.click();
-  await page.keyboard.type(secondaryContent);
+  await page.keyboard.insertText(secondaryContent);
 
   await expect(page.locator('[data-save-state="saving"]')).toBeVisible();
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();

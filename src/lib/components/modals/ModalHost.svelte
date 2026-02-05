@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import CommandPaletteModal from "$lib/components/modals/CommandPaletteModal.svelte";
+  import ConfirmDialog from "$lib/components/modals/ConfirmDialog.svelte";
   import GlobalSearchModal from "$lib/components/modals/GlobalSearchModal.svelte";
   import TemplatePickerModal from "$lib/components/modals/TemplatePickerModal.svelte";
   import type {
@@ -33,6 +34,15 @@
     | ((panel: "outline" | "backlinks" | "metadata") => void | Promise<void>)
     | null = null;
   export let onOpenSettings: (() => void | Promise<void>) | null = null;
+
+  type ConfirmDialogData = {
+    title: string;
+    message?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    destructive?: boolean;
+    onConfirm?: () => void | Promise<void>;
+  };
 
   let previousActiveElement: HTMLElement | null = null;
   let hadModal = false;
@@ -87,6 +97,31 @@
   const handleClose = (): void => {
     closeTopModal();
   };
+
+  const resolveConfirmData = (data: unknown): ConfirmDialogData => {
+    if (!data || typeof data !== "object") {
+      return { title: "Confirm" };
+    }
+    const input = data as Partial<ConfirmDialogData>;
+    return {
+      title: input.title ?? "Confirm",
+      message: input.message,
+      confirmLabel: input.confirmLabel,
+      cancelLabel: input.cancelLabel,
+      destructive: input.destructive,
+      onConfirm: input.onConfirm,
+    };
+  };
+
+  const handleConfirm = async (data: ConfirmDialogData): Promise<void> => {
+    handleClose();
+    await data.onConfirm?.();
+  };
+
+  $: confirmDialogData =
+    $activeModal?.type === "confirm"
+      ? resolveConfirmData($activeModal.data)
+      : null;
 </script>
 
 {#if $activeModal?.type === "global-search"}
@@ -124,4 +159,16 @@
     onCreateBlank={onCreateNote}
     onCreateFromTemplate={onCreateNoteFromTemplate}
   />
+{:else if $activeModal?.type === "confirm"}
+  {#if confirmDialogData}
+    <ConfirmDialog
+      title={confirmDialogData.title}
+      message={confirmDialogData.message ?? ""}
+      confirmLabel={confirmDialogData.confirmLabel ?? "Confirm"}
+      cancelLabel={confirmDialogData.cancelLabel ?? "Cancel"}
+      destructive={confirmDialogData.destructive ?? false}
+      onConfirm={() => void handleConfirm(confirmDialogData)}
+      onCancel={handleClose}
+    />
+  {/if}
 {/if}
