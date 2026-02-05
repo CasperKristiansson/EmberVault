@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { motion } from "@motionone/svelte";
   import type { TemplateIndexEntry } from "$lib/core/storage/types";
+  import { prefersReducedMotion } from "$lib/state/motion.store";
 
   export let templates: TemplateIndexEntry[] = [];
   export let lastUsedTemplateId: string | null = null;
@@ -117,7 +119,11 @@
   });
 </script>
 
-<div class="modal-overlay" data-testid="template-picker-modal">
+<div
+  class="modal-overlay"
+  data-testid="template-picker-modal"
+  transition:motion={{ preset: "fade", reducedMotion: $prefersReducedMotion }}
+>
   <div
     class="modal-panel"
     role="dialog"
@@ -126,6 +132,7 @@
     tabindex="0"
     bind:this={panelElement}
     on:keydown={handleKeydown}
+    transition:motion={{ preset: "modal", reducedMotion: $prefersReducedMotion }}
   >
     <header class="modal-header">
       <div class="modal-title">New note</div>

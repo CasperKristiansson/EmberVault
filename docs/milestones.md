@@ -98,7 +98,7 @@ Note: Implemented trash filter chip + trash view, trash row actions (restore/per
 ## Milestone 10 — Visual perfection + accessibility + hardening
 
 - [x] Implement all styling rules in brand.md and ui-spec.md (no drift)
-- [ ] Add motion per brand rules + reduced motion support
+- [x] Add motion per brand rules + reduced motion support
 - [ ] Add accessibility pass: focus order, ARIA labels, contrast checks
 - [ ] Add error boundaries + safe toasts for adapter failures
 - [ ] Add performance checks: list virtualization, search latency budget tests (synthetic)

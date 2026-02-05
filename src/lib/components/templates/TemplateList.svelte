@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { motion } from "@motionone/svelte";
+  import { prefersReducedMotion } from "$lib/state/motion.store";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import type { TemplateIndexEntry } from "$lib/core/storage/types";
 
@@ -45,11 +47,22 @@
     onSelect={templateId => void onSelect(templateId)}
     virtualizeThreshold={100}
   >
-    <svelte:fragment slot="row" let:note let:active let:onSelect>
+    <svelte:fragment
+      slot="row"
+      let:note
+      let:active
+      let:onSelect
+      let:motionEnabled
+    >
       <button
         class={`template-row${active ? " active" : ""}`}
         type="button"
         data-testid={`template-row-${note.id}`}
+        transition:motion={{
+          preset: "list",
+          reducedMotion: $prefersReducedMotion,
+          enabled: motionEnabled,
+        }}
         on:click={() => void onSelect(note.id)}
       >
         <span class="template-row-title">

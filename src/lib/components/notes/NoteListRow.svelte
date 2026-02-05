@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { motion } from "@motionone/svelte";
+  import { prefersReducedMotion } from "$lib/state/motion.store";
   import type { NoteIndexEntry } from "$lib/core/storage/types";
 
   export let note: NoteIndexEntry;
   export let active = false;
+  export let motionEnabled = true;
   export let onSelect: (noteId: string) => void = () => {};
   export let draggable = false;
   export let dragging = false;
@@ -56,6 +59,11 @@
   class={`note-row${active ? " active" : ""}`}
   role="button"
   tabindex="0"
+  transition:motion={{
+    preset: "list",
+    reducedMotion: $prefersReducedMotion,
+    enabled: motionEnabled,
+  }}
   on:click={handleClick}
   on:keydown={handleKeydown}
   data-testid={`note-row-${note.id}`}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { motion } from "@motionone/svelte";
   import { onMount } from "svelte";
   import { Editor, type JSONContent } from "@tiptap/core";
   import {
@@ -21,6 +22,7 @@
     createEmptyDocument,
     createTiptapExtensions,
   } from "$lib/core/editor/tiptap-config";
+  import { prefersReducedMotion } from "$lib/state/motion.store";
   import SlashMenu from "./SlashMenu.svelte";
   import WikiLinkMenu from "./WikiLinkMenu.svelte";
 
@@ -698,10 +700,15 @@
     aria-label="Image preview"
     tabindex="0"
     bind:this={lightboxBackdrop}
+    transition:motion={{ preset: "fade", reducedMotion: $prefersReducedMotion }}
     on:click={handleLightboxClick}
     on:keydown={handleLightboxKeydown}
   >
-    <div class="lightbox-panel" role="document">
+    <div
+      class="lightbox-panel"
+      role="document"
+      transition:motion={{ preset: "modal", reducedMotion: $prefersReducedMotion }}
+    >
       <img class="lightbox-image" src={lightboxSrc} alt={lightboxAlt} />
       {#if lightboxCaption}
         <div class="lightbox-caption">{lightboxCaption}</div>

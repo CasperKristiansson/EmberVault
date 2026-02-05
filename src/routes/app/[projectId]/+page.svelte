@@ -2634,10 +2634,11 @@
             onSelect={noteId => void activateTab(noteId)}
             draggable={false}
           >
-            <svelte:fragment slot="row" let:note let:active>
+            <svelte:fragment slot="row" let:note let:active let:motionEnabled>
               <TrashNoteRow
                 note={note as NoteIndexEntry}
                 {active}
+                {motionEnabled}
                 onSelect={noteId => void activateTab(noteId)}
                 onRestore={noteId => void restoreTrashedNote(noteId)}
                 onDeletePermanent={openPermanentDeleteConfirm}

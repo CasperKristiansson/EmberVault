@@ -1,5 +1,7 @@
 <script lang="ts">
   import { afterUpdate } from "svelte";
+  import { motion } from "@motionone/svelte";
+  import { prefersReducedMotion } from "$lib/state/motion.store";
   import type { FolderTree } from "$lib/core/storage/types";
   import type { SvelteSet } from "svelte/reactivity";
   import { getChildFolderIds } from "$lib/core/utils/folder-tree";
@@ -150,7 +152,14 @@
   </div>
 
   {#if hasChildren && isExpanded}
-    <div class="folder-children">
+    <div
+      class="folder-children"
+      transition:motion={{
+        preset: "collapse",
+        axis: "y",
+        reducedMotion: $prefersReducedMotion,
+      }}
+    >
       {#each childFolderIds as childId (childId)}
         <svelte:self
           folderId={childId}

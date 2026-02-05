@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import { motion } from "@motionone/svelte";
   import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
+  import { prefersReducedMotion } from "$lib/state/motion.store";
 
   export let project: Project | null = null;
   export let projects: Project[] = [];
@@ -312,8 +314,17 @@
   });
 </script>
 
-<div class="modal-overlay" data-testid="command-palette-modal">
-  <div class="modal-panel" role="dialog" aria-modal="true">
+<div
+  class="modal-overlay"
+  data-testid="command-palette-modal"
+  transition:motion={{ preset: "fade", reducedMotion: $prefersReducedMotion }}
+>
+  <div
+    class="modal-panel"
+    role="dialog"
+    aria-modal="true"
+    transition:motion={{ preset: "modal", reducedMotion: $prefersReducedMotion }}
+  >
     <header class="modal-header">
       <div class="modal-title">Command palette</div>
       <button

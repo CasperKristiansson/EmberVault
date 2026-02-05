@@ -25,6 +25,7 @@
   let viewportHeight = 0;
   let rowHeight = 34;
   let rowGap = 4;
+  let motionEnabled = true;
 
   const parseCssNumber = (value: string, fallback: number): number => {
     const parsed = Number.parseFloat(value);
@@ -81,6 +82,7 @@
   });
 
   $: useVirtualization = notes.length > virtualizeThreshold;
+  $: motionEnabled = !useVirtualization;
   $: rowStep = rowHeight + rowGap;
   $: totalHeight = notes.length > 0 ? notes.length * rowStep - rowGap : 0;
   $: safeViewport = Math.max(viewportHeight, rowStep);
@@ -113,6 +115,7 @@
             active={note.id === activeNoteId}
             onSelect={onSelect}
             onToggleFavorite={onToggleFavorite}
+            {motionEnabled}
           >
             <NoteListRow
               note={note as NoteIndexEntry}
@@ -126,6 +129,7 @@
               onDrop={onDrop}
               onDragEnd={onDragEnd}
               onToggleFavorite={onToggleFavorite}
+              {motionEnabled}
             />
           </slot>
         {/each}
@@ -140,6 +144,7 @@
           active={note.id === activeNoteId}
           onSelect={onSelect}
           onToggleFavorite={onToggleFavorite}
+          {motionEnabled}
         >
           <NoteListRow
             note={note as NoteIndexEntry}
@@ -153,6 +158,7 @@
             onDrop={onDrop}
             onDragEnd={onDragEnd}
             onToggleFavorite={onToggleFavorite}
+            {motionEnabled}
           />
         </slot>
       {/each}

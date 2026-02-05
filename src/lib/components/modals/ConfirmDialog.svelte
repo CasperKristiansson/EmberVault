@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { motion } from "@motionone/svelte";
+  import { prefersReducedMotion } from "$lib/state/motion.store";
 
   export let title = "Confirm";
   export let message = "";
@@ -16,8 +18,17 @@
   });
 </script>
 
-<div class="modal-overlay" data-testid="confirm-dialog">
-  <div class="modal-panel" role="dialog" aria-modal="true">
+<div
+  class="modal-overlay"
+  data-testid="confirm-dialog"
+  transition:motion={{ preset: "fade", reducedMotion: $prefersReducedMotion }}
+>
+  <div
+    class="modal-panel"
+    role="dialog"
+    aria-modal="true"
+    transition:motion={{ preset: "modal", reducedMotion: $prefersReducedMotion }}
+  >
     <div class="modal-title">{title}</div>
     {#if message}
       <div class="modal-message">{message}</div>
