@@ -85,11 +85,11 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Metadata panel with custom fields CRUD
 - [x] Trash view polish with restore/permanent delete confirm
 Note: Implemented trash filter chip + trash view, trash row actions (restore/permanent delete), confirm dialog modal, and delete-to-trash button in editor; added unit/component tests and e2e trash flow. Resolved e2e flake in `tests/e2e/editor-reload-blocks.spec.ts` by reordering checklist insertion and stabilizing slash-menu input.
-- [ ] E2E: create template, new note from template, persists
+- [x] E2E: create template, new note from template, persists
 
 ## Milestone 9 — File System Access (disk vault) + hybrid cache
 
-- [ ] FileSystemAdapter implementing disk layout in storage.md
+- [x] FileSystemAdapter implementing disk layout in storage.md
 - [ ] Onboarding option for folder vault (feature-detect)
 - [ ] Permissions handling + recovery UI
 - [ ] Hybrid cache: store search index + uiState in IDB even for disk mode

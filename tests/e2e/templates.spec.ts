@@ -35,9 +35,19 @@ test("create template and apply to new note", async ({ page }) => {
 
   await expect(noteTitle).toHaveValue(templateTitleText);
   await expect(noteBody).toContainText(templateBodyText);
+  await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
 
   await page.reload();
 
   await expect(noteTitle).toHaveValue(templateTitleText);
   await expect(noteBody).toContainText(templateBodyText);
+
+  await page.getByTestId("new-note-from-template").click();
+  const pickerModal = page.getByTestId("template-picker-modal");
+  await expect(pickerModal).toBeVisible();
+  await expect(
+    pickerModal.getByRole("button", { name: templateTitleText })
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("template-picker-modal")).toBeHidden();
 });
