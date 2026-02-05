@@ -9,15 +9,9 @@ const resolveModifierKey = (): "Meta" | "Control" =>
 const openSlashMenu = async (
   page: import("@playwright/test").Page
 ): Promise<void> => {
-  const modifierKey = resolveModifierKey();
   const slashMenu = page.getByTestId("slash-menu");
-  await page.keyboard.press(`${modifierKey}+Slash`);
-  try {
-    await slashMenu.waitFor({ state: "visible", timeout: slashMenuTimeoutMs });
-  } catch {
-    await page.keyboard.type("/");
-    await slashMenu.waitFor({ state: "visible", timeout: slashMenuTimeoutMs });
-  }
+  await page.keyboard.type("/");
+  await slashMenu.waitFor({ state: "visible", timeout: slashMenuTimeoutMs });
 };
 
 const insertSlashBlock = async (
@@ -45,13 +39,15 @@ test("create blocks and reload preserves structure", async ({ page }) => {
 
   await page.keyboard.type("## Reload heading");
   await page.keyboard.press("Enter");
+  await insertSlashBlock(page, "checklist", "Reload task");
+  await expect(page.locator('ul[data-type="taskList"]')).toBeVisible();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
   await insertSlashBlock(page, "code", "const foo = 1;");
   await page.keyboard.press(`${resolveModifierKey()}+Enter`);
   await page.keyboard.press("Enter");
   await page.keyboard.type("$$E = mc^2$$");
   await page.keyboard.press("Enter");
-  await insertSlashBlock(page, "checklist", "Reload task");
-  await expect(page.locator('ul[data-type="taskList"]')).toBeVisible();
 
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
 
