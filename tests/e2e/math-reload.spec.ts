@@ -16,7 +16,7 @@ const isContentEditable = function isContentEditable(
 test("insert LaTeX persists after reload", async ({ page }) => {
   await page.goto(onboardingPath);
   await page.getByTestId(useBrowserStorageTestId).click();
-  await page.waitForURL(/\/app\/.+/);
+  await page.waitForURL(/\/app\/?$/);
 
   await page.getByTestId(newNoteTestId).click();
 

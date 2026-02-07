@@ -7,7 +7,7 @@ test("undo and redo edits", async ({ page }) => {
   await page.goto("/onboarding");
 
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/.+/);
+  await page.waitForURL(/\/app\/?$/);
 
   await page.getByTestId("new-note").click();
 

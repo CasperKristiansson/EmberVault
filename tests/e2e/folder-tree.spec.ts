@@ -4,7 +4,7 @@ test("create, rename, and delete an empty folder", async ({ page }) => {
   await page.goto("/onboarding");
 
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/.+/);
+  await page.waitForURL(/\/app\/?$/);
 
   const tree = page.getByTestId("folder-tree");
   await tree.click({ button: "right" });

@@ -14,7 +14,7 @@ test("drags a tab to the other pane", async ({ page }) => {
   await page.goto("/onboarding");
 
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/.+/);
+  await page.waitForURL(/\/app\/?$/);
 
   const createNote = async (title: string): Promise<void> => {
     await page.getByTestId("new-note").click();

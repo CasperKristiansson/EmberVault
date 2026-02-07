@@ -182,7 +182,7 @@ test.describe("folder vault", () => {
 
     await page.goto("/onboarding");
     await page.getByTestId("use-folder-storage").click();
-    await page.waitForURL(/\/app\/.+/);
+    await page.waitForURL(/\/app\/?$/);
 
     await page.getByTestId("new-note").click();
     await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
@@ -212,7 +212,7 @@ test.describe("folder vault", () => {
 
     await page.goto("/onboarding");
     await page.getByTestId("use-folder-storage").click();
-    await page.waitForURL(/\/app\/.+/);
+    await page.waitForURL(/\/app\/?$/);
 
     await page.evaluate(() => {
       const globalWithMock = globalThis as typeof globalThis & {

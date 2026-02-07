@@ -1854,11 +1854,24 @@
   };
 
   const resolveWorkspaceProjectId = async (): Promise<string> => {
+    const writeUiStatePatch = async (
+      patch: Record<string, unknown>
+    ): Promise<void> => {
+      const current =
+        (await runAdapterTask(() => adapter.readUIState(), null)) ?? {};
+      await runAdapterVoid(() =>
+        adapter.writeUIState({
+          ...current,
+          ...patch,
+        })
+      );
+    };
+
     const projects = await runAdapterTask(() => adapter.listProjects(), []);
     if (projects.length === 0) {
       const created = createDefaultProject();
       await runAdapterVoid(() => adapter.createProject(created));
-      await runAdapterVoid(() => adapter.writeUIState({ lastProjectId: created.id }));
+      await writeUiStatePatch({ lastProjectId: created.id });
       return created.id;
     }
 
@@ -1872,7 +1885,7 @@
       : null;
     const resolvedProjectId = (active ?? projects[0])?.id ?? "";
     if (resolvedProjectId) {
-      await runAdapterVoid(() => adapter.writeUIState({ lastProjectId: resolvedProjectId }));
+      await writeUiStatePatch({ lastProjectId: resolvedProjectId });
     }
     return resolvedProjectId;
   };
