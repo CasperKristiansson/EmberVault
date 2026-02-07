@@ -5,7 +5,7 @@
   export let mobileView: MobileView = "notes";
   export let mobileSidebarOpen = false;
   export let mobileRightPanelOpen = false;
-  export let workspaceMode: "notes" | "graph" | "templates" = "notes";
+  export let workspaceMode: "notes" = "notes";
 </script>
 
 <div
@@ -74,20 +74,6 @@
     padding: 0 16px;
     background: var(--bg-1);
     border-bottom: 1px solid var(--stroke-0);
-  }
-
-  .app-shell[data-workspace-mode="templates"] {
-    grid-template-columns: minmax(240px, var(--sidebar-width))
-      minmax(280px, var(--note-list-width))
-      minmax(0, 1fr);
-  }
-
-  .app-shell[data-workspace-mode="templates"] .topbar {
-    grid-column: 2 / 4;
-  }
-
-  .app-shell[data-workspace-mode="templates"] .right-panel {
-    display: none;
   }
 
   .sidebar {
@@ -173,10 +159,6 @@
     }
 
     .app-shell[data-mobile-view="editor"] .editor {
-      display: flex;
-    }
-
-    .app-shell[data-mobile-view="graph"] .editor {
       display: flex;
     }
 

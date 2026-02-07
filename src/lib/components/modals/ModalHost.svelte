@@ -3,32 +3,18 @@
   import ConfirmDialog from "$lib/components/modals/ConfirmDialog.svelte";
   import type CommandPaletteModalType from "$lib/components/modals/CommandPaletteModal.svelte";
   import type GlobalSearchModalType from "$lib/components/modals/GlobalSearchModal.svelte";
-  import type TemplatePickerModalType from "$lib/components/modals/TemplatePickerModal.svelte";
-  import type {
-    NoteIndexEntry,
-    Project,
-    TemplateIndexEntry,
-  } from "$lib/core/storage/types";
+  import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
   import type { SearchIndexState } from "$lib/state/search.store";
   import { activeModal, closeTopModal, modalStackStore } from "$lib/state/ui.store";
 
   export let project: Project | null = null;
-  export let projects: Project[] = [];
   export let searchState: SearchIndexState | null = null;
   export let notes: NoteIndexEntry[] = [];
-  export let templates: TemplateIndexEntry[] = [];
   export let activeNoteId: string | null = null;
-  export let lastUsedTemplateId: string | null = null;
   export let onOpenNote: (noteId: string) => void | Promise<void> = async () => {};
   export let onCreateNote: (() => void | Promise<void>) | null = null;
-  export let onCreateNoteFromTemplate:
-    | ((templateId: string) => void | Promise<void>)
-    | null = null;
   export let onOpenGlobalSearch: (() => void | Promise<void>) | null = null;
-  export let onProjectChange: (projectId: string) => void | Promise<void> = async () => {};
   export let onToggleSplitView: (() => void | Promise<void>) | null = null;
-  export let onOpenGraph: (() => void | Promise<void>) | null = null;
-  export let onOpenTemplates: (() => void | Promise<void>) | null = null;
   export let onGoToTrash: (() => void | Promise<void>) | null = null;
   export let onToggleRightPanel:
     | ((panel: "outline" | "backlinks" | "metadata") => void | Promise<void>)
@@ -37,7 +23,6 @@
 
   let CommandPaletteModalComponent: typeof CommandPaletteModalType | null = null;
   let GlobalSearchModalComponent: typeof GlobalSearchModalType | null = null;
-  let TemplatePickerModalComponent: typeof TemplatePickerModalType | null = null;
 
   const ensureCommandPaletteLoaded = async (): Promise<void> => {
     if (CommandPaletteModalComponent) {
@@ -53,14 +38,6 @@
     }
     const module = await import("$lib/components/modals/GlobalSearchModal.svelte");
     GlobalSearchModalComponent = module.default;
-  };
-
-  const ensureTemplatePickerLoaded = async (): Promise<void> => {
-    if (TemplatePickerModalComponent) {
-      return;
-    }
-    const module = await import("$lib/components/modals/TemplatePickerModal.svelte");
-    TemplatePickerModalComponent = module.default;
   };
 
   type ConfirmDialogData = {
@@ -165,10 +142,6 @@
   $: if ($activeModal?.type === "command-palette") {
     void ensureCommandPaletteLoaded();
   }
-
-  $: if ($activeModal?.type === "template-picker") {
-    void ensureTemplatePickerLoaded();
-  }
 </script>
 
 {#if $activeModal?.type === "global-search"}
@@ -176,43 +149,25 @@
     <svelte:component
       this={GlobalSearchModalComponent}
       {project}
-      {projects}
       {searchState}
       onClose={handleClose}
       onOpenNote={onOpenNote}
-      onProjectChange={onProjectChange}
     />
   {/if}
 {:else if $activeModal?.type === "command-palette"}
   {#if CommandPaletteModalComponent}
     <svelte:component
       this={CommandPaletteModalComponent}
-      {project}
-      {projects}
       {notes}
       {activeNoteId}
       onClose={handleClose}
       onOpenNote={onOpenNote}
       {onCreateNote}
       {onOpenGlobalSearch}
-      {onProjectChange}
       {onToggleSplitView}
-      {onOpenGraph}
-      {onOpenTemplates}
       {onGoToTrash}
       {onToggleRightPanel}
       {onOpenSettings}
-    />
-  {/if}
-{:else if $activeModal?.type === "template-picker"}
-  {#if TemplatePickerModalComponent}
-    <svelte:component
-      this={TemplatePickerModalComponent}
-      {templates}
-      {lastUsedTemplateId}
-      onClose={handleClose}
-      onCreateBlank={onCreateNote}
-      onCreateFromTemplate={onCreateNoteFromTemplate}
     />
   {/if}
 {:else if $activeModal?.type === "confirm"}

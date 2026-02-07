@@ -117,12 +117,6 @@
           <span class="system-label">Favorite</span>
           <span class="system-value">{note.favorite ? "Yes" : "No"}</span>
         </div>
-        <div class="system-row">
-          <span class="system-label">Template</span>
-          <span class="system-value">
-            {note.isTemplate ? "Yes" : "No"}
-          </span>
-        </div>
       </div>
     </section>
 

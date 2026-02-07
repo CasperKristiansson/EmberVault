@@ -16,13 +16,11 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
 
 ### 1.1 Core
 
-- Projects (containers/workspaces)
-- Notes within projects (target scale: ~1k notes/project, but no hard limit)
+- Single workspace (folders; “projects” exist only as an internal storage detail)
 - Folders + Tags (both)
 - Favorites (pinned notes)
-- Templates (create + apply)
 - Metadata panel (system fields + custom fields)
-- Backlinks + Graph view
+- Backlinks
 - Tabs + Split view
 - Drag & drop (folders, notes, tabs)
 - Search: full-text + filters + fuzzy
@@ -78,9 +76,7 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
 
 ### 2.4 Graph view
 
-- sigma.js + graphology for rendering and layout
-- Edge types: wiki-link edges + backlink edges (same relation, different directionality)
-- Filters: tags, folders, favorites, depth
+Removed.
 
 ### 2.5 Storage
 
@@ -107,7 +103,7 @@ See `storage.md` for canonical on-disk structure and fallback rules.
 - Folder (tree)
 - Note
 - Tag
-- Template
+- Template (reserved; not user-facing)
 - Asset (image blob + metadata)
 - UI State (tabs, splits, last opened, sidebar widths)
 
@@ -117,23 +113,18 @@ See `storage.md` for canonical on-disk structure and fallback rules.
   - Folder tree
   - Notes list
   - Tags dictionary
-  - Templates list
   - Saved searches (optional)
-  - Graph cache (optional)
 
 ## 4) Application views (must implement)
 
 - Onboarding / Vault selection
-- Project switcher
 - Main workspace:
-  - Sidebar (projects + folder tree + tags)
+  - Sidebar (folder tree)
   - Note list pane
   - Editor pane (tabs + split view)
   - Right panel (toggleable): Outline / Backlinks / Metadata
 - Command palette
 - Global search modal
-- Templates manager
-- Graph view
 - Favorites view
 - Trash view
 - Settings
@@ -155,7 +146,6 @@ See `ui-spec.md` for pixel-level UI behavior.
 - Notes list scroll: 60fps on mid-range laptop
 - Open note: < 50ms perceived (show skeleton instantly, content paint quickly)
 - Search typing: results update within 80ms for 1k notes (debounce 50ms)
-- Graph render: initial layout < 500ms for 1k nodes
 
 Implementation requirements:
 

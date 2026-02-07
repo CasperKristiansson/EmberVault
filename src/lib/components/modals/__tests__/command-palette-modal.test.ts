@@ -2,22 +2,7 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CommandPaletteModal from "$lib/components/modals/CommandPaletteModal.svelte";
-import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
-
-const createProject = (id: string, name: string): Project => {
-  const timestamp = Date.now();
-  return {
-    id,
-    name,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    folders: {},
-    tags: {},
-    notesIndex: {},
-    templatesIndex: {},
-    settings: {},
-  };
-};
+import type { NoteIndexEntry } from "$lib/core/storage/types";
 
 const createNote = (input: {
   id: string;
@@ -41,11 +26,8 @@ describe("CommandPaletteModal", () => {
   });
 
   it("focuses the command input on mount", async () => {
-    const project = createProject("project-1", "Personal");
     const { getByLabelText } = render(CommandPaletteModal, {
       props: {
-        project,
-        projects: [project],
         notes: [],
       },
     });
@@ -57,8 +39,6 @@ describe("CommandPaletteModal", () => {
   });
 
   it("navigates results with arrow keys and selects with enter", async () => {
-    const project = createProject("project-1", "Personal");
-    const projects = [project, createProject("project-2", "Work")];
     const noteA = createNote({
       id: "note-a",
       title: "Alpha",
@@ -75,17 +55,12 @@ describe("CommandPaletteModal", () => {
 
     const { getByLabelText, getByTestId } = render(CommandPaletteModal, {
       props: {
-        project,
-        projects,
         onOpenNote,
         onClose,
         notes: [noteA, noteB],
         onCreateNote: vi.fn(),
         onOpenGlobalSearch: vi.fn(),
-        onProjectChange: vi.fn(),
         onToggleSplitView: vi.fn(),
-        onOpenGraph: vi.fn(),
-        onOpenTemplates: vi.fn(),
         onGoToTrash: vi.fn(),
         onToggleRightPanel: vi.fn(),
         onOpenSettings: vi.fn(),

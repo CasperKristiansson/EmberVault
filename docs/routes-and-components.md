@@ -19,7 +19,7 @@ Directory: `src/routes/`
   File: `src/routes/+page.svelte`  
   Behavior:
   - If vault not configured: redirect internally to `/onboarding`
-  - Else: redirect to last opened project/workspace route `/app/{projectId}` (or default)
+  - Else: redirect to `/app`
 
 ### 1.2 Onboarding (vault selection)
 
@@ -33,33 +33,24 @@ Directory: `src/routes/`
   - On completion:
     - Initialize adapter
     - Create default project “Personal”
-    - Navigate to `/app/{projectId}`
+    - Navigate to `/app`
 
 ### 1.3 Main workspace (single-page shell with internal state)
 
-- `/app/[projectId]`  
+- `/app`  
   Files:
-  - `src/routes/app/[projectId]/+page.svelte`
-  - `src/routes/app/[projectId]/+page.ts` Behavior:
+  - `src/routes/app/+page.svelte` Behavior:
   - Render full shell (sidebar + note list + editor + right panel)
   - All internal navigation (folder/tag filters, note open, tabs, split) is client-state driven (no subroutes required)
-  - Update URL query params for shareable state (see 1.4)
+
+- `/app/[projectId]`  
+  File:
+  - `src/routes/app/[projectId]/+page.ts` Behavior:
+  - Redirect to `/app` (legacy URL support)
 
 ### 1.4 URL state (query params)
 
-Route remains `/app/[projectId]`, but keep URL state synchronized:
-
-- `?folder={folderId}` selected folder
-- `?tag={tagId}` optional tag filter
-- `?view=favorites|trash|all` optional view filter
-- `?note={noteId}` optional “primary focused note”
-- `?split={noteIdA},{noteIdB}` when split view enabled
-- `?tab={noteId}` active tab (primary pane) Rules:
-- URL reflects current state, but app must function without URL state.
-- When split is enabled:
-  - `split` must be set
-  - `note` represents the focused editor pane note
-- The agent must implement a single URL sync module (see 4.6) to avoid scattering logic.
+Not implemented.
 
 ### 1.5 Settings (optional route; still opened as modal from workspace)
 
@@ -84,7 +75,7 @@ Directory: `src/lib/components/`
 ### 2.1 App shell
 
 - `AppShell.svelte`
-  - Layout wrapper used by `/app/[projectId]`
+  - Layout wrapper used by `/app`
   - Slots or explicit children:
     - `Sidebar.svelte`
     - `NoteListPane.svelte`
@@ -97,7 +88,6 @@ Directory: `src/lib/components/`
 ### 2.2 Sidebar
 
 - `sidebar/Sidebar.svelte`
-  - `ProjectSwitcher.svelte`
   - `SidebarQuickActions.svelte`
   - `FolderTree.svelte`
     - `FolderTreeNode.svelte` (recursive)
@@ -155,26 +145,16 @@ Directory: `src/lib/components/`
 - `modals/CommandPaletteModal.svelte`
 - `modals/GlobalSearchModal.svelte`
 - `modals/NoteSwitcherModal.svelte` (Cmd/Ctrl+P)
-- `modals/TemplatePickerModal.svelte`
 - `modals/ConfirmDialog.svelte`
 - `modals/ImageLightboxModal.svelte`
 
 ### 2.8 Graph view
 
-Graph is a “mode” inside workspace (not separate route):
-
-- `graph/GraphView.svelte`
-  - `GraphToolbar.svelte`
-  - `SigmaCanvas.svelte`
-  - `GraphTooltip.svelte`
+Removed.
 
 ### 2.9 Templates
 
-Also within workspace:
-
-- `templates/TemplatesView.svelte`
-  - `TemplateList.svelte`
-  - `TemplateEditor.svelte`
+Removed.
 
 ### 2.10 Settings
 
@@ -242,7 +222,6 @@ Directory: `src/lib/state/`
   - Folder tree
   - Notes index (lightweight list)
   - Tags
-  - Templates index
 
 - `notes.store.ts`
   - Note cache (Map noteId -> NoteDocFile)
@@ -258,11 +237,6 @@ Directory: `src/lib/state/`
   - MiniSearch instance per project
   - index hydration/persistence
   - query() with filters
-
-- `graph.store.ts`
-  - Graphology graph instance
-  - Build/update edges on note changes
-  - Filters + selection
 
 - `ui.store.ts`
   - Modal stack (open/close)
@@ -311,11 +285,7 @@ Directory: `src/lib/core/`
 
 ### 4.4 Graph
 
-- `core/graph/build.ts`
-  - buildGraph(notesIndexEntries)
-  - updateGraph(noteChange)
-- `core/graph/layout.ts` (layout config)
-- `core/graph/filters.ts`
+Removed.
 
 ### 4.5 Shortcuts
 
@@ -351,8 +321,8 @@ routes/
 onboarding/
 +page.svelte
 app/
-[projectId]/
 +page.svelte
+[projectId]/
 +page.ts
 +error.svelte
 ```
@@ -371,8 +341,6 @@ components/sidebar/...
 components/notes/...
 components/editor/...
 components/modals/...
-components/graph/...
-components/templates/...
 components/settings/...
 components/ui/...
 ```
@@ -385,7 +353,6 @@ project.store.ts
 notes.store.ts
 assets.store.ts
 search.store.ts
-graph.store.ts
 ui.store.ts
 ```
 
@@ -394,7 +361,6 @@ core/
 storage/...
 editor/...
 search/...
-graph/...
 shortcuts/...
 url/...
 utils/...
@@ -431,7 +397,6 @@ base.css
 - `NoteListVirtualized` must be used for:
   - note list
   - search results
-  - template list if large
 
 ### 6.4 Autosave rules
 

@@ -7,7 +7,6 @@ Mac uses Cmd, Windows/Linux uses Ctrl.
 - Cmd/Ctrl+K: Command palette
 - Cmd/Ctrl+Shift+F: Global search
 - Cmd/Ctrl+N: New note (in current folder)
-- Cmd/Ctrl+Shift+N: New note from template picker
 - Cmd/Ctrl+P: Quick switch (notes list fuzzy)
 - Cmd/Ctrl+,: Settings
 - Esc: Close modal / focus editor (if no modal)
@@ -20,7 +19,6 @@ Mac uses Cmd, Windows/Linux uses Ctrl.
 - Cmd/Ctrl+4: Toggle right panel
 - Cmd/Ctrl+B: Toggle backlinks panel (if right panel)
 - Cmd/Ctrl+O: Toggle outline panel
-- Cmd/Ctrl+G: Open graph
 
 ## Tabs / Split
 

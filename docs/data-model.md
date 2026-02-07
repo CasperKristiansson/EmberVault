@@ -31,9 +31,8 @@ Wiki links syntax: [[Note Title]] and [[noteId]] (internal stable) Resolution st
 - Prefer [[noteId]] when created by UI
 - When user types [[Title]]:
   - resolve by exact title match in project
-  - if ambiguous: link remains unresolved until user selects Graph edges:
-- From note -> referenced note
+  - if ambiguous: link remains unresolved until user selects the intended note
 
 ## 6) Templates
 
-Template is a NoteDocFile with isTemplate=true and stored under templates store/folder.
+Templates are reserved (not user-facing). Storage may still contain template records for legacy compatibility.

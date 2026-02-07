@@ -1,4 +1,4 @@
-export type MobileView = "notes" | "editor" | "search" | "graph" | "settings";
+export type MobileView = "notes" | "editor" | "search" | "settings";
 
 export const resolveMobileView = (
   view: MobileView,

@@ -22,10 +22,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes("/prosemirror-")) return "vendor-prosemirror";
             if (id.includes("/@tiptap/")) return "vendor-tiptap";
 
-            if (id.includes("/graphology/") || id.includes("/sigma/")) {
-              return "vendor-graph";
-            }
-
             if (id.includes("/minisearch/")) {
               return "vendor-search";
             }

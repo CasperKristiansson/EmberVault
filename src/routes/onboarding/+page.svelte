@@ -1,8 +1,8 @@
-<script lang="ts">
-  import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
-  import { createDefaultProject } from "$lib/core/storage/indexeddb.adapter";
+  <script lang="ts">
+    import { onMount } from "svelte";
+    import { goto } from "$app/navigation";
+    import { resolve } from "$app/paths";
+    import { createDefaultProject } from "$lib/core/storage/indexeddb.adapter";
   import {
     initAdapter,
     type StorageMode,
@@ -38,7 +38,7 @@
         await adapter.createProject(project);
       }
       await adapter.writeUIState({ lastProjectId: project.id });
-      await goto(resolve("/app/[projectId]", { projectId: project.id }));
+      await goto(resolve("/app"));
     } catch (error) {
       errorMessage =
         error instanceof Error ? error.message : "Unable to set up storage.";
@@ -65,7 +65,7 @@
         await adapter.createProject(project);
       }
       await adapter.writeUIState({ lastProjectId: project.id });
-      await goto(resolve("/app/[projectId]", { projectId: project.id }));
+      await goto(resolve("/app"));
     } catch (error) {
       if (!isAbortError(error)) {
         errorMessage =

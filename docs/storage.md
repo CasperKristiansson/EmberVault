@@ -51,6 +51,7 @@ Vault root folder:
     - templates/
       - {templateId}.json
       - {templateId}.md
+      - (reserved; templates are not user-facing)
     - assets/
       - {assetId}.{ext}
       - assets.json (asset registry optional; can derive by scanning)
@@ -69,6 +70,7 @@ project.json contains:
 - note index (id -> title, folderId, tags, createdAt, updatedAt, favorite, deletedAt?)
 - tag dictionary
 - template index
+  - (reserved; templates are not user-facing)
 - settings (per project)
 
 ## 4) IndexedDB layout (IndexedDBAdapter)
@@ -78,6 +80,7 @@ DB name: `local-notes` Object stores:
 - projects (key: projectId)
 - notes (compound key: [projectId, noteId])
 - templates (compound key: [projectId, templateId])
+  - (reserved; templates are not user-facing)
 - assets (compound key: [projectId, assetId]) -> Blob
 - uiState (key: "ui")
 - searchIndex (key: projectId) -> serialized MiniSearch index

@@ -1,6 +1,5 @@
 import "fake-indexeddb/auto";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
-import { readable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyDocument } from "$lib/core/editor/tiptap-config";
 import {
@@ -9,26 +8,11 @@ import {
 } from "$lib/core/storage/indexeddb.adapter";
 // eslint-disable-next-line sonarjs/no-implicit-dependencies
 import TiptapEditorMock from "$lib/components/editor/__mocks__/TiptapEditor.svelte";
-import Page from "../+page.svelte";
+import Page from "../../+page.svelte";
 import type { NoteDocumentFile, Project } from "$lib/core/storage/types";
 
 vi.mock("$app/navigation", () => ({
   goto: vi.fn(),
-}));
-
-vi.mock("$app/paths", () => ({
-  resolve: (path: string, parameters?: Record<string, string>) => {
-    if (!parameters?.projectId) {
-      return path;
-    }
-    return path.replace("[projectId]", parameters.projectId);
-  },
-}));
-
-vi.mock("$app/stores", () => ({
-  page: readable({
-    params: { projectId: "project-1" },
-  }),
 }));
 
 vi.mock("$lib/components/editor/TiptapEditor.svelte", () => ({

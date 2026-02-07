@@ -16,11 +16,9 @@
   import { prefersReducedMotion } from "$lib/state/motion.store";
 
   export let project: Project | null = null;
-  export let projects: Project[] = [];
   export let searchState: SearchIndexState | null = null;
   export let onClose: () => void = () => {};
   export let onOpenNote: (noteId: string) => void | Promise<void> = async () => {};
-  export let onProjectChange: (projectId: string) => void | Promise<void> = async () => {};
 
   let query = "";
   let results: SearchResult[] = [];
@@ -176,20 +174,6 @@
     onClose();
   };
 
-  const handleProjectChange = async (event: Event): Promise<void> => {
-    const target = event.currentTarget;
-    if (!(target instanceof HTMLSelectElement)) {
-      return;
-    }
-    const nextProjectId = target.value;
-    const currentProjectId = project?.id ?? "";
-    if (!nextProjectId || nextProjectId === currentProjectId) {
-      return;
-    }
-    onClose();
-    await onProjectChange(nextProjectId);
-  };
-
   const buildSnippet = (content: string, terms: string[]): string => {
     const normalized = content.replace(/\s+/g, " ").trim();
     if (!normalized) {
@@ -313,26 +297,6 @@
     </div>
 
     <div class="filter-grid">
-      <label class="filter-field">
-        <span class="filter-label">Project</span>
-        <select
-          class="filter-select"
-          value={project?.id ?? ""}
-          on:change={handleProjectChange}
-          aria-label="Filter by project"
-          disabled={projects.length <= 1}
-        >
-          {#if project}
-            <option value={project.id}>{project.name}</option>
-          {/if}
-          {#each projects as option (option.id)}
-            {#if option.id !== project?.id}
-              <option value={option.id}>{option.name}</option>
-            {/if}
-          {/each}
-        </select>
-      </label>
-
       <label class="filter-field">
         <span class="filter-label">Folder</span>
         <select

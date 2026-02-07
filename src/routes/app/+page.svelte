@@ -2,7 +2,6 @@
   import { onDestroy, onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { page } from "$app/stores";
   import { get } from "svelte/store";
   import AppShell from "$lib/components/AppShell.svelte";
   import ToastHost from "$lib/components/ToastHost.svelte";
@@ -13,10 +12,6 @@
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import TrashNoteRow from "$lib/components/notes/TrashNoteRow.svelte";
   import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
-  import ProjectSwitcher from "$lib/components/sidebar/ProjectSwitcher.svelte";
-  import type GraphViewType from "$lib/components/graph/GraphView.svelte";
-  import type TemplateEditorType from "$lib/components/templates/TemplateEditor.svelte";
-  import type TemplateListType from "$lib/components/templates/TemplateList.svelte";
   import { createEmptyDocument } from "$lib/core/editor/tiptap-config";
   import {
     buildBacklinkSnippet,
@@ -73,7 +68,6 @@
     NoteIndexEntry,
     Project,
     StorageAdapter,
-    TemplateIndexEntry,
     UIState,
   } from "$lib/core/storage/types";
   let adapter = get(adapterStore);
@@ -107,13 +101,6 @@
     editorPlainText: string;
   };
 
-  type TemplateState = {
-    template: NoteDocumentFile | null;
-    titleValue: string;
-    editorContent: Record<string, unknown>;
-    editorPlainText: string;
-  };
-
   type RightPanelTab = "outline" | "backlinks" | "metadata";
 
   type BacklinkEntry = {
@@ -131,18 +118,9 @@
     editorPlainText: "",
   });
 
-  const createTemplateState = (): TemplateState => ({
-    template: null,
-    titleValue: "",
-    editorContent: createEmptyDocument(),
-    editorPlainText: "",
-  });
-
   let project: Project | null = null;
-  let projects: Project[] = [];
   let notes: NoteIndexEntry[] = [];
   let filteredNotes: NoteIndexEntry[] = [];
-  let templates: TemplateIndexEntry[] = [];
   let splitEnabled = false;
   let activePane: PaneId = "primary";
   let favoriteOverrides: Record<string, boolean> = {};
@@ -150,7 +128,6 @@
     primary: createPaneState(),
     secondary: createPaneState(),
   };
-  let templateState: TemplateState = createTemplateState();
   let activePaneState: PaneState = paneStates[activePane];
   let activeNote: NoteDocumentFile | null = null;
   let activeTabId: string | null = null;
@@ -166,7 +143,7 @@
   let isLoading = true;
   let saveState: "idle" | "saving" | "saved" = "idle";
   let mobileView: MobileView = "notes";
-  let workspaceMode: "notes" | "graph" | "templates" = "notes";
+  let workspaceMode: "notes" = "notes";
   let activeFolderId: string | null = null;
   let favoritesOnly = false;
   let trashOnly = false;
@@ -177,34 +154,6 @@
   let backlinksLoading = false;
   let notesRevision = 0;
   let backlinksKey = "";
-  let activeTemplate: NoteDocumentFile | null = null;
-  let activeTemplateId: string | null = null;
-  let lastUsedTemplateId: string | null = null;
-  let templateTitleInput: HTMLInputElement | null = null;
-
-  let GraphViewComponent: typeof GraphViewType | null = null;
-  let TemplateEditorComponent: typeof TemplateEditorType | null = null;
-  let TemplateListComponent: typeof TemplateListType | null = null;
-
-  const ensureGraphViewLoaded = async (): Promise<void> => {
-    if (GraphViewComponent) {
-      return;
-    }
-    const module = await import("$lib/components/graph/GraphView.svelte");
-    GraphViewComponent = module.default;
-  };
-
-  const ensureTemplatesLoaded = async (): Promise<void> => {
-    if (TemplateEditorComponent && TemplateListComponent) {
-      return;
-    }
-    const [editorModule, listModule] = await Promise.all([
-      import("$lib/components/templates/TemplateEditor.svelte"),
-      import("$lib/components/templates/TemplateList.svelte"),
-    ]);
-    TemplateEditorComponent = editorModule.default;
-    TemplateListComponent = listModule.default;
-  };
 
   const saveDelay = 400;
   const uiStateDelay = 800;
@@ -217,33 +166,12 @@
   const pendingSaveIds: Record<string, true> = {};
   let pendingSaveCount = 0;
 
-  type TemplateSaveTask = ReturnType<
-    typeof createDebouncedTask<[NoteDocumentFile]>
-  >;
-  const templateSaveTasks: Record<string, TemplateSaveTask> = {};
-  const pendingTemplateSaveIds: Record<string, true> = {};
-  let pendingTemplateSaveCount = 0;
-
   let projectId = "";
-  $: projectId = $page.params.projectId ?? "";
   $: activePaneState = paneStates[activePane];
   $: activeNote = activePaneState.note;
   $: activeTabId = activePaneState.activeTabId;
   $: activeTabs = activePaneState.tabs;
-  $: activeTemplate = templateState.template;
-  $: activeTemplateId = templateState.template?.id ?? null;
-  $: hasActiveEditor =
-    workspaceMode === "templates"
-      ? Boolean(activeTemplate)
-      : Boolean(activeNote);
-
-  $: if (workspaceMode === "graph") {
-    void ensureGraphViewLoaded();
-  }
-
-  $: if (workspaceMode === "templates") {
-    void ensureTemplatesLoaded();
-  }
+  $: hasActiveEditor = Boolean(activeNote);
   $: wikiLinkCandidates = notes
     .filter((note) => note.deletedAt === null)
     .map((note) => ({ id: note.id, title: note.title }));
@@ -370,28 +298,6 @@
         plainText: "",
         outgoingLinks: [],
       },
-      isTemplate: false,
-    };
-  };
-
-  const createTemplateDocument = (): NoteDocumentFile => {
-    const timestamp = Date.now();
-    return {
-      id: createUlid(),
-      title: "",
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      folderId: null,
-      tagIds: [],
-      favorite: false,
-      deletedAt: null,
-      customFields: {},
-      pmDoc: createEmptyDocument(),
-      derived: {
-        plainText: "",
-        outgoingLinks: [],
-      },
-      isTemplate: true,
     };
   };
 
@@ -433,10 +339,7 @@
       await runAdapterVoid(() =>
         nextAdapter.writeUIState({ lastProjectId: project.id })
       );
-      if (project.id !== projectId) {
-        await goto(resolve("/app/[projectId]", { projectId: project.id }));
-        return;
-      }
+      projectId = project.id;
       await initializeWorkspace();
     } catch (error) {
       if (isAbortError(error)) {
@@ -468,7 +371,8 @@
       await runAdapterVoid(() =>
         nextAdapter.writeUIState({ lastProjectId: project.id })
       );
-      await goto(resolve("/app/[projectId]", { projectId: project.id }));
+      projectId = project.id;
+      await initializeWorkspace();
       notifyAdapterFailure(adapterFallbackToastMessage);
     } finally {
       isRecoveringStorage = false;
@@ -561,34 +465,15 @@
     pendingSaveCount = Math.max(0, pendingSaveCount - 1);
   };
 
-  const markPendingTemplateSave = (templateId: string): void => {
-    if (pendingTemplateSaveIds[templateId]) {
-      return;
-    }
-    pendingTemplateSaveIds[templateId] = true;
-    pendingTemplateSaveCount += 1;
-  };
-
-  const clearPendingTemplateSave = (templateId: string): void => {
-    if (!pendingTemplateSaveIds[templateId]) {
-      return;
-    }
-    delete pendingTemplateSaveIds[templateId];
-    pendingTemplateSaveCount = Math.max(0, pendingTemplateSaveCount - 1);
-  };
-
   const syncSaveState = (): void => {
-    if (pendingSaveCount > 0 || pendingTemplateSaveCount > 0) {
+    if (pendingSaveCount > 0) {
       saveState = "saving";
       return;
     }
     const hasActiveNotes =
       paneStates.primary.note !== null ||
       (splitEnabled && paneStates.secondary.note !== null);
-    const hasActiveTemplate =
-      workspaceMode === "templates" && templateState.template !== null;
-    const hasActive = hasActiveNotes || hasActiveTemplate;
-    saveState = hasActive ? "saved" : "idle";
+    saveState = hasActiveNotes ? "saved" : "idle";
   };
 
   const setActivePane = (paneId: PaneId): void => {
@@ -606,16 +491,6 @@
     syncSaveState();
   };
 
-  const setTemplate = (template: NoteDocumentFile | null): void => {
-    templateState = {
-      template,
-      titleValue: template?.title ?? "",
-      editorContent: template?.pmDoc ?? createEmptyDocument(),
-      editorPlainText: template?.derived?.plainText ?? "",
-    };
-    syncSaveState();
-  };
-
   const buildWorkspaceUiState = (): UIState => ({
     workspaceState: {
       projectId,
@@ -625,7 +500,6 @@
       tabsSecondary: paneStates.secondary.tabs,
       activeTabPrimary: paneStates.primary.activeTabId,
       activeTabSecondary: paneStates.secondary.activeTabId,
-      lastUsedTemplateId,
     },
   });
 
@@ -666,21 +540,7 @@
   };
 
   const setMobileView = (view: MobileView): void => {
-    const hasActiveEditor =
-      workspaceMode === "templates"
-        ? Boolean(activeTemplate)
-        : Boolean(activeNote);
-    mobileView = resolveMobileView(view, hasActiveEditor);
-    if (view === "graph") {
-      workspaceMode = "graph";
-      return;
-    }
-    if (
-      workspaceMode === "graph" &&
-      (view === "notes" || view === "editor")
-    ) {
-      workspaceMode = "notes";
-    }
+    mobileView = resolveMobileView(view, Boolean(activeNote));
   };
 
   const openGlobalSearch = (): void => {
@@ -691,20 +551,8 @@
     openModal("command-palette");
   };
 
-  const openTemplatePicker = (): void => {
-    openModal("template-picker");
-  };
-
-  const openGraphView = (): void => {
-    workspaceMode = "graph";
-    mobileView = "graph";
-  };
-
   const openNotesView = (): void => {
     workspaceMode = "notes";
-    if (mobileView === "graph") {
-      mobileView = "notes";
-    }
   };
 
   const toggleFavoritesFilter = (): void => {
@@ -730,13 +578,6 @@
     trashOnly = true;
     favoritesOnly = false;
     activeFolderId = null;
-  };
-
-  const openTemplatesView = (): void => {
-    workspaceMode = "templates";
-    if (mobileView === "graph") {
-      mobileView = "notes";
-    }
   };
 
   const handleRightPanelTabSelect = (tab: RightPanelTab): void => {
@@ -812,10 +653,6 @@
 
   const sortNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] =>
     [...list].sort((first, second) => second.updatedAt - first.updatedAt);
-  const sortTemplates = (
-    list: TemplateIndexEntry[]
-  ): TemplateIndexEntry[] =>
-    [...list].sort((first, second) => second.updatedAt - first.updatedAt);
 
   const sortTrashNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] =>
     [...list].sort(
@@ -835,9 +672,6 @@
   $: filteredNotes = trashOnly
     ? trashedNotes
     : filterNotesByFavorites(displayNotes, favoritesOnly);
-  $: displayTemplates = sortTemplates(
-    templates.filter((template) => template.deletedAt === null)
-  );
   $: noteListTitle = project
     ? trashOnly
       ? `${project.name} / Trash`
@@ -849,7 +683,6 @@
     : favoritesOnly
       ? "No favorites yet."
       : "No notes yet.";
-  $: templateListCount = displayTemplates.length;
   $: {
     const targetId = activeNote?.id ?? "";
     const targetTitle = activeNote?.title ?? "";
@@ -888,26 +721,6 @@
     if (storedProject) {
       project = storedProject;
     }
-  };
-
-  const loadTemplates = async (): Promise<void> => {
-    if (!projectId) {
-      return;
-    }
-    templates = sortTemplates(
-      await runAdapterTask(() => adapter.listTemplates(projectId), [])
-    );
-    const storedProject = await runAdapterTask(
-      () => adapter.readProject(projectId),
-      null
-    );
-    if (storedProject) {
-      project = storedProject;
-    }
-  };
-
-  const loadProjects = async (): Promise<void> => {
-    projects = await runAdapterTask(() => adapter.listProjects(), []);
   };
 
   const readWorkspaceState = (state: UIState | null): Record<string, unknown> => {
@@ -962,10 +775,6 @@
       await runAdapterTask(() => adapter.readUIState(), null)
     );
     const storedProjectId = storedState.projectId;
-    lastUsedTemplateId =
-      typeof storedState.lastUsedTemplateId === "string"
-        ? storedState.lastUsedTemplateId
-        : null;
     const useStoredState =
       typeof storedProjectId === "string" && storedProjectId === projectId;
 
@@ -1050,35 +859,13 @@
     );
   };
 
-  const loadTemplateDocumentsForIndex = async (): Promise<
-    NoteDocumentFile[]
-  > => {
-    if (!projectId || templates.length === 0) {
-      return [];
-    }
-    const templateDocuments = await Promise.all(
-      templates.map(async (entry) =>
-        runAdapterTask(() => adapter.readTemplate(projectId, entry.id), null)
-      )
-    );
-    return templateDocuments.filter(
-      (template): template is NoteDocumentFile =>
-        template !== null && template.deletedAt === null
-    );
-  };
-
   const loadSearchIndex = async (): Promise<void> => {
     if (!projectId) {
       return;
     }
     const noteDocuments = await loadNoteDocumentsForIndex();
-    const templateDocuments = await loadTemplateDocumentsForIndex();
     searchState = await runAdapterTask(
-      () =>
-        hydrateSearchIndex(adapter, projectId, [
-          ...noteDocuments,
-          ...templateDocuments,
-        ]),
+      () => hydrateSearchIndex(adapter, projectId, [...noteDocuments]),
       null
     );
   };
@@ -1111,14 +898,8 @@
     );
   };
 
-
   const persistProject = async (nextProject: Project): Promise<void> => {
     project = nextProject;
-    projects = projects.some(current => current.id === nextProject.id)
-      ? projects.map(current =>
-          current.id === nextProject.id ? nextProject : current
-        )
-      : [...projects, nextProject];
     await runAdapterVoid(() =>
       adapter.writeProject(nextProject.id, nextProject)
     );
@@ -1533,33 +1314,6 @@
     await updateSearchIndexForDocument(resolvedNote);
   };
 
-  const persistTemplate = async (
-    template: NoteDocumentFile
-  ): Promise<void> => {
-    const resolvedPlainText = template.derived?.plainText ?? "";
-    const resolvedTemplate: NoteDocumentFile = {
-      ...template,
-      isTemplate: true,
-      derived: {
-        ...(template.derived ?? {}),
-        plainText: resolvedPlainText,
-        outgoingLinks: template.derived?.outgoingLinks ?? [],
-      },
-    };
-    await runAdapterVoid(() =>
-      adapter.writeTemplate({
-        projectId,
-        templateId: resolvedTemplate.id,
-        noteDocument: resolvedTemplate,
-        derivedMarkdown: toDerivedMarkdown(
-          resolvedTemplate.title,
-          resolvedPlainText
-        ),
-      })
-    );
-    await updateSearchIndexForDocument(resolvedTemplate);
-  };
-
   const getSaveTask = (noteId: string): NoteSaveTask => {
     const existing = saveTasks[noteId];
     if (existing) {
@@ -1585,31 +1339,6 @@
     getSaveTask(note.id).schedule(noteSnapshot);
   };
 
-  const getTemplateSaveTask = (templateId: string): TemplateSaveTask => {
-    const existing = templateSaveTasks[templateId];
-    if (existing) {
-      return existing;
-    }
-    const task = createDebouncedTask(
-      async (templateSnapshot: NoteDocumentFile) => {
-        await persistTemplate(templateSnapshot);
-        await loadTemplates();
-        clearPendingTemplateSave(templateSnapshot.id);
-        syncSaveState();
-      },
-      saveDelay
-    );
-    templateSaveTasks[templateId] = task;
-    return task;
-  };
-
-  const scheduleTemplateSave = (template: NoteDocumentFile): void => {
-    markPendingTemplateSave(template.id);
-    syncSaveState();
-    const templateSnapshot = structuredClone(template);
-    getTemplateSaveTask(template.id).schedule(templateSnapshot);
-  };
-
   const flushPendingSaveForNote = async (
     noteId: string | null
   ): Promise<void> => {
@@ -1623,28 +1352,14 @@
     await task.flush();
   };
 
-  const flushPendingSaveForTemplate = async (
-    templateId: string | null
-  ): Promise<void> => {
-    if (!templateId) {
-      return;
-    }
-    const task = templateSaveTasks[templateId];
-    if (!task || !task.pending()) {
-      return;
-    }
-    await task.flush();
-  };
-
   const flushPendingSave = async (): Promise<void> => {
-    const pendingTasks = [
-      ...Object.values(saveTasks),
-      ...Object.values(templateSaveTasks),
-    ].filter(task => task.pending());
+    const pendingTasks = Object.values(saveTasks).filter((task) =>
+      task.pending()
+    );
     if (pendingTasks.length === 0) {
       return;
     }
-    await Promise.all(pendingTasks.map(task => task.flush()));
+    await Promise.all(pendingTasks.map((task) => task.flush()));
   };
 
   const applyEdits = (
@@ -1740,9 +1455,6 @@
       updatedAt: Math.max(project.updatedAt, Date.now()),
     };
     project = updatedProject;
-    projects = projects.map((entry) =>
-      entry.id === updatedProject.id ? updatedProject : entry
-    );
   };
 
   const deleteNoteToTrash = async (noteId: string): Promise<void> => {
@@ -1987,68 +1699,6 @@
     void setNoteFavorite(noteId, nextFavorite);
   };
 
-  const applyTemplateEdits = (updates: {
-    title?: string;
-    pmDoc?: Record<string, unknown>;
-    plainText?: string;
-  }): void => {
-    if (!templateState.template) {
-      return;
-    }
-    const timestamp = Date.now();
-    const nextTitleValue = updates.title ?? templateState.titleValue;
-    const resolvedTitle = nextTitleValue.trim();
-    const resolvedDoc =
-      updates.pmDoc ?? templateState.template.pmDoc ?? createEmptyDocument();
-    const resolvedPlainText =
-      updates.plainText ?? templateState.editorPlainText;
-    const updatedTemplate: NoteDocumentFile = {
-      ...templateState.template,
-      title: resolvedTitle,
-      updatedAt: timestamp,
-      pmDoc: resolvedDoc,
-      derived: {
-        plainText: resolvedPlainText,
-        outgoingLinks: templateState.template.derived?.outgoingLinks ?? [],
-      },
-      isTemplate: true,
-    };
-    templateState = {
-      template: updatedTemplate,
-      titleValue: nextTitleValue,
-      editorContent: resolvedDoc,
-      editorPlainText: resolvedPlainText,
-    };
-    scheduleTemplateSave(updatedTemplate);
-  };
-
-  const handleTemplateTitleInput = (event: Event): void => {
-    const target = event.currentTarget;
-    if (!(target instanceof HTMLInputElement)) {
-      return;
-    }
-    applyTemplateEdits({ title: target.value });
-  };
-
-  const handleTemplateTitleBlur = (event: Event): void => {
-    handleTemplateTitleInput(event);
-    if (templateState.template) {
-      void flushPendingSaveForTemplate(templateState.template.id);
-    }
-  };
-
-  const handleTemplateEditorUpdate = (payload: {
-    json: Record<string, unknown>;
-    text: string;
-  }): void => {
-    const titleValue = templateTitleInput?.value;
-    applyTemplateEdits({
-      pmDoc: payload.json,
-      plainText: payload.text,
-      title: titleValue,
-    });
-  };
-
   const handleEditorUpdate = (
     paneId: PaneId,
     payload: {
@@ -2064,36 +1714,6 @@
       plainText: payload.text,
       title: titleValue,
     });
-  };
-
-  const loadTemplate = async (templateId: string): Promise<void> => {
-    if (!templateId) {
-      return;
-    }
-    const template = await runAdapterTask(
-      () => adapter.readTemplate(projectId, templateId),
-      null
-    );
-    if (template) {
-      setTemplate(template);
-    }
-  };
-
-  const selectTemplate = async (templateId: string): Promise<void> => {
-    await flushPendingSaveForTemplate(activeTemplateId);
-    openTemplatesView();
-    await loadTemplate(templateId);
-  };
-
-  const createTemplate = async (): Promise<void> => {
-    await flushPendingSave();
-    openTemplatesView();
-    const template = createTemplateDocument();
-    setTemplate(template);
-    saveState = "saving";
-    await persistTemplate(template);
-    await loadTemplates();
-    syncSaveState();
   };
 
   const createNote = async (): Promise<void> => {
@@ -2131,78 +1751,6 @@
       };
       await persistProject(updatedProject);
     }
-    syncSaveState();
-  };
-
-  const createNoteFromTemplate = async (
-    templateId: string
-  ): Promise<void> => {
-    trashOnly = false;
-    if (!templateId) {
-      await createNote();
-      return;
-    }
-    await flushPendingSave();
-    const template =
-      activeTemplateId === templateId && activeTemplate
-        ? activeTemplate
-        : await runAdapterTask(
-            () => adapter.readTemplate(projectId, templateId),
-            null
-          );
-    if (!template) {
-      await createNote();
-      return;
-    }
-    openNotesView();
-    const timestamp = Date.now();
-    const templateSnapshot = structuredClone(template);
-    const note: NoteDocumentFile = {
-      ...templateSnapshot,
-      id: createUlid(),
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      folderId: activeFolderId,
-      favorite: false,
-      deletedAt: null,
-      isTemplate: false,
-      derived: {
-        plainText: templateSnapshot.derived?.plainText ?? "",
-        outgoingLinks: [],
-      },
-    };
-    setPaneNote(activePane, note);
-    const pane = getPaneState(activePane);
-    updatePaneState(activePane, {
-      tabs: addTab(pane.tabs, note.id),
-      activeTabId: note.id,
-    });
-    tabTitles = { ...tabTitles, [note.id]: note.title ?? "" };
-    saveState = "saving";
-    scheduleUiStateWrite();
-    await persistNote(note);
-    await loadNotes();
-    if (activeFolderId && project?.folders[activeFolderId]?.noteIds) {
-      const currentOrder = resolveFolderNoteOrder(
-        notes,
-        activeFolderId,
-        project.folders
-      );
-      const nextOrder = [...currentOrder.filter((id) => id !== note.id), note.id];
-      const nextFolders = setFolderNoteOrder(
-        project.folders,
-        activeFolderId,
-        nextOrder
-      );
-      const updatedProject: Project = {
-        ...project,
-        folders: nextFolders,
-        updatedAt: Date.now(),
-      };
-      await persistProject(updatedProject);
-    }
-    lastUsedTemplateId = templateId;
-    scheduleUiStateWrite();
     syncSaveState();
   };
 
@@ -2305,23 +1853,28 @@
     }
   };
 
-  const switchProject = async (nextProjectId: string): Promise<void> => {
-    if (!nextProjectId || nextProjectId === projectId) {
-      return;
+  const resolveWorkspaceProjectId = async (): Promise<string> => {
+    const projects = await runAdapterTask(() => adapter.listProjects(), []);
+    if (projects.length === 0) {
+      const created = createDefaultProject();
+      await runAdapterVoid(() => adapter.createProject(created));
+      await runAdapterVoid(() => adapter.writeUIState({ lastProjectId: created.id }));
+      return created.id;
     }
-    await flushPendingSave();
-    await flushUiStateWrite();
-    const currentState =
-      (await runAdapterTask(() => adapter.readUIState(), null)) ?? {};
-    await runAdapterVoid(() =>
-      adapter.writeUIState({
-        ...currentState,
-        ...buildWorkspaceUiState(),
-        lastProjectId: nextProjectId,
-      })
-    );
-    activeFolderId = null;
-    await goto(resolve("/app/[projectId]", { projectId: nextProjectId }));
+
+    const state = (await runAdapterTask(() => adapter.readUIState(), null)) ?? {};
+    const lastProjectId =
+      typeof (state as { lastProjectId?: unknown }).lastProjectId === "string"
+        ? (state as { lastProjectId: string }).lastProjectId
+        : null;
+    const active = lastProjectId
+      ? projects.find((project) => project.id === lastProjectId)
+      : null;
+    const resolvedProjectId = (active ?? projects[0])?.id ?? "";
+    if (resolvedProjectId) {
+      await runAdapterVoid(() => adapter.writeUIState({ lastProjectId: resolvedProjectId }));
+    }
+    return resolvedProjectId;
   };
 
   const selectFolder = (folderId: string): void => {
@@ -2336,6 +1889,7 @@
       isLoading = false;
       return;
     }
+    projectId = await resolveWorkspaceProjectId();
     if (!projectId) {
       isLoading = false;
       return;
@@ -2352,9 +1906,7 @@
       return;
     }
     project = storedProject;
-    await loadProjects();
     await loadNotes();
-    await loadTemplates();
     await loadSearchIndex();
     await restoreWorkspaceState();
     activeFolderId = null;
@@ -2374,11 +1926,6 @@
         openCommandPalette();
         return;
       }
-      if (key === "n" && event.shiftKey) {
-        event.preventDefault();
-        openTemplatePicker();
-        return;
-      }
       if (key === "n" && !event.shiftKey) {
         event.preventDefault();
         void createNote();
@@ -2387,11 +1934,6 @@
       if (key === "f" && event.shiftKey) {
         event.preventDefault();
         openGlobalSearch();
-        return;
-      }
-      if (key === "g" && !event.shiftKey) {
-        event.preventDefault();
-        openGraphView();
         return;
       }
       if (event.shiftKey && (event.key === "\\" || event.key === "|")) {
@@ -2430,10 +1972,7 @@
   });
 
   $: {
-    const hasActiveEditor =
-      workspaceMode === "templates"
-        ? Boolean(activeTemplate)
-        : Boolean(activeNote);
+    const hasActiveEditor = Boolean(activeNote);
     const resolvedView = resolveMobileView(mobileView, hasActiveEditor);
     if (resolvedView !== mobileView) {
       mobileView = resolvedView;
@@ -2443,114 +1982,91 @@
 
 <AppShell {saveState} {mobileView} {workspaceMode}>
   <div slot="topbar" class="topbar-content" data-mode={workspaceMode}>
-    {#if workspaceMode === "templates"}
-      <div class="topbar-templates">
-        <div class="topbar-title">Templates</div>
-        <button
-          class="button secondary"
-          type="button"
-          on:click={() => {
-            workspaceMode = "notes";
-            if (mobileView === "graph") {
-              mobileView = "notes";
-            }
-          }}
+    <div
+      class="topbar-tabs"
+      role="tablist"
+      aria-label="Open notes"
+      data-testid="tab-list"
+    >
+      {#each activeTabs as tabId (tabId)}
+        <div
+          class="tab"
+          role="tab"
+          tabindex={tabId === activeTabId ? 0 : -1}
+          aria-selected={tabId === activeTabId}
+          data-testid="tab-item"
+          data-note-id={tabId}
+          data-active={tabId === activeTabId}
+          data-drop-target={dropTargetTabId === tabId}
+          data-dragging={draggingTabId === tabId}
+          draggable="true"
+          on:click={() => void activateTab(tabId)}
+          on:keydown={event => handleTabKeydown(event, tabId)}
+          on:dragstart={event => handleTabDragStart(event, tabId)}
+          on:dragover={event => handleTabDragOver(event, tabId)}
+          on:drop={event => handleTabDrop(event, tabId)}
+          on:dragend={handleTabDragEnd}
         >
-          Back to notes
-        </button>
-      </div>
-    {:else}
-      <div
-        class="topbar-tabs"
-        role="tablist"
-        aria-label="Open notes"
-        data-testid="tab-list"
-      >
-        {#each activeTabs as tabId (tabId)}
-          <div
-            class="tab"
-            role="tab"
-            tabindex={tabId === activeTabId ? 0 : -1}
-            aria-selected={tabId === activeTabId}
-            data-testid="tab-item"
+          <span class="tab-title" data-testid="tab-title">
+            {getTabTitle(tabId, tabTitles)}
+          </span>
+          <button
+            class="tab-close"
+            type="button"
+            aria-label="Close tab"
+            data-testid="tab-close"
             data-note-id={tabId}
-            data-active={tabId === activeTabId}
-            data-drop-target={dropTargetTabId === tabId}
-            data-dragging={draggingTabId === tabId}
-            draggable="true"
-            on:click={() => void activateTab(tabId)}
-            on:keydown={event => handleTabKeydown(event, tabId)}
-            on:dragstart={event => handleTabDragStart(event, tabId)}
-            on:dragover={event => handleTabDragOver(event, tabId)}
-            on:drop={event => handleTabDrop(event, tabId)}
-            on:dragend={handleTabDragEnd}
+            draggable="false"
+            on:click|stopPropagation={() => void handleCloseTab(tabId)}
           >
-            <span class="tab-title" data-testid="tab-title">
-              {getTabTitle(tabId, tabTitles)}
-            </span>
-            <button
-              class="tab-close"
-              type="button"
-              aria-label="Close tab"
-              data-testid="tab-close"
-              data-note-id={tabId}
-              draggable="false"
-              on:click|stopPropagation={() => void handleCloseTab(tabId)}
+            <svg
+              class="tab-close-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             >
-              <svg
-                class="tab-close-icon"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M6 6 18 18" />
-                <path d="M6 18 18 6" />
-              </svg>
-            </button>
-          </div>
-        {/each}
-      </div>
-      <div class="topbar-actions">
-        <button
-          class="icon-button"
-          type="button"
-          aria-label="Toggle split view"
-          aria-pressed={splitEnabled}
-          data-testid="toggle-split"
-          on:click={() => void toggleSplitView()}
+              <path d="M6 6 18 18" />
+              <path d="M6 18 18 6" />
+            </svg>
+          </button>
+        </div>
+      {/each}
+    </div>
+    <div class="topbar-actions">
+      <button
+        class="icon-button"
+        type="button"
+        aria-label="Toggle split view"
+        aria-pressed={splitEnabled}
+        data-testid="toggle-split"
+        on:click={() => void toggleSplitView()}
+      >
+        <svg
+          class="icon"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
         >
-          <svg
-            class="icon"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M12 4v16" />
-          </svg>
-        </button>
-        <RightPanelTabs
-          activeTab={rightPanelTab}
-          onSelect={handleRightPanelTabSelect}
-        />
-      </div>
-    {/if}
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M12 4v16" />
+        </svg>
+      </button>
+      <RightPanelTabs
+        activeTab={rightPanelTab}
+        onSelect={handleRightPanelTabSelect}
+      />
+    </div>
   </div>
 
   <div slot="sidebar" class="sidebar-content">
-    <ProjectSwitcher
-      {projects}
-      activeProjectId={project?.id ?? projectId}
-      onSelect={switchProject}
-    />
     <div class="sidebar-views" role="list" aria-label="Views">
       <button
         class="sidebar-view"
@@ -2561,26 +2077,6 @@
         on:click={openNotesView}
       >
         Notes
-      </button>
-      <button
-        class="sidebar-view"
-        type="button"
-        aria-pressed={workspaceMode === "templates"}
-        data-active={workspaceMode === "templates"}
-        data-testid="sidebar-view-templates"
-        on:click={openTemplatesView}
-      >
-        Templates
-      </button>
-      <button
-        class="sidebar-view"
-        type="button"
-        aria-pressed={workspaceMode === "graph"}
-        data-active={workspaceMode === "graph"}
-        data-testid="sidebar-view-graph"
-        on:click={openGraphView}
-      >
-        Graph
       </button>
     </div>
     <FolderTree
@@ -2597,182 +2093,126 @@
   </div>
 
   <div slot="note-list" class="note-list-content">
-    {#if workspaceMode === "templates"}
-      {#if TemplateListComponent}
-        <svelte:component
-          this={TemplateListComponent}
-          templates={displayTemplates}
-          {activeTemplateId}
-          {isLoading}
-          totalCount={templateListCount}
-          onCreate={createTemplate}
-          onSelect={selectTemplate}
-        />
-      {:else}
-        <div class="note-list-empty">Loading templates...</div>
-      {/if}
-    {:else}
-      <header class="note-list-header">
-        <div>
-          <div class="note-list-title">{noteListTitle}</div>
-          <div class="note-list-subtitle">{noteListCount} total</div>
-        </div>
-        <div class="note-list-actions">
-          <button
-            class="icon-button"
-            type="button"
-            data-testid="open-global-search"
-            aria-label="Open global search"
-            on:click={openGlobalSearch}
+    <header class="note-list-header">
+      <div>
+        <div class="note-list-title">{noteListTitle}</div>
+        <div class="note-list-subtitle">{noteListCount} total</div>
+      </div>
+      <div class="note-list-actions">
+        <button
+          class="icon-button"
+          type="button"
+          data-testid="open-global-search"
+          aria-label="Open global search"
+          on:click={openGlobalSearch}
+        >
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
           >
-            <svg
-              class="icon"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-          </button>
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+        </button>
+        <button
+          class="button primary"
+          data-testid="new-note"
+          on:click={createNote}
+          disabled={isLoading}
+        >
+          New note
+        </button>
+      </div>
+    </header>
+
+    <div class="note-list-filters" aria-label="Note filters">
+      <button
+        class={`filter-chip${favoritesOnly ? " active" : ""}`}
+        type="button"
+        aria-pressed={favoritesOnly}
+        data-testid="filter-favorites"
+        on:click={toggleFavoritesFilter}
+      >
+        Favorites
+      </button>
+      <button
+        class={`filter-chip${trashOnly ? " active" : ""}`}
+        type="button"
+        aria-pressed={trashOnly}
+        data-testid="filter-trash"
+        on:click={toggleTrashFilter}
+      >
+        Trash
+      </button>
+    </div>
+
+    {#if isLoading}
+      <div class="note-list-empty">Loading notes...</div>
+    {:else if filteredNotes.length === 0}
+      <div class="note-list-empty">
+        <div>{noteListEmptyMessage}</div>
+        {#if favoritesOnly || trashOnly}
           <button
             class="button secondary"
             type="button"
-            data-testid="new-note-from-template"
-            on:click={openTemplatePicker}
-            disabled={isLoading}
+            on:click={() => {
+              favoritesOnly = false;
+              trashOnly = false;
+            }}
           >
-            From template
+            Clear filters
           </button>
-          <button
-            class="button primary"
-            data-testid="new-note"
-            on:click={createNote}
-            disabled={isLoading}
-          >
-            New note
-          </button>
-        </div>
-      </header>
-
-      <div class="note-list-filters" aria-label="Note filters">
-        <button
-          class={`filter-chip${favoritesOnly ? " active" : ""}`}
-          type="button"
-          aria-pressed={favoritesOnly}
-          data-testid="filter-favorites"
-          on:click={toggleFavoritesFilter}
-        >
-          Favorites
-        </button>
-        <button
-          class={`filter-chip${trashOnly ? " active" : ""}`}
-          type="button"
-          aria-pressed={trashOnly}
-          data-testid="filter-trash"
-          on:click={toggleTrashFilter}
-        >
-          Trash
-        </button>
-      </div>
-
-      {#if isLoading}
-        <div class="note-list-empty">Loading notes...</div>
-      {:else if filteredNotes.length === 0}
-        <div class="note-list-empty">
-          <div>{noteListEmptyMessage}</div>
-          {#if favoritesOnly || trashOnly}
-            <button
-              class="button secondary"
-              type="button"
-              on:click={() => {
-                favoritesOnly = false;
-                trashOnly = false;
-              }}
-            >
-              Clear filters
-            </button>
-          {/if}
-        </div>
-      {:else}
-        {#if trashOnly}
-          <NoteListVirtualized
-            notes={filteredNotes}
-            activeNoteId={activeTabId}
-            onSelect={noteId => void activateTab(noteId)}
-            draggable={false}
-          >
-            <svelte:fragment slot="row" let:note let:active let:motionEnabled>
-              <TrashNoteRow
-                note={note as NoteIndexEntry}
-                {active}
-                {motionEnabled}
-                onSelect={noteId => void activateTab(noteId)}
-                onRestore={noteId => void restoreTrashedNote(noteId)}
-                onDeletePermanent={openPermanentDeleteConfirm}
-              />
-            </svelte:fragment>
-          </NoteListVirtualized>
-        {:else}
-          <NoteListVirtualized
-            notes={filteredNotes}
-            activeNoteId={activeTabId}
-            onSelect={noteId => void activateTab(noteId)}
-            onToggleFavorite={handleFavoriteToggle}
-            draggable={true}
-            draggingNoteId={draggingNoteId}
-            dropTargetNoteId={dropTargetNoteId}
-            onDragStart={handleNoteDragStart}
-            onDragOver={handleNoteDragOver}
-            onDrop={handleNoteDrop}
-            onDragEnd={handleNoteDragEnd}
-          />
         {/if}
+      </div>
+    {:else}
+      {#if trashOnly}
+        <NoteListVirtualized
+          notes={filteredNotes}
+          activeNoteId={activeTabId}
+          onSelect={noteId => void activateTab(noteId)}
+          draggable={false}
+        >
+          <svelte:fragment slot="row" let:note let:active let:motionEnabled>
+            <TrashNoteRow
+              note={note as NoteIndexEntry}
+              {active}
+              {motionEnabled}
+              onSelect={noteId => void activateTab(noteId)}
+              onRestore={noteId => void restoreTrashedNote(noteId)}
+              onDeletePermanent={openPermanentDeleteConfirm}
+            />
+          </svelte:fragment>
+        </NoteListVirtualized>
+      {:else}
+        <NoteListVirtualized
+          notes={filteredNotes}
+          activeNoteId={activeTabId}
+          onSelect={noteId => void activateTab(noteId)}
+          onToggleFavorite={handleFavoriteToggle}
+          draggable={true}
+          draggingNoteId={draggingNoteId}
+          dropTargetNoteId={dropTargetNoteId}
+          onDragStart={handleNoteDragStart}
+          onDragOver={handleNoteDragOver}
+          onDrop={handleNoteDrop}
+          onDragEnd={handleNoteDragEnd}
+        />
       {/if}
     {/if}
   </div>
 
   <div
     slot="editor"
-    class={workspaceMode === "graph" ? "graph-content" : "editor-content"}
+    class="editor-content"
     data-split={splitEnabled ? "true" : "false"}
   >
-    {#if workspaceMode === "templates"}
-      {#if TemplateEditorComponent}
-        <svelte:component
-          this={TemplateEditorComponent}
-          template={activeTemplate}
-          titleValue={templateState.titleValue}
-          editorContent={templateState.editorContent}
-          {isLoading}
-          bind:titleInput={templateTitleInput}
-          linkCandidates={wikiLinkCandidates}
-          onImagePaste={handleImagePaste}
-          onTitleInput={handleTemplateTitleInput}
-          onTitleBlur={handleTemplateTitleBlur}
-          onEditorUpdate={handleTemplateEditorUpdate}
-        />
-      {:else}
-        <div class="editor-empty">Preparing editor...</div>
-      {/if}
-    {:else if workspaceMode === "graph"}
-      {#if GraphViewComponent}
-        <svelte:component
-          this={GraphViewComponent}
-          {notes}
-          tags={project?.tags ?? {}}
-          activeNoteId={activeNote?.id ?? null}
-          onNodeClick={noteId => void activateTab(noteId)}
-        />
-      {:else}
-        <div class="editor-empty">Loading graph...</div>
-      {/if}
-    {:else}
-      {#if splitEnabled}
+    {#if splitEnabled}
         <div
           class="editor-pane"
           data-pane="primary"
@@ -3083,7 +2523,6 @@
           </div>
         {/if}
       {/if}
-    {/if}
   </div>
 
   <RightPanel
@@ -3101,21 +2540,14 @@
   <ModalHost
     slot="modal"
     {project}
-    {projects}
     notes={notes}
-    templates={templates}
     activeNoteId={activeTabId}
-    lastUsedTemplateId={lastUsedTemplateId}
     {searchState}
     onOpenNote={activateTab}
     onCreateNote={createNote}
-    onCreateNoteFromTemplate={createNoteFromTemplate}
     onOpenGlobalSearch={openGlobalSearch}
-    onProjectChange={switchProject}
     onToggleSplitView={toggleSplitView}
     onToggleRightPanel={handleRightPanelTabSelect}
-    onOpenGraph={openGraphView}
-    onOpenTemplates={openTemplatesView}
     onGoToTrash={openTrashView}
   />
 
@@ -3134,19 +2566,6 @@
       }}
     >
       Notes
-    </button>
-    <button
-      class="mobile-nav-button"
-      class:active={workspaceMode === "templates" && mobileView === "notes"}
-      type="button"
-      data-testid="mobile-nav-templates"
-      aria-pressed={workspaceMode === "templates" && mobileView === "notes"}
-      on:click={() => {
-        openTemplatesView();
-        setMobileView("notes");
-      }}
-    >
-      Templates
     </button>
     {#if hasActiveEditor}
       <button
@@ -3171,16 +2590,6 @@
     </button>
     <button
       class="mobile-nav-button"
-      class:active={mobileView === "graph"}
-      type="button"
-      data-testid="mobile-nav-graph"
-      aria-pressed={mobileView === "graph"}
-      on:click={() => setMobileView("graph")}
-    >
-      Graph
-    </button>
-    <button
-      class="mobile-nav-button"
       type="button"
       data-testid="mobile-nav-settings"
       aria-disabled="true"
@@ -3198,18 +2607,6 @@
     justify-content: space-between;
     width: 100%;
     gap: 16px;
-  }
-
-  .topbar-templates {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    width: 100%;
-  }
-
-  .topbar-title {
-    font-weight: 500;
   }
 
   .topbar-tabs {
@@ -3457,14 +2854,6 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    min-height: 0;
-  }
-
-  .graph-content {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    height: 100%;
     min-height: 0;
   }
 

@@ -1,21 +1,16 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { motion } from "@motionone/svelte";
-  import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
+  import type { NoteIndexEntry } from "$lib/core/storage/types";
   import { prefersReducedMotion } from "$lib/state/motion.store";
 
-  export let project: Project | null = null;
-  export let projects: Project[] = [];
   export let notes: NoteIndexEntry[] = [];
   export let activeNoteId: string | null = null;
   export let onClose: () => void = () => {};
   export let onOpenNote: (noteId: string) => void | Promise<void> = async () => {};
   export let onCreateNote: (() => void | Promise<void>) | null = null;
   export let onOpenGlobalSearch: (() => void | Promise<void>) | null = null;
-  export let onProjectChange: ((projectId: string) => void | Promise<void>) | null = null;
   export let onToggleSplitView: (() => void | Promise<void>) | null = null;
-  export let onOpenGraph: (() => void | Promise<void>) | null = null;
-  export let onOpenTemplates: (() => void | Promise<void>) | null = null;
   export let onGoToTrash: (() => void | Promise<void>) | null = null;
   export let onToggleRightPanel:
     | ((panel: "outline" | "backlinks" | "metadata") => void | Promise<void>)
@@ -70,18 +65,6 @@
   const formatNoteSubtitle = (note: NoteIndexEntry): string => {
     const updated = new Date(note.updatedAt).toLocaleDateString();
     return note.id === activeNoteId ? `Active · ${updated}` : `Updated ${updated}`;
-  };
-
-  const resolveNextProjectId = (): string | null => {
-    if (!project || projects.length <= 1) {
-      return null;
-    }
-    const index = projects.findIndex((entry) => entry.id === project.id);
-    if (index === -1) {
-      return projects[0]?.id ?? null;
-    }
-    const next = projects[(index + 1) % projects.length];
-    return next?.id ?? null;
   };
 
   const runAction = async (item: PaletteItem): Promise<void> => {
@@ -157,19 +140,6 @@
       },
       {
         type: "action",
-        id: "switch-project",
-        label: "Switch project",
-        group: "Actions",
-        disabled: !onProjectChange || projects.length <= 1,
-        perform: async () => {
-          const nextProjectId = resolveNextProjectId();
-          if (nextProjectId) {
-            await onProjectChange?.(nextProjectId);
-          }
-        },
-      },
-      {
-        type: "action",
         id: "search-everywhere",
         label: "Search everywhere",
         group: "Actions",
@@ -186,26 +156,6 @@
         disabled: !onToggleSplitView,
         perform: async () => {
           await onToggleSplitView?.();
-        },
-      },
-      {
-        type: "action",
-        id: "open-graph",
-        label: "Open graph",
-        group: "Actions",
-        disabled: !onOpenGraph,
-        perform: async () => {
-          await onOpenGraph?.();
-        },
-      },
-      {
-        type: "action",
-        id: "open-templates",
-        label: "Open templates",
-        group: "Actions",
-        disabled: !onOpenTemplates,
-        perform: async () => {
-          await onOpenTemplates?.();
         },
       },
       {
@@ -272,7 +222,7 @@
 
   const buildNoteItems = (filter: string): PaletteItem[] => {
     const filteredNotes = notes
-      .filter((note) => !note.deletedAt && !note.isTemplate)
+      .filter((note) => !note.deletedAt)
       .filter((note) => matches(note.title ?? "", filter))
       .sort((first, second) => second.updatedAt - first.updatedAt)
       .slice(0, 8);

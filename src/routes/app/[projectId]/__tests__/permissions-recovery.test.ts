@@ -1,9 +1,9 @@
 import { cleanup, render } from "@testing-library/svelte";
-import { readable, writable } from "svelte/store";
+import { writable } from "svelte/store";
 import { afterEach, describe, expect, it, vi } from "vitest";
 // eslint-disable-next-line sonarjs/no-implicit-dependencies
 import TiptapEditorMock from "$lib/components/editor/__mocks__/TiptapEditor.svelte";
-import Page from "../+page.svelte";
+import Page from "../../+page.svelte";
 
 vi.mock("$lib/state/adapter.store", () => {
   const adapterInstance = {
@@ -28,21 +28,6 @@ vi.mock("$lib/state/adapter.store", () => {
 
 vi.mock("$app/navigation", () => ({
   goto: vi.fn(),
-}));
-
-vi.mock("$app/paths", () => ({
-  resolve: (path: string, parameters?: Record<string, string>) => {
-    if (!parameters?.projectId) {
-      return path;
-    }
-    return path.replace("[projectId]", parameters.projectId);
-  },
-}));
-
-vi.mock("$app/stores", () => ({
-  page: readable({
-    params: { projectId: "project-1" },
-  }),
 }));
 
 vi.mock("$lib/components/editor/TiptapEditor.svelte", () => ({

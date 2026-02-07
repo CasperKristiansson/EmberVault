@@ -4,7 +4,6 @@ export type ModalType =
   | "global-search"
   | "command-palette"
   | "note-switcher"
-  | "template-picker"
   | "confirm"
   | "image-lightbox";
 

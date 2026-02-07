@@ -76,7 +76,6 @@ describe("GlobalSearchModal", () => {
     const { getByLabelText } = render(GlobalSearchModal, {
       props: {
         project,
-        projects: [project],
       },
     });
 
@@ -118,7 +117,6 @@ describe("GlobalSearchModal", () => {
       props: {
         project,
         searchState,
-        projects: [project],
       },
     });
 

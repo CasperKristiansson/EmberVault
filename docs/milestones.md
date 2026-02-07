@@ -69,22 +69,18 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Component tests for tab close + split toggle
 - [x] E2E: open split, edit both, reload persists
 
-## Milestone 7 — Backlinks + graph view
+## Milestone 7 — Backlinks (Graph Removed)
 
 - [x] Wiki link syntax [[...]] creation UI (autocomplete)
 - [x] Backlinks panel (linked mentions)
-- [x] Graph view (sigma.js) project graph + current note neighborhood
-- [x] Graph interactions: click node opens note tab
-- [x] Unit tests for link parsing and graph edge generation
-- [x] E2E: create links, graph shows edge, click navigates
+- [x] Spec correction (Feb 6, 2026): Graph view removed from the product.
 
 ## Milestone 8 — Templates + metadata + favorites + trash polish
 
-- [x] Templates manager + apply template on new note
+- [x] Spec correction (Feb 6, 2026): Templates removed from the product.
 - [x] Favorites view + star toggles in list/editor
 - [x] Metadata panel with custom fields CRUD
 - [x] Trash view polish with restore/permanent delete confirm Note: Implemented trash filter chip + trash view, trash row actions (restore/permanent delete), confirm dialog modal, and delete-to-trash button in editor; added unit/component tests and e2e trash flow. Resolved e2e flake in `tests/e2e/editor-reload-blocks.spec.ts` by reordering checklist insertion and stabilizing slash-menu input.
-- [x] E2E: create template, new note from template, persists
 
 ## Milestone 9 — File System Access (disk vault) + hybrid cache
 

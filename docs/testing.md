@@ -29,10 +29,10 @@ Markdown:
 - import markdown -> pmDoc contains expected nodes (headings, lists, code)
 - export pmDoc -> markdown contains expected constructs
 
-Links/graph:
+Links:
 
 - parse outgoing links
-- graph edges stable after rename/title changes (id-based links remain valid)
+- backlinks remain stable after rename/title changes (id-based links remain valid)
 
 ## 3) Required component tests
 
@@ -56,8 +56,6 @@ Links/graph:
   - open 2 notes in split, edit both, persist
 - Trash:
   - delete note -> appears in trash -> restore -> returns to folder
-- Graph:
-  - create [[link]] between notes -> graph shows edge -> click node opens note
 - Cross-browser:
   - run same suite on WebKit at minimum for IDB mode
 

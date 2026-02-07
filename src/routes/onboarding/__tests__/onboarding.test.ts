@@ -6,15 +6,6 @@ vi.mock("$app/navigation", () => ({
   goto: vi.fn(),
 }));
 
-vi.mock("$app/paths", () => ({
-  resolve: (path: string, parameters?: Record<string, string>) => {
-    if (!parameters?.projectId) {
-      return path;
-    }
-    return path.replace("[projectId]", parameters.projectId);
-  },
-}));
-
 type WindowWithPicker = Window & {
   showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
 };

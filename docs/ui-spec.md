@@ -24,7 +24,6 @@ Top bar:
   - Notes
   - Editor (if a note is open)
   - Search
-  - Graph
   - Settings
 - Sidebar + folders/tags appear as a slide-over sheet (from left)
 - Right panel content becomes a segmented control inside a slide-over (from right)
@@ -46,16 +45,15 @@ Rules:
 - If FS Access not supported: hide option 1, show an info note “Your browser doesn’t support folder storage.”
 - After selection: create default Project “Personal”.
 
-## 3) Left Sidebar (Projects + Folders + Tags)
+## 3) Left Sidebar (Folders + Tags)
 
 Structure (top to bottom):
 
-1. Project switcher (44px row)
-2. Quick actions row (icon buttons): New Note, Cmd Palette hint, Search
-3. Views row (text buttons): Notes, Graph
-4. Folder tree (scrollable)
-5. Tags list (collapsible section)
-6. Footer (sync/status + settings icon)
+1. Quick actions row (icon buttons): New Note, Cmd Palette hint, Search
+2. Views row (text buttons): Notes
+3. Folder tree (scrollable)
+4. Tags list (collapsible section)
+5. Footer (sync/status + settings icon)
 
 Folder tree:
 
@@ -78,7 +76,7 @@ Header (44px):
 
 - Breadcrumb: Project / Folder
 - Sort dropdown (Updated, Created, Title)
-- Filter chips (Tag / Favorites / Template / Trash)
+- Filter chips (Tag / Favorites / Trash)
 
 Search-in-list field:
 
@@ -135,7 +133,7 @@ Editor header (inside editor, top):
 - Title field (single line, autosize):
   - 22px font, weight 500
   - Placeholder “Untitled”
-- Below title: metadata chips row (tags, folder, template badge)
+- Below title: metadata chips row (tags, folder)
 - Right side: favorite toggle + note menu
 
 Block interactions:
@@ -214,7 +212,7 @@ Backlinks:
 Metadata:
 
 - System fields:
-  - Created, Updated, Folder, Tags, Favorite, Template
+  - Created, Updated, Folder, Tags, Favorite
 - Custom fields:
   - Key-value pairs (string, number, date, boolean)
   - Add field button Rules:
@@ -230,11 +228,8 @@ Modal:
 - List of actions/results
 - Group headings: Notes, Actions, Settings Actions (minimum):
 - New note
-- Switch project
 - Search everywhere
 - Toggle split view
-- Open graph
-- Open templates
 - Go to Trash
 - Toggle right panel: Outline/Backlinks/Metadata
 
@@ -249,7 +244,7 @@ Keyboard:
 - Trigger: Cmd/Ctrl+Shift+F or Search icon
 - Same modal styling as command palette Features:
 - Full-text + fuzzy
-- Filters: project, folder, tag, favorites, created/updated range
+- Filters: folder, tag, favorites, created/updated range
 - Results show:
   - Note title
   - matched snippet
@@ -257,30 +252,11 @@ Keyboard:
 
 ## 10) Graph view
 
-- Accessible from:
-  - Left sidebar item “Graph”
-  - Command palette
-- Modes:
-  - Project graph
-  - Current note neighborhood (depth 1–3)
-- Visual rules:
-  - Nodes: circles, base color muted; current note in --accent-0
-  - Hover shows tooltip with title + tags
-  - Click node opens note in a new tab (same pane) Controls:
-- Search node input
-- Depth slider (1–3)
-- Filter tags dropdown
-- “Recenter” button
+Removed.
 
 ## 11) Templates
 
-Templates manager view:
-
-- List of templates (left)
-- Preview/editor (right) Apply template:
-- On “New note” choose:
-  - Blank
-  - From template (last used pinned) Templates are notes with type=template; stored separately and searchable.
+Removed.
 
 ## 12) Trash
 
