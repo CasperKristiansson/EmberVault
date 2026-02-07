@@ -131,8 +131,22 @@
       >
         {isExpanded ? "v" : ">"}
       </button>
-    {:else}
-      <span class="folder-chevron spacer" aria-hidden="true"></span>
+    {/if}
+
+    {#if !isEditing}
+      <svg
+        class="folder-icon"
+        data-testid="folder-icon"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.91 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+      </svg>
     {/if}
 
     {#if isEditing}
@@ -245,7 +259,6 @@
   }
 
   .folder-chevron:hover {
-    background: var(--bg-3);
     color: var(--text-0);
   }
 
@@ -254,8 +267,19 @@
     outline-offset: 2px;
   }
 
-  .folder-chevron.spacer {
-    display: inline-block;
+  .folder-icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    color: var(--text-1);
+  }
+
+  .folder-row:hover .folder-icon {
+    color: var(--text-0);
+  }
+
+  .folder-row.active .folder-icon {
+    color: var(--text-0);
   }
 
   .folder-label {

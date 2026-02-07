@@ -118,6 +118,16 @@ Button heights:
 - Icon: --text-1 (hover -> --text-0)
 - No border
 
+### Ghost text button
+
+- Height: 32px
+- Background: transparent
+- Border: none
+- Radius: --r-sm
+- Text: --text-1 (hover -> --text-0)
+- Hover: background --bg-3
+- Focus: 2px ring using --focus-ring
+
 ## 7) Inputs (exact styles)
 
 - Height: 32px

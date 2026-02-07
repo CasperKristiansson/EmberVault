@@ -51,12 +51,18 @@ Structure (top to bottom):
 
 1. Quick actions row (icon buttons): New Note, Cmd Palette hint, Search
 2. Views row (text buttons): Notes
+   - Clicking “Notes” clears folder selection and shows “All notes”
 3. Folder tree (scrollable)
 4. Tags list (collapsible section)
 5. Footer (sync/status + settings icon)
 
 Folder tree:
 
+- Always show a button above the folder tree: “Trash”
+  - Opens a Trash modal listing all trashed notes
+- Always show a button above the folder tree: “Add new folder”
+  - Creates a root-level folder and immediately enters rename
+- Each folder row shows a 16px folder icon next to the label
 - Chevron expanders at 16px
 - Drag & drop:
   - Drop indicator line (2px) in --accent-0
@@ -76,7 +82,7 @@ Header (44px):
 
 - Breadcrumb: Project / Folder
 - Sort dropdown (Updated, Created, Title)
-- Filter chips (Tag / Favorites / Trash)
+- Filter chips (Tag / Favorites)
 
 Search-in-list field:
 
@@ -230,7 +236,7 @@ Modal:
 - New note
 - Search everywhere
 - Toggle split view
-- Go to Trash
+- Go to Trash (opens Trash modal)
 - Toggle right panel: Outline/Backlinks/Metadata
 
 Keyboard:
@@ -260,7 +266,7 @@ Removed.
 
 ## 12) Trash
 
-- Trash is a view (filter) in note list
+- Trash is a modal (opened from the sidebar Trash button or command palette)
 - Actions:
   - Restore
   - Delete permanently (confirm dialog) Retention:

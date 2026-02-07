@@ -5,8 +5,8 @@ test("drags notes to folders and persists order", async ({ page }) => {
   const movedTitle = "Move Me";
   const rootTitle = "Stay Root";
   const reorderTitle = "Second In Folder";
-  const treeMenuOffset = 8;
   const pollTimeoutMs = 10_000;
+  const persistDelayMs = 250;
   const twoNotes = 2;
   const firstIndex = 0;
   const secondIndex = 1;
@@ -22,16 +22,7 @@ test("drags notes to folders and persists order", async ({ page }) => {
 
   const tree = page.getByTestId("folder-tree");
   const createFolder = async (name: string): Promise<void> => {
-    const treeBounds = await tree.boundingBox();
-    if (!treeBounds) {
-      throw new Error("Folder tree not available");
-    }
-    await page.mouse.click(
-      treeBounds.x + treeMenuOffset,
-      treeBounds.y + treeBounds.height - treeMenuOffset,
-      { button: "right" }
-    );
-    await page.getByTestId("folder-menu-new").click();
+    await page.getByTestId("folder-add").click();
     const input = page.getByTestId("folder-rename-input");
     await input.fill(name);
     await input.press("Enter");
@@ -90,11 +81,7 @@ test("drags notes to folders and persists order", async ({ page }) => {
     hasText: folderName,
   });
 
-  await draggedRow.dispatchEvent("dragstart");
-  await expect(draggedRow).toHaveAttribute("data-dragging", "true");
-  await folderRow.dispatchEvent("dragover");
-  await folderRow.dispatchEvent("drop");
-  await draggedRow.dispatchEvent("dragend");
+  await draggedRow.dragTo(folderRow);
 
   await folderRow.click();
   const noteList = page.getByTestId("note-list");
@@ -117,15 +104,13 @@ test("drags notes to folders and persists order", async ({ page }) => {
   const draggedReorder = page.getByTestId(`note-row-${draggedId}`);
   const dropTarget = page.getByTestId(`note-row-${dropTargetId}`);
 
-  await draggedReorder.dispatchEvent("dragstart");
-  await expect(draggedReorder).toHaveAttribute("data-dragging", "true");
-  await dropTarget.dispatchEvent("dragover");
-  await dropTarget.dispatchEvent("drop");
-  await draggedReorder.dispatchEvent("dragend");
+  await draggedReorder.dragTo(dropTarget);
 
   const orderAfter = await readNoteOrder();
   expect(orderAfter[firstIndex]).toBe(draggedId);
 
+  // Reordering persists via async project writes; give it a moment before reload.
+  await page.waitForTimeout(persistDelayMs);
   await page.reload();
   await folderRow.click();
   const persistedOrder = await readNoteOrder();

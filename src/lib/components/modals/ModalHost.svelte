@@ -3,6 +3,7 @@
   import ConfirmDialog from "$lib/components/modals/ConfirmDialog.svelte";
   import type CommandPaletteModalType from "$lib/components/modals/CommandPaletteModal.svelte";
   import type GlobalSearchModalType from "$lib/components/modals/GlobalSearchModal.svelte";
+  import type TrashModalType from "$lib/components/modals/TrashModal.svelte";
   import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
   import type { SearchIndexState } from "$lib/state/search.store";
   import { activeModal, closeTopModal, modalStackStore } from "$lib/state/ui.store";
@@ -10,8 +11,12 @@
   export let project: Project | null = null;
   export let searchState: SearchIndexState | null = null;
   export let notes: NoteIndexEntry[] = [];
+  export let trashedNotes: NoteIndexEntry[] = [];
   export let activeNoteId: string | null = null;
   export let onOpenNote: (noteId: string) => void | Promise<void> = async () => {};
+  export let onRestoreTrashedNote: (noteId: string) => void | Promise<void> =
+    async () => {};
+  export let onDeleteTrashedNotePermanent: (noteId: string) => void = () => {};
   export let onCreateNote: (() => void | Promise<void>) | null = null;
   export let onOpenGlobalSearch: (() => void | Promise<void>) | null = null;
   export let onToggleSplitView: (() => void | Promise<void>) | null = null;
@@ -23,6 +28,7 @@
 
   let CommandPaletteModalComponent: typeof CommandPaletteModalType | null = null;
   let GlobalSearchModalComponent: typeof GlobalSearchModalType | null = null;
+  let TrashModalComponent: typeof TrashModalType | null = null;
 
   const ensureCommandPaletteLoaded = async (): Promise<void> => {
     if (CommandPaletteModalComponent) {
@@ -38,6 +44,14 @@
     }
     const module = await import("$lib/components/modals/GlobalSearchModal.svelte");
     GlobalSearchModalComponent = module.default;
+  };
+
+  const ensureTrashLoaded = async (): Promise<void> => {
+    if (TrashModalComponent) {
+      return;
+    }
+    const module = await import("$lib/components/modals/TrashModal.svelte");
+    TrashModalComponent = module.default;
   };
 
   type ConfirmDialogData = {
@@ -142,6 +156,10 @@
   $: if ($activeModal?.type === "command-palette") {
     void ensureCommandPaletteLoaded();
   }
+
+  $: if ($activeModal?.type === "trash") {
+    void ensureTrashLoaded();
+  }
 </script>
 
 {#if $activeModal?.type === "global-search"}
@@ -168,6 +186,19 @@
       {onGoToTrash}
       {onToggleRightPanel}
       {onOpenSettings}
+    />
+  {/if}
+{:else if $activeModal?.type === "trash"}
+  {#if TrashModalComponent}
+    <svelte:component
+      this={TrashModalComponent}
+      {project}
+      {trashedNotes}
+      {activeNoteId}
+      onClose={handleClose}
+      onOpenNote={onOpenNote}
+      onRestore={onRestoreTrashedNote}
+      onDeletePermanent={onDeleteTrashedNotePermanent}
     />
   {/if}
 {:else if $activeModal?.type === "confirm"}

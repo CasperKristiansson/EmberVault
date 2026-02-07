@@ -23,9 +23,12 @@ test("trash restores and deletes notes permanently", async ({ page }) => {
   await page.getByTestId("note-delete").click();
   await expect(noteList.getByText(deleteTitle)).toHaveCount(emptyCount);
 
-  await page.getByTestId("filter-trash").click();
+  await page.getByTestId("open-trash").click();
 
-  const trashList = page.getByTestId("note-list");
+  const trashModal = page.getByTestId("trash-modal");
+  await expect(trashModal).toBeVisible();
+
+  const trashList = trashModal.getByTestId("trash-list");
   const restoreRow = trashList
     .getByTestId("trash-row")
     .filter({ hasText: restoreTitle });
@@ -48,6 +51,6 @@ test("trash restores and deletes notes permanently", async ({ page }) => {
 
   await expect(trashList.getByText(deleteTitle)).toHaveCount(emptyCount);
 
-  await page.getByTestId("filter-trash").click();
-  await expect(page.getByText(restoreTitle)).toBeVisible();
+  await trashModal.getByTestId("trash-close").click();
+  await expect(noteList.getByText(restoreTitle, { exact: true })).toBeVisible();
 });

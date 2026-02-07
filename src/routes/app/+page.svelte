@@ -10,7 +10,6 @@
   import ModalHost from "$lib/components/modals/ModalHost.svelte";
   import TiptapEditor from "$lib/components/editor/TiptapEditor.svelte";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
-  import TrashNoteRow from "$lib/components/notes/TrashNoteRow.svelte";
   import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
   import { createEmptyDocument } from "$lib/core/editor/tiptap-config";
   import {
@@ -54,6 +53,7 @@
     resolveMobileView,
     type MobileView,
   } from "$lib/core/utils/mobile-view";
+  import { openAllNotesView as openAllNotesViewFilters } from "$lib/core/utils/notes-view";
   import {
     adapter as adapterStore,
     initAdapter,
@@ -146,7 +146,6 @@
   let workspaceMode: "notes" = "notes";
   let activeFolderId: string | null = null;
   let favoritesOnly = false;
-  let trashOnly = false;
   let searchState: SearchIndexState | null = null;
   let wikiLinkCandidates: WikiLinkCandidate[] = [];
   let rightPanelTab: RightPanelTab = "outline";
@@ -553,31 +552,24 @@
 
   const openNotesView = (): void => {
     workspaceMode = "notes";
+    mobileView = "notes";
+  };
+
+  const openAllNotesView = (): void => {
+    openNotesView();
+    ({ activeFolderId, favoritesOnly } = openAllNotesViewFilters({
+      activeFolderId,
+      favoritesOnly,
+    }));
   };
 
   const toggleFavoritesFilter = (): void => {
     const next = !favoritesOnly;
     favoritesOnly = next;
-    if (next) {
-      trashOnly = false;
-    }
-  };
-
-  const toggleTrashFilter = (): void => {
-    const next = !trashOnly;
-    trashOnly = next;
-    if (next) {
-      favoritesOnly = false;
-      activeFolderId = null;
-    }
   };
 
   const openTrashView = (): void => {
-    openNotesView();
-    mobileView = "notes";
-    trashOnly = true;
-    favoritesOnly = false;
-    activeFolderId = null;
+    openModal("trash");
   };
 
   const handleRightPanelTabSelect = (tab: RightPanelTab): void => {
@@ -669,20 +661,12 @@
   $: trashedNotes = sortTrashNotes(
     notes.filter((note) => note.deletedAt !== null)
   );
-  $: filteredNotes = trashOnly
-    ? trashedNotes
-    : filterNotesByFavorites(displayNotes, favoritesOnly);
+  $: filteredNotes = filterNotesByFavorites(displayNotes, favoritesOnly);
   $: noteListTitle = project
-    ? trashOnly
-      ? `${project.name} / Trash`
-      : `${project.name} / ${activeFolderName ?? "All notes"}`
+    ? `${project.name} / ${activeFolderName ?? "All notes"}`
     : "Notes";
   $: noteListCount = filteredNotes.length;
-  $: noteListEmptyMessage = trashOnly
-    ? "Trash is empty."
-    : favoritesOnly
-      ? "No favorites yet."
-      : "No notes yet.";
+  $: noteListEmptyMessage = favoritesOnly ? "No favorites yet." : "No notes yet.";
   $: {
     const targetId = activeNote?.id ?? "";
     const targetTitle = activeNote?.title ?? "";
@@ -1717,7 +1701,7 @@
   };
 
   const createNote = async (): Promise<void> => {
-    trashOnly = false;
+    favoritesOnly = false;
     await flushPendingSave();
     openNotesView();
     const note = createNoteDocument();
@@ -1891,7 +1875,6 @@
   };
 
   const selectFolder = (folderId: string): void => {
-    trashOnly = false;
     activeFolderId = folderId;
   };
 
@@ -2087,7 +2070,7 @@
         aria-pressed={workspaceMode === "notes"}
         data-active={workspaceMode === "notes"}
         data-testid="sidebar-view-notes"
-        on:click={openNotesView}
+        on:click={openAllNotesView}
       >
         Notes
       </button>
@@ -2101,6 +2084,7 @@
       onCreate={createFolder}
       onRename={renameFolder}
       onDelete={deleteFolder}
+      onOpenTrash={openTrashView}
       onNoteDrop={handleFolderNoteDrop}
     />
   </div>
@@ -2154,15 +2138,6 @@
       >
         Favorites
       </button>
-      <button
-        class={`filter-chip${trashOnly ? " active" : ""}`}
-        type="button"
-        aria-pressed={trashOnly}
-        data-testid="filter-trash"
-        on:click={toggleTrashFilter}
-      >
-        Trash
-      </button>
     </div>
 
     {#if isLoading}
@@ -2170,13 +2145,12 @@
     {:else if filteredNotes.length === 0}
       <div class="note-list-empty">
         <div>{noteListEmptyMessage}</div>
-        {#if favoritesOnly || trashOnly}
+        {#if favoritesOnly}
           <button
             class="button secondary"
             type="button"
             on:click={() => {
               favoritesOnly = false;
-              trashOnly = false;
             }}
           >
             Clear filters
@@ -2184,39 +2158,19 @@
         {/if}
       </div>
     {:else}
-      {#if trashOnly}
-        <NoteListVirtualized
-          notes={filteredNotes}
-          activeNoteId={activeTabId}
-          onSelect={noteId => void activateTab(noteId)}
-          draggable={false}
-        >
-          <svelte:fragment slot="row" let:note let:active let:motionEnabled>
-            <TrashNoteRow
-              note={note as NoteIndexEntry}
-              {active}
-              {motionEnabled}
-              onSelect={noteId => void activateTab(noteId)}
-              onRestore={noteId => void restoreTrashedNote(noteId)}
-              onDeletePermanent={openPermanentDeleteConfirm}
-            />
-          </svelte:fragment>
-        </NoteListVirtualized>
-      {:else}
-        <NoteListVirtualized
-          notes={filteredNotes}
-          activeNoteId={activeTabId}
-          onSelect={noteId => void activateTab(noteId)}
-          onToggleFavorite={handleFavoriteToggle}
-          draggable={true}
-          draggingNoteId={draggingNoteId}
-          dropTargetNoteId={dropTargetNoteId}
-          onDragStart={handleNoteDragStart}
-          onDragOver={handleNoteDragOver}
-          onDrop={handleNoteDrop}
-          onDragEnd={handleNoteDragEnd}
-        />
-      {/if}
+      <NoteListVirtualized
+        notes={filteredNotes}
+        activeNoteId={activeTabId}
+        onSelect={noteId => void activateTab(noteId)}
+        onToggleFavorite={handleFavoriteToggle}
+        draggable={true}
+        draggingNoteId={draggingNoteId}
+        dropTargetNoteId={dropTargetNoteId}
+        onDragStart={handleNoteDragStart}
+        onDragOver={handleNoteDragOver}
+        onDrop={handleNoteDrop}
+        onDragEnd={handleNoteDragEnd}
+      />
     {/if}
   </div>
 
@@ -2554,9 +2508,12 @@
     slot="modal"
     {project}
     notes={notes}
+    trashedNotes={trashedNotes}
     activeNoteId={activeTabId}
     {searchState}
     onOpenNote={activateTab}
+    onRestoreTrashedNote={restoreTrashedNote}
+    onDeleteTrashedNotePermanent={openPermanentDeleteConfirm}
     onCreateNote={createNote}
     onOpenGlobalSearch={openGlobalSearch}
     onToggleSplitView={toggleSplitView}

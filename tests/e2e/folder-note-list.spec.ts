@@ -2,7 +2,6 @@ import { expect, test } from "@playwright/test";
 
 test("creates notes in folders and filters the list", async ({ page }) => {
   const emptyCount = 0;
-  const treeMenuOffset = 8;
   const workNoteTitle = "Work Note";
   const personalNoteTitle = "Personal Note";
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -15,16 +14,7 @@ test("creates notes in folders and filters the list", async ({ page }) => {
   const tree = page.getByTestId("folder-tree");
 
   const createFolder = async (name: string): Promise<void> => {
-    const treeBounds = await tree.boundingBox();
-    if (!treeBounds) {
-      throw new Error("Folder tree not available");
-    }
-    await page.mouse.click(
-      treeBounds.x + treeMenuOffset,
-      treeBounds.y + treeBounds.height - treeMenuOffset,
-      { button: "right" }
-    );
-    await page.getByTestId("folder-menu-new").click();
+    await page.getByTestId("folder-add").click();
     const input = page.getByTestId("folder-rename-input");
     await input.fill(name);
     await input.press("Enter");
@@ -57,4 +47,12 @@ test("creates notes in folders and filters the list", async ({ page }) => {
   await expect(
     noteList.getByText(personalNoteTitle, { exact: true })
   ).toHaveCount(emptyCount);
+
+  await page.getByTestId("sidebar-view-notes").click();
+  await expect(
+    noteList.getByText(workNoteTitle, { exact: true })
+  ).toBeVisible();
+  await expect(
+    noteList.getByText(personalNoteTitle, { exact: true })
+  ).toBeVisible();
 });

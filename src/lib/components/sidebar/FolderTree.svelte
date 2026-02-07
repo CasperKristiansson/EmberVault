@@ -20,6 +20,7 @@
   export let onRename: (folderId: string, name: string) => Promise<void> =
     async () => {};
   export let onDelete: (folderId: string) => Promise<void> = async () => {};
+  export let onOpenTrash: (() => void | Promise<void>) | null = null;
   export let draggingNoteId: string | null = null;
   export let onNoteDrop: (noteId: string, folderId: string) => void | Promise<void> =
     async () => {};
@@ -142,36 +143,54 @@
   });
 </script>
 
-<div
-  class="folder-tree"
-  data-testid="folder-tree"
-  role="tree"
-  tabindex="0"
-  on:contextmenu|preventDefault={event => openMenu(null, event)}
->
-  {#if rootFolderIds.length === 0}
-    <div class="folder-empty" data-testid="folder-empty">
-      No folders yet. Right-click to add one.
-    </div>
-  {:else}
-    {#each rootFolderIds as folderId (folderId)}
-      <FolderTreeNode
-        {folderId}
-        {folders}
-        {expandedIds}
-        {activeFolderId}
-        {editingFolderId}
-        bind:draftName={draftName}
-        {draggingNoteId}
-        {onNoteDrop}
-        onToggle={toggleFolder}
-        onContextMenu={openMenu}
-        onCommitRename={commitRename}
-        onCancelRename={cancelRename}
-        onSelect={onSelect}
-      />
-    {/each}
-  {/if}
+<div class="folder-tree">
+  <button
+    class="folder-add"
+    type="button"
+    data-testid="open-trash"
+    on:click={() => void onOpenTrash?.()}
+  >
+    Trash
+  </button>
+
+  <button
+    class="folder-add"
+    type="button"
+    data-testid="folder-add"
+    on:click={() => void handleCreate(null)}
+  >
+    Add new folder
+  </button>
+
+  <div
+    class="folder-tree-scroll"
+    data-testid="folder-tree"
+    role="tree"
+    tabindex="0"
+    on:contextmenu|preventDefault={event => openMenu(null, event)}
+  >
+    {#if rootFolderIds.length === 0}
+      <div class="folder-empty" data-testid="folder-empty">No folders yet.</div>
+    {:else}
+      {#each rootFolderIds as folderId (folderId)}
+        <FolderTreeNode
+          {folderId}
+          {folders}
+          {expandedIds}
+          {activeFolderId}
+          {editingFolderId}
+          bind:draftName={draftName}
+          {draggingNoteId}
+          {onNoteDrop}
+          onToggle={toggleFolder}
+          onContextMenu={openMenu}
+          onCommitRename={commitRename}
+          onCancelRename={cancelRename}
+          onSelect={onSelect}
+        />
+      {/each}
+    {/if}
+  </div>
 </div>
 
 {#if menuOpen}
@@ -217,11 +236,38 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-height: 0;
+  }
+
+  .folder-add {
+    height: 32px;
+    padding: 0 8px;
+    border-radius: var(--r-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-1);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .folder-add:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
+  .folder-add:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .folder-tree-scroll {
+    flex: 1;
     overflow: auto;
     padding-right: 4px;
   }
 
-  .folder-tree:focus-visible {
+  .folder-tree-scroll:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
