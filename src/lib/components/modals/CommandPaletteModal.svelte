@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { motion } from "@motionone/svelte";
+  import { X } from "lucide-svelte";
   import type { NoteIndexEntry } from "$lib/core/storage/types";
   import { prefersReducedMotion } from "$lib/state/motion.store";
 
@@ -283,19 +284,7 @@
         aria-label="Close command palette"
         on:click={onClose}
       >
-        <svg
-          class="icon"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
+        <X aria-hidden="true" size={16} />
       </button>
     </header>
 
@@ -425,9 +414,8 @@
     outline-offset: 2px;
   }
 
-  .icon {
-    width: 16px;
-    height: 16px;
+  .icon-button :global(svg) {
+    display: block;
   }
 
   .palette-input-row {

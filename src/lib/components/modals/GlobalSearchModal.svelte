@@ -2,6 +2,7 @@
   import { onDestroy, onMount, tick } from "svelte";
   import { SvelteDate } from "svelte/reactivity";
   import { motion } from "@motionone/svelte";
+  import { X } from "lucide-svelte";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import SearchResultRow from "$lib/components/search/SearchResultRow.svelte";
   import { createDebouncedTask } from "$lib/core/utils/debounce";
@@ -263,19 +264,7 @@
         aria-label="Close search"
         on:click={onClose}
       >
-        <svg
-          class="icon"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
+        <X aria-hidden="true" size={16} />
       </button>
     </header>
 
@@ -516,9 +505,8 @@
     outline-offset: 2px;
   }
 
-  .icon {
-    width: 16px;
-    height: 16px;
+  .icon-button :global(svg) {
+    display: block;
   }
 
   .search-input-row {

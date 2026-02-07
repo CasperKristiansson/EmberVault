@@ -2,6 +2,7 @@
   import { afterUpdate } from "svelte";
   import { motion } from "@motionone/svelte";
   import { prefersReducedMotion } from "$lib/state/motion.store";
+  import { ChevronDown, ChevronRight, Folder } from "lucide-svelte";
   import type { FolderTree } from "$lib/core/storage/types";
   import type { SvelteSet } from "svelte/reactivity";
   import { getChildFolderIds } from "$lib/core/utils/folder-tree";
@@ -129,24 +130,18 @@
         aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
         on:click={() => onToggle(folderId)}
       >
-        {isExpanded ? "v" : ">"}
+        {#if isExpanded}
+          <ChevronDown aria-hidden="true" size={14} />
+        {:else}
+          <ChevronRight aria-hidden="true" size={14} />
+        {/if}
       </button>
     {/if}
 
     {#if !isEditing}
-      <svg
-        class="folder-icon"
-        data-testid="folder-icon"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.91 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-      </svg>
+      <span class="folder-icon" data-testid="folder-icon" aria-hidden="true">
+        <Folder aria-hidden="true" size={16} />
+      </span>
     {/if}
 
     {#if isEditing}
@@ -260,6 +255,10 @@
 
   .folder-chevron:hover {
     color: var(--text-0);
+  }
+
+  .folder-chevron :global(svg) {
+    display: block;
   }
 
   .folder-chevron:focus-visible {

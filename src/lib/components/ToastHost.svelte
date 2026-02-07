@@ -1,6 +1,7 @@
 <script lang="ts">
   import { motion } from "@motionone/svelte";
   import { prefersReducedMotion } from "$lib/state/motion.store";
+  import { X } from "lucide-svelte";
   import { dismissToast, toastStore } from "$lib/state/ui.store";
 </script>
 
@@ -29,19 +30,7 @@
         aria-label="Dismiss notification"
         on:click={() => dismissToast(toast.id)}
       >
-        <svg
-          class="icon"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M18 6 6 18" />
-          <path d="m6 6 12 12" />
-        </svg>
+        <X aria-hidden="true" size={14} />
       </button>
     </div>
   {/each}
@@ -114,9 +103,10 @@
     outline-offset: 2px;
   }
 
-  .toast-dismiss .icon {
+  .toast-dismiss :global(svg) {
     width: 14px;
     height: 14px;
+    display: block;
   }
 
   @media (max-width: 767px) {

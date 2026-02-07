@@ -1,6 +1,7 @@
 <script lang="ts">
   import { motion } from "@motionone/svelte";
   import { prefersReducedMotion } from "$lib/state/motion.store";
+  import { RotateCcw, Trash2 } from "lucide-svelte";
   import type { NoteIndexEntry } from "$lib/core/storage/types";
 
   export let note: NoteIndexEntry;
@@ -63,19 +64,7 @@
       data-testid="trash-restore"
       on:click={handleRestoreClick}
     >
-      <svg
-        class="note-row-action-icon"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M3 2v6h6" />
-        <path d="M3 8a9 9 0 1 0 3-6.7" />
-      </svg>
+      <RotateCcw aria-hidden="true" size={14} />
     </button>
     <button
       class="note-row-action danger"
@@ -84,21 +73,7 @@
       data-testid="trash-delete"
       on:click={handleDeleteClick}
     >
-      <svg
-        class="note-row-action-icon"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M3 6h18" />
-        <path d="M8 6v12" />
-        <path d="M16 6v12" />
-        <path d="M10 6V4h4v2" />
-      </svg>
+      <Trash2 aria-hidden="true" size={14} />
     </button>
   </div>
 </div>
@@ -205,9 +180,10 @@
     color: var(--danger);
   }
 
-  .note-row-action-icon {
+  .note-row-action :global(svg) {
     width: 14px;
     height: 14px;
+    display: block;
   }
 
   @media (max-width: 767px) {

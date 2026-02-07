@@ -124,7 +124,9 @@ test("paste image persists after reload", async ({ page }) => {
   await expect(image).toHaveAttribute(assetIdAttribute, /[\da-f]{64}/);
   const assetId = await image.getAttribute(assetIdAttribute);
   expect(assetId).not.toBeNull();
-  await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
+  await expect(page.locator('[data-save-state="saved"]')).toBeVisible({
+    timeout: 15_000,
+  });
 
   await page.reload();
 

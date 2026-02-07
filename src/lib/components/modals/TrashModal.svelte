@@ -1,6 +1,7 @@
 <script lang="ts">
   import { motion } from "@motionone/svelte";
   import { prefersReducedMotion } from "$lib/state/motion.store";
+  import { X } from "lucide-svelte";
   import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import TrashNoteRow from "$lib/components/notes/TrashNoteRow.svelte";
@@ -48,19 +49,7 @@
         data-testid="trash-close"
         on:click={onClose}
       >
-        <svg
-          class="icon"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M6 6 18 18" />
-          <path d="M6 18 18 6" />
-        </svg>
+        <X aria-hidden="true" size={16} />
       </button>
     </div>
 
@@ -167,9 +156,8 @@
     outline-offset: 2px;
   }
 
-  .icon {
-    width: 16px;
-    height: 16px;
+  .icon-button :global(svg) {
+    display: block;
   }
 
   .modal-empty {

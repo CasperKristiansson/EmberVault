@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { get } from "svelte/store";
+  import { Columns2, Search, Star, Trash2, X } from "lucide-svelte";
   import AppShell from "$lib/components/AppShell.svelte";
   import ToastHost from "$lib/components/ToastHost.svelte";
   import RightPanel from "$lib/components/rightpanel/RightPanel.svelte";
@@ -2010,24 +2011,12 @@
             class="tab-close"
             type="button"
             aria-label="Close tab"
-            data-testid="tab-close"
-            data-note-id={tabId}
-            draggable="false"
-            on:click|stopPropagation={() => void handleCloseTab(tabId)}
-          >
-            <svg
-              class="tab-close-icon"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M6 6 18 18" />
-              <path d="M6 18 18 6" />
-            </svg>
+          data-testid="tab-close"
+          data-note-id={tabId}
+          draggable="false"
+          on:click|stopPropagation={() => void handleCloseTab(tabId)}
+        >
+            <X aria-hidden="true" size={14} />
           </button>
         </div>
       {/each}
@@ -2041,19 +2030,7 @@
         data-testid="toggle-split"
         on:click={() => void toggleSplitView()}
       >
-        <svg
-          class="icon"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <rect x="3" y="4" width="18" height="16" rx="2" />
-          <path d="M12 4v16" />
-        </svg>
+        <Columns2 aria-hidden="true" size={16} />
       </button>
       <RightPanelTabs
         activeTab={rightPanelTab}
@@ -2103,19 +2080,7 @@
           aria-label="Open global search"
           on:click={openGlobalSearch}
         >
-          <svg
-            class="icon"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
+          <Search aria-hidden="true" size={16} />
         </button>
         <button
           class="button primary"
@@ -2224,20 +2189,7 @@
                   data-testid="note-favorite-toggle"
                   on:click={() => toggleFavoriteForPane("primary")}
                 >
-                  <svg
-                    class="icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M11.48 3.5c.2-.4.76-.4.96 0l2.2 4.46c.08.17.25.28.43.3l4.93.72c.44.06.62.61.3.92l-3.56 3.47c-.13.13-.19.31-.16.49l.84 4.9c.08.44-.39.78-.78.58l-4.41-2.32a.5.5 0 0 0-.46 0l-4.41 2.32c-.39.2-.86-.14-.78-.58l.84-4.9a.5.5 0 0 0-.16-.49L3.7 9.9c-.32-.31-.14-.86.3-.92l4.93-.72a.5.5 0 0 0 .43-.3z"
-                    />
-                  </svg>
+                  <Star aria-hidden="true" size={16} />
                 </button>
                 {#if paneStates.primary.note?.deletedAt === null}
                   <button
@@ -2247,21 +2199,7 @@
                     data-testid="note-delete"
                     on:click={() => deleteNoteFromPane("primary")}
                   >
-                    <svg
-                      class="icon"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M3 6h18" />
-                      <path d="M8 6v12" />
-                      <path d="M16 6v12" />
-                      <path d="M10 6V4h4v2" />
-                    </svg>
+                    <Trash2 aria-hidden="true" size={16} />
                   </button>
                 {/if}
               </div>
@@ -2332,20 +2270,7 @@
                   data-testid="note-favorite-toggle-secondary"
                   on:click={() => toggleFavoriteForPane("secondary")}
                 >
-                  <svg
-                    class="icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M11.48 3.5c.2-.4.76-.4.96 0l2.2 4.46c.08.17.25.28.43.3l4.93.72c.44.06.62.61.3.92l-3.56 3.47c-.13.13-.19.31-.16.49l.84 4.9c.08.44-.39.78-.78.58l-4.41-2.32a.5.5 0 0 0-.46 0l-4.41 2.32c-.39.2-.86-.14-.78-.58l.84-4.9a.5.5 0 0 0-.16-.49L3.7 9.9c-.32-.31-.14-.86.3-.92l4.93-.72a.5.5 0 0 0 .43-.3z"
-                    />
-                  </svg>
+                  <Star aria-hidden="true" size={16} />
                 </button>
                 {#if paneStates.secondary.note?.deletedAt === null}
                   <button
@@ -2355,21 +2280,7 @@
                     data-testid="note-delete-secondary"
                     on:click={() => deleteNoteFromPane("secondary")}
                   >
-                    <svg
-                      class="icon"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M3 6h18" />
-                      <path d="M8 6v12" />
-                      <path d="M16 6v12" />
-                      <path d="M10 6V4h4v2" />
-                    </svg>
+                    <Trash2 aria-hidden="true" size={16} />
                   </button>
                 {/if}
               </div>
@@ -2427,20 +2338,7 @@
                 data-testid="note-favorite-toggle"
                 on:click={() => toggleFavoriteForPane("primary")}
               >
-                <svg
-                  class="icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M11.48 3.5c.2-.4.76-.4.96 0l2.2 4.46c.08.17.25.28.43.3l4.93.72c.44.06.62.61.3.92l-3.56 3.47c-.13.13-.19.31-.16.49l.84 4.9c.08.44-.39.78-.78.58l-4.41-2.32a.5.5 0 0 0-.46 0l-4.41 2.32c-.39.2-.86-.14-.78-.58l.84-4.9a.5.5 0 0 0-.16-.49L3.7 9.9c-.32-.31-.14-.86.3-.92l4.93-.72a.5.5 0 0 0 .43-.3z"
-                  />
-                </svg>
+                <Star aria-hidden="true" size={16} />
               </button>
               {#if paneStates.primary.note?.deletedAt === null}
                 <button
@@ -2450,21 +2348,7 @@
                   data-testid="note-delete"
                   on:click={() => deleteNoteFromPane("primary")}
                 >
-                  <svg
-                    class="icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M3 6h18" />
-                    <path d="M8 6v12" />
-                    <path d="M16 6v12" />
-                    <path d="M10 6V4h4v2" />
-                  </svg>
+                  <Trash2 aria-hidden="true" size={16} />
                 </button>
               {/if}
             </div>
@@ -2663,7 +2547,7 @@
     outline-offset: 2px;
   }
 
-  .tab-close-icon {
+  .tab-close :global(svg) {
     width: 14px;
     height: 14px;
     display: block;
@@ -2694,6 +2578,12 @@
     color: var(--text-0);
   }
 
+  .icon-button :global(svg) {
+    width: 16px;
+    height: 16px;
+    display: block;
+  }
+
   .icon-button[aria-pressed="true"] {
     background: var(--bg-2);
     color: var(--text-0);
@@ -2702,12 +2592,6 @@
   .icon-button:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
-  }
-
-  .icon {
-    width: 16px;
-    height: 16px;
-    display: block;
   }
 
   .sidebar-content {
@@ -2871,7 +2755,7 @@
     color: var(--accent-0);
   }
 
-  .editor-favorite[data-active="true"] .icon {
+  .editor-favorite[data-active="true"] :global(svg) {
     fill: currentColor;
   }
 
