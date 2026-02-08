@@ -11,14 +11,21 @@ test("trash restores and deletes notes permanently", async ({ page }) => {
   await page.waitForURL(/\/app\/?$/);
 
   await page.getByTestId("new-note").click();
-  await page.getByTestId("note-title").fill(restoreTitle);
+  const bodyEditor = page.getByTestId("note-body");
+  await bodyEditor.click();
+  await expect(bodyEditor).toBeFocused();
+  await page.keyboard.type(restoreTitle);
+  await page.keyboard.press("Enter");
   const noteList = page.getByTestId("note-list");
   await expect(noteList.getByText(restoreTitle)).toBeVisible();
   await page.getByTestId("note-delete").click();
   await expect(noteList.getByText(restoreTitle)).toHaveCount(emptyCount);
 
   await page.getByTestId("new-note").click();
-  await page.getByTestId("note-title").fill(deleteTitle);
+  await bodyEditor.click();
+  await expect(bodyEditor).toBeFocused();
+  await page.keyboard.type(deleteTitle);
+  await page.keyboard.press("Enter");
   await expect(noteList.getByText(deleteTitle)).toBeVisible();
   await page.getByTestId("note-delete").click();
   await expect(noteList.getByText(deleteTitle)).toHaveCount(emptyCount);

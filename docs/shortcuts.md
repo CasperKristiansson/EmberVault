@@ -20,11 +20,11 @@ Mac uses Cmd, Windows/Linux uses Ctrl.
 - Cmd/Ctrl+B: Toggle backlinks panel (if right panel)
 - Cmd/Ctrl+O: Toggle outline panel
 
-## Tabs / Split
+## Tabs / Panes
 
 - Cmd/Ctrl+T: New tab (opens note switcher)
 - Cmd/Ctrl+W: Close tab
-- Cmd/Ctrl+Shift+\: Toggle split view
+- Drag tabs (or notes) onto pane edges to create more panes
 - Ctrl+Tab / Ctrl+Shift+Tab: Next/prev tab (also on mac)
 
 ## Editor

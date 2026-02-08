@@ -21,7 +21,7 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
 - Favorites (pinned notes)
 - Metadata panel (system fields + custom fields)
 - Backlinks
-- Tabs + Split view
+- Tabs + Pane docking
 - Drag & drop (folders, notes, tabs)
 - Search: full-text + filters + fuzzy
 - Command palette (Cmd/Ctrl+K)
@@ -105,7 +105,7 @@ See `storage.md` for canonical on-disk structure and fallback rules.
 - Tag
 - Template (reserved; not user-facing)
 - Asset (image blob + metadata)
-- UI State (tabs, splits, last opened, sidebar widths)
+- UI State (tabs, pane layout, last opened, sidebar widths)
 
 ### 3.2 Project structure
 
@@ -121,7 +121,7 @@ See `storage.md` for canonical on-disk structure and fallback rules.
 - Main workspace:
   - Sidebar (folder tree)
   - Note list pane
-  - Editor pane (tabs + split view)
+  - Editor pane (tabs + pane docking)
   - Right panel (toggleable): Outline / Backlinks / Metadata
 - Command palette
 - Global search modal

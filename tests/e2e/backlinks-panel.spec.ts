@@ -10,7 +10,11 @@ test("backlinks panel shows linked mentions", async ({ page }) => {
 
   const createNote = async (title: string): Promise<void> => {
     await page.getByTestId("new-note").click();
-    await page.getByTestId("note-title").fill(title);
+    const bodyEditor = page.getByTestId("note-body");
+    await bodyEditor.click();
+    await expect(bodyEditor).toBeFocused();
+    await page.keyboard.type(title);
+    await page.keyboard.press("Enter");
   };
 
   await createNote(targetTitle);
@@ -41,7 +45,7 @@ test("backlinks panel shows linked mentions", async ({ page }) => {
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
 
   await targetTab.click();
-  await expect(page.getByTestId("note-title")).toHaveValue(targetTitle);
+  await expect(page.getByTestId("note-body")).toContainText(targetTitle);
 
   await page.getByTestId("right-panel-tab-backlinks").click();
 

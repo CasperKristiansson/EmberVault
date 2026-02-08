@@ -10,10 +10,13 @@ test("custom metadata fields persist after reload", async ({ page }) => {
 
   await page.getByTestId("new-note").click();
 
-  const titleInput = page.getByTestId("note-title");
+  const bodyEditor = page.getByTestId("note-body");
   const metadataTab = page.getByTestId("right-panel-tab-metadata");
-  await expect(titleInput).toBeVisible();
-  await titleInput.fill(noteTitle);
+  await expect(bodyEditor).toBeVisible();
+  await bodyEditor.click();
+  await expect(bodyEditor).toBeFocused();
+  await page.keyboard.type(noteTitle);
+  await page.keyboard.press("Enter");
 
   await metadataTab.click();
   await page.getByTestId("metadata-add-field").click();
@@ -23,14 +26,14 @@ test("custom metadata fields persist after reload", async ({ page }) => {
 
   const valueInput = page.getByTestId("custom-field-value-0");
   await valueInput.fill("Focused");
-  await titleInput.click();
+  await bodyEditor.click();
 
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
 
   await page.reload();
 
-  await expect(titleInput).toBeVisible();
-  await expect(titleInput).toHaveValue(noteTitle);
+  await expect(bodyEditor).toBeVisible();
+  await expect(bodyEditor).toContainText(noteTitle);
 
   await metadataTab.click();
 

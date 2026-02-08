@@ -11,7 +11,6 @@
   export let onOpenNote: (noteId: string) => void | Promise<void> = async () => {};
   export let onCreateNote: (() => void | Promise<void>) | null = null;
   export let onOpenGlobalSearch: (() => void | Promise<void>) | null = null;
-  export let onToggleSplitView: (() => void | Promise<void>) | null = null;
   export let onGoToTrash: (() => void | Promise<void>) | null = null;
   export let onToggleRightPanel:
     | ((panel: "outline" | "backlinks" | "metadata") => void | Promise<void>)
@@ -147,16 +146,6 @@
         disabled: !onOpenGlobalSearch,
         perform: async () => {
           await onOpenGlobalSearch?.();
-        },
-      },
-      {
-        type: "action",
-        id: "toggle-split",
-        label: "Toggle split view",
-        group: "Actions",
-        disabled: !onToggleSplitView,
-        perform: async () => {
-          await onToggleSplitView?.();
         },
       },
       {

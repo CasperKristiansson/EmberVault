@@ -31,7 +31,11 @@ test("drags notes to folders and persists order", async ({ page }) => {
 
   const createNote = async (title: string): Promise<void> => {
     await page.getByTestId("new-note").click();
-    await page.getByTestId("note-title").fill(title);
+    const bodyEditor = page.getByTestId("note-body");
+    await bodyEditor.click();
+    await expect(bodyEditor).toBeFocused();
+    await page.keyboard.type(title);
+    await page.keyboard.press("Enter");
     await expect(
       page.getByTestId("note-list").getByText(title, { exact: true })
     ).toBeVisible();

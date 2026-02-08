@@ -26,14 +26,21 @@ test("creates notes in folders and filters the list", async ({ page }) => {
 
   await tree.getByText("Work", { exact: true }).click();
   await page.getByTestId("new-note").click();
-  await page.getByTestId("note-title").fill(workNoteTitle);
+  const bodyEditor = page.getByTestId("note-body");
+  await bodyEditor.click();
+  await expect(bodyEditor).toBeFocused();
+  await page.keyboard.type(workNoteTitle);
+  await page.keyboard.press("Enter");
   await expect(
     page.getByTestId("note-list").getByText(workNoteTitle, { exact: true })
   ).toBeVisible();
 
   await tree.getByText("Personal", { exact: true }).click();
   await page.getByTestId("new-note").click();
-  await page.getByTestId("note-title").fill(personalNoteTitle);
+  await bodyEditor.click();
+  await expect(bodyEditor).toBeFocused();
+  await page.keyboard.type(personalNoteTitle);
+  await page.keyboard.press("Enter");
   await expect(
     page.getByTestId("note-list").getByText(personalNoteTitle, { exact: true })
   ).toBeVisible();

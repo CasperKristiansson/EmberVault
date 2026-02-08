@@ -7,11 +7,12 @@ test("global search returns results with snippet", async ({ page }) => {
 
   await page.getByTestId("new-note").click();
 
-  const titleInput = page.getByTestId("note-title");
   const bodyEditor = page.getByTestId("note-body");
 
-  await titleInput.fill("Searchable Note");
   await bodyEditor.click();
+  await expect(bodyEditor).toBeFocused();
+  await page.keyboard.type("Searchable Note");
+  await page.keyboard.press("Enter");
   await page.keyboard.type("The quick brown fox jumps over the log.");
 
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
@@ -33,11 +34,12 @@ test("global search finds note by partial typo", async ({ page }) => {
 
   await page.getByTestId("new-note").click();
 
-  const titleInput = page.getByTestId("note-title");
   const bodyEditor = page.getByTestId("note-body");
 
-  await titleInput.fill("Project Plan");
   await bodyEditor.click();
+  await expect(bodyEditor).toBeFocused();
+  await page.keyboard.type("Project Plan");
+  await page.keyboard.press("Enter");
   await page.keyboard.type("Kickoff notes for the quarterly plan.");
 
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();

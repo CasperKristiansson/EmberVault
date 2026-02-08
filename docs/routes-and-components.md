@@ -41,7 +41,7 @@ Directory: `src/routes/`
   Files:
   - `src/routes/app/+page.svelte` Behavior:
   - Render full shell (sidebar + note list + editor + right panel)
-  - All internal navigation (folder/tag filters, note open, tabs, split) is client-state driven (no subroutes required)
+- All internal navigation (folder/tag filters, note open, tabs, panes) is client-state driven (no subroutes required)
 
 - `/app/[projectId]`  
   File:
@@ -111,14 +111,14 @@ Directory: `src/lib/components/`
 - `topbar/TopBar.svelte`
   - `TabsBar.svelte`
     - `TabItem.svelte`
-  - `TopBarActions.svelte` (split toggle, right panel toggles, etc.)
+  - `TopBarActions.svelte` (right panel toggles, etc.)
 
 ### 2.5 Editor workspace
 
 - `editor/EditorWorkspace.svelte`
   - Manages:
-    - Single vs split layout
-    - Active pane
+    - Pane docking layout (nested splits)
+    - Focused pane
     - Tab routing per pane
   - Uses:
     - `EditorPane.svelte` (one pane)
@@ -127,7 +127,7 @@ Directory: `src/lib/components/`
         - `BlockHandleGutter.svelte`
         - `SlashMenu.svelte`
       - `EditorStatusBar.svelte` (optional: word count, saved indicator)
-    - `SplitDivider.svelte` (draggable divider if implemented)
+    - (Optional) resizable split dividers (not required)
 
 ### 2.6 Right panel
 
@@ -196,15 +196,12 @@ Directory: `src/lib/state/`
 - `workspace.store.ts`
   - Selected projectId
   - Selected folderId / tagId / view filter
-  - Split state:
-    - enabled
-    - paneA activeNoteId
-    - paneB activeNoteId
-    - focusedPane (A|B)
+  - Pane layout state:
+    - `paneLayout` (tree: leaf paneId OR split row/column with children)
+    - `focusedPaneId`
   - Tabs per pane:
-    - `tabsA: noteId[]`
-    - `tabsB: noteId[]`
-    - `activeTabA`, `activeTabB`
+    - `panes[paneId].tabs: noteId[]`
+    - `panes[paneId].activeTabId`
   - Right panel:
     - open/closed
     - active tab (outline|backlinks|metadata)
@@ -213,7 +210,7 @@ Directory: `src/lib/state/`
   - Actions:
     - openNote(noteId, targetPane)
     - closeTab(noteId, pane)
-    - toggleSplit()
+    - dockNote(noteId, targetPane, side)
     - setFocusedPane()
     - etc.
 
@@ -248,7 +245,7 @@ Directory: `src/lib/state/`
 - Persist to adapter (uiState) on:
   - changes to pane widths
   - last opened project
-  - last opened notes/tabs/split state
+- last opened notes/tabs/pane layout state
   - right panel open/tab
 - Debounce uiState writes: 800ms.
 

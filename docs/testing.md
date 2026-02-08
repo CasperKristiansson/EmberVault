@@ -52,8 +52,8 @@ Links:
   - paste image -> image persists after reload
 - Search:
   - global search returns results with snippets
-- Tabs/split:
-  - open 2 notes in split, edit both, persist
+- Tabs/panes:
+  - dock notes into multiple panes (right, right, then top), reload -> pane layout persists
 - Trash:
   - delete note -> appears in trash -> restore -> returns to folder
 - Cross-browser:

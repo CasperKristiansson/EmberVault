@@ -1,0 +1,256 @@
+<script lang="ts">
+  import { Star, Trash2 } from "lucide-svelte";
+  import TiptapEditor from "$lib/components/editor/TiptapEditor.svelte";
+  import type { DockSide } from "$lib/core/utils/pane-layout";
+  import type { WikiLinkCandidate } from "$lib/core/editor/wiki-links";
+  import type { NoteDocumentFile } from "$lib/core/storage/types";
+
+  type PaneState = {
+    tabs: string[];
+    activeTabId: string | null;
+    note: NoteDocumentFile | null;
+    titleValue: string;
+    editorContent: Record<string, unknown>;
+    editorPlainText: string;
+  };
+
+  export let paneId: string;
+  export let pane: PaneState;
+  export let isLoading = false;
+  export let isActive = false;
+  export let chips: Array<{ key: string; label: string }> = [];
+  export let linkCandidates: WikiLinkCandidate[] = [];
+
+  export let dockTargetSide: DockSide | null = null;
+  export let dockTargetActive = false;
+
+  export let onSetActive: (paneId: string) => void = () => {};
+  export let onKeydown: (event: KeyboardEvent, paneId: string) => void = () => {};
+  export let onToggleFavorite: (paneId: string) => void = () => {};
+  export let onDeleteNote: (paneId: string) => void = () => {};
+  export let onEditorUpdate: (
+    paneId: string,
+    payload: { json: Record<string, unknown>; text: string }
+  ) => void = () => {};
+  export let onImagePaste: (file: File | Blob) => Promise<{
+    assetId: string;
+    src: string;
+    alt?: string;
+    mime?: string;
+    width?: number;
+    height?: number;
+  } | null> = async () => null;
+
+  export let onDockDragOver: (event: DragEvent, paneId: string) => void =
+    () => {};
+  export let onDockDrop: (
+    event: DragEvent,
+    paneId: string
+  ) => void | Promise<void> = async () => {};
+  export let onDockDragLeave: (event: DragEvent, paneId: string) => void =
+    () => {};
+</script>
+
+<div
+  class="editor-pane"
+  data-testid="editor-pane-leaf"
+  data-pane-id={paneId}
+  data-active={isActive}
+  data-dock-target={dockTargetActive ? "true" : "false"}
+  data-dock-side={dockTargetSide ?? "none"}
+  on:focusin={() => onSetActive(paneId)}
+  on:click={() => onSetActive(paneId)}
+  on:keydown={event => onKeydown(event, paneId)}
+  on:dragover={event => onDockDragOver(event, paneId)}
+  on:drop={event => onDockDrop(event, paneId)}
+  on:dragleave={event => onDockDragLeave(event, paneId)}
+  role="button"
+  tabindex="0"
+>
+  {#if dockTargetActive && dockTargetSide}
+    <div class="dock-overlay" aria-hidden="true" data-side={dockTargetSide}></div>
+  {/if}
+
+  {#if isLoading}
+    <div class="editor-empty">Preparing editor...</div>
+  {:else if !pane.note}
+    <div class="editor-empty">Select a note to start writing.</div>
+  {:else}
+    <div class="editor-actions" aria-label="Note actions">
+      <button
+        class="icon-button editor-favorite"
+        type="button"
+        aria-pressed={pane.note.favorite}
+        aria-label={pane.note.favorite ? "Remove from favorites" : "Add to favorites"}
+        data-active={pane.note.favorite ? "true" : "false"}
+        data-testid="note-favorite-toggle"
+        on:click|stopPropagation={() => onToggleFavorite(paneId)}
+      >
+        <Star aria-hidden="true" size={16} />
+      </button>
+      {#if pane.note.deletedAt === null}
+        <button
+          class="icon-button note-delete"
+          type="button"
+          aria-label="Move note to trash"
+          data-testid="note-delete"
+          on:click|stopPropagation={() => onDeleteNote(paneId)}
+        >
+          <Trash2 aria-hidden="true" size={16} />
+        </button>
+      {/if}
+    </div>
+
+    {#if chips.length > 0}
+      <div class="chips-row" aria-label="Metadata chips">
+        {#each chips as chip (chip.key)}
+          <span class="metadata-chip">{chip.label}</span>
+        {/each}
+      </div>
+    {/if}
+
+    <div class="editor-body">
+      <TiptapEditor
+        content={pane.note.pmDoc}
+        contentKey={pane.note.id}
+        ariaLabel="Note content"
+        dataTestId="note-body"
+        chrome="flat"
+        focusEmptyTitleOnClick={true}
+        linkCandidates={linkCandidates}
+        {onImagePaste}
+        onUpdate={payload => onEditorUpdate(paneId, payload)}
+      />
+    </div>
+  {/if}
+</div>
+
+<style>
+  .editor-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    position: relative;
+  }
+
+  .editor-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: inline-flex;
+    gap: 8px;
+    padding: 4px;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--bg-1) 65%, transparent);
+    border: 1px solid var(--stroke-0);
+    z-index: 1;
+  }
+
+  .icon-button {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: var(--r-md);
+    border: none;
+    background: transparent;
+    color: var(--text-1);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .icon-button:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
+  .icon-button[aria-pressed="true"] {
+    background: var(--bg-2);
+    color: var(--text-0);
+  }
+
+  .icon-button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .icon-button :global(svg) {
+    width: 16px;
+    height: 16px;
+    display: block;
+  }
+
+  .editor-favorite[data-active="true"] {
+    color: var(--accent-0);
+  }
+
+  .editor-favorite[data-active="true"] :global(svg) {
+    fill: currentColor;
+  }
+
+  .note-delete:hover {
+    color: var(--danger);
+  }
+
+  .chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .editor-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  .metadata-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-2);
+    color: var(--text-1);
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .editor-empty {
+    color: var(--text-2);
+  }
+
+  .dock-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--r-md);
+    background: rgba(255, 138, 42, 0.08);
+    outline: 2px solid rgba(255, 138, 42, 0.35);
+    pointer-events: none;
+  }
+
+  .dock-overlay[data-side="center"] {
+    background: rgba(255, 138, 42, 0.06);
+  }
+
+  .dock-overlay[data-side="left"] {
+    clip-path: inset(0 65% 0 0 round var(--r-md));
+  }
+
+  .dock-overlay[data-side="right"] {
+    clip-path: inset(0 0 0 65% round var(--r-md));
+  }
+
+  .dock-overlay[data-side="top"] {
+    clip-path: inset(0 0 65% 0 round var(--r-md));
+  }
+
+  .dock-overlay[data-side="bottom"] {
+    clip-path: inset(65% 0 0 0 round var(--r-md));
+  }
+</style>

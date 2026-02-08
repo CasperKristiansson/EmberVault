@@ -17,7 +17,17 @@ const lowlight = createLowlight(common);
 
 const emptyDocument: Record<string, unknown> = {
   type: "doc",
-  content: [],
+  content: [
+    {
+      type: "heading",
+      attrs: { level: 1 },
+      content: [],
+    },
+    {
+      type: "paragraph",
+      content: [],
+    },
+  ],
 };
 
 export const createEmptyDocument = (): Record<string, unknown> =>
@@ -47,6 +57,11 @@ export const createTiptapExtensions = (): Extensions => [
     openOnClick: false,
   }),
   Placeholder.configure({
-    placeholder: "Start writing...",
+    placeholder: ({ node }) => {
+      if (node.type.name === "heading") {
+        return "Untitled";
+      }
+      return "Start writing...";
+    },
   }),
 ];

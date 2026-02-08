@@ -60,14 +60,15 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Unit tests for fuzzy search correctness
 - [x] E2E: search finds note by partial typo
 
-## Milestone 6 — Tabs + split view + drag/drop
+## Milestone 6 — Tabs + pane docking + drag/drop
 
 - [x] Tab system in top bar (open/close/reorder)
-- [x] Split view mode with two panes
-- [x] Drag tab to other pane
+- [x] Pane docking layout (nested splits; unlimited panes)
+- [x] Drag tab/note into a pane edge to create a new pane
+- [x] Drag tab into an existing pane to move it
 - [x] Drag notes to folders + reorder within folder (persist order)
-- [x] Component tests for tab close + split toggle
-- [x] E2E: open split, edit both, reload persists
+- [x] Component tests for tab close + pane layout
+- [x] E2E: dock notes into multiple panes, reload persists
 
 ## Milestone 7 — Backlinks (Graph Removed)
 

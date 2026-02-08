@@ -2,6 +2,7 @@
   import { motion } from "@motionone/svelte";
   import { onMount } from "svelte";
   import { Editor, type JSONContent } from "@tiptap/core";
+  import { TextSelection } from "@tiptap/pm/state";
   import {
     applySlashMenuCommand,
     getSlashMenuItems,
@@ -27,9 +28,14 @@
   import WikiLinkMenu from "./WikiLinkMenu.svelte";
 
   export let content: Record<string, unknown> = createEmptyDocument();
+  // Used to decide when external content should be applied into the editor.
+  // Keep this stable during normal typing to avoid resetting the selection.
+  export let contentKey = "";
   export let editable = true;
   export let ariaLabel = "Note content";
   export let dataTestId = "note-body";
+  export let chrome: "boxed" | "flat" = "boxed";
+  export let focusEmptyTitleOnClick = false;
   export let linkCandidates: WikiLinkCandidate[] = [];
   export let onImagePaste: (file: File | Blob) => Promise<{
     assetId: string;
@@ -46,7 +52,7 @@
 
   let element: HTMLDivElement | null = null;
   let editor: Editor | null = null;
-  let lastContent: Record<string, unknown> | null = null;
+  let lastContentKey: string | null = null;
   let syntheticPasteHandler: ((event: Event) => void) | null = null;
   let imageClickHandler: ((event: MouseEvent) => void) | null = null;
 
@@ -397,6 +403,22 @@
           spellcheck: "true",
         },
         handleDOMEvents: {
+          mousedown: (view, event) => {
+            if (!focusEmptyTitleOnClick) {
+              return false;
+            }
+            const first = view.state.doc.firstChild;
+            if (first && first.textContent.trim().length > 0) {
+              return false;
+            }
+            event.preventDefault();
+            const tr = view.state.tr.setSelection(
+              TextSelection.create(view.state.doc, 1)
+            );
+            view.dispatch(tr);
+            view.focus();
+            return true;
+          },
           drop: (_view, event) => {
             const imageFile = extractImageFromDataTransfer(
               (event as DragEvent).dataTransfer
@@ -580,7 +602,7 @@
       openLightbox(image);
     };
     element.addEventListener("click", imageClickHandler);
-    lastContent = content;
+    lastContentKey = contentKey;
   };
 
   onMount(() => {
@@ -652,9 +674,9 @@
     editor.setEditable(editable);
   }
 
-  $: if (editor && content && content !== lastContent) {
+  $: if (editor && contentKey !== lastContentKey) {
     editor.commands.setContent(content as JSONContent, { emitUpdate: false });
-    lastContent = content;
+    lastContentKey = contentKey;
   }
 
   $: if (lightboxOpen && lightboxBackdrop) {
@@ -664,7 +686,7 @@
   }
 </script>
 
-<div class="editor-surface" data-testid="tiptap-surface">
+<div class="editor-surface" data-testid="tiptap-surface" data-chrome={chrome}>
   <div
     bind:this={element}
     class="editor-mount"
@@ -726,6 +748,13 @@
     padding: 8px 12px;
   }
 
+  .editor-surface[data-chrome="flat"] {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 8px 12px;
+  }
+
   .editor-surface:focus-within {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
@@ -737,6 +766,18 @@
     line-height: 1.55;
     color: var(--text-0);
     outline: none;
+  }
+
+  .editor-surface[data-chrome="flat"] :global(.ProseMirror) {
+    min-height: 100%;
+  }
+
+  .editor-surface[data-chrome="flat"] :global(.ProseMirror > :first-child) {
+    margin: 0 0 16px;
+    font-size: 28px;
+    line-height: 1.2;
+    font-weight: 500;
+    color: var(--text-0);
   }
 
   .editor-surface :global(.ProseMirror p) {
@@ -842,7 +883,7 @@
   }
 
   .editor-surface
-    :global(.ProseMirror p.is-editor-empty:first-child::before) {
+    :global(.ProseMirror .is-editor-empty:first-child::before) {
     content: attr(data-placeholder);
     color: var(--text-2);
     float: left;

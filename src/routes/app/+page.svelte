@@ -3,16 +3,21 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { get } from "svelte/store";
-  import { Columns2, Search, Star, Trash2, X } from "lucide-svelte";
+  import { Search, X } from "lucide-svelte";
   import AppShell from "$lib/components/AppShell.svelte";
   import ToastHost from "$lib/components/ToastHost.svelte";
   import RightPanel from "$lib/components/rightpanel/RightPanel.svelte";
   import RightPanelTabs from "$lib/components/rightpanel/RightPanelTabs.svelte";
   import ModalHost from "$lib/components/modals/ModalHost.svelte";
-  import TiptapEditor from "$lib/components/editor/TiptapEditor.svelte";
+  import EditorPaneLayout from "$lib/components/panes/EditorPaneLayout.svelte";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import FolderTree from "$lib/components/sidebar/FolderTree.svelte";
   import { createEmptyDocument } from "$lib/core/editor/tiptap-config";
+  import {
+    ensureTitleHeadingInPmDocument,
+    extractTitleFromPmDocument,
+    splitEditorTextIntoTitleAndBody,
+  } from "$lib/core/editor/title-line";
   import {
     buildBacklinkSnippet,
     resolveLinkedMentions,
@@ -43,7 +48,15 @@
     moveTabBetweenPanes,
     reorderTabs,
   } from "$lib/core/utils/tabs";
-  import { resolveSecondaryNoteId } from "$lib/core/utils/split-view";
+  import {
+    collectLeafPaneIds,
+    countLeaves,
+    createLeaf,
+    dockLeaf,
+    removeLeaf,
+    type DockSide,
+    type PaneLayoutNode,
+  } from "$lib/core/utils/pane-layout";
   import {
     applySearchIndexChange,
     hydrateSearchIndex,
@@ -91,7 +104,7 @@
     }
   });
 
-  type PaneId = "primary" | "secondary";
+  type PaneId = string;
 
   type PaneState = {
     tabs: string[];
@@ -122,12 +135,12 @@
   let project: Project | null = null;
   let notes: NoteIndexEntry[] = [];
   let filteredNotes: NoteIndexEntry[] = [];
-  let splitEnabled = false;
   let activePane: PaneId = "primary";
   let favoriteOverrides: Record<string, boolean> = {};
+  let titleOverrides: Record<string, string> = {};
+  let paneLayout: PaneLayoutNode = createLeaf("primary");
   let paneStates: Record<PaneId, PaneState> = {
     primary: createPaneState(),
-    secondary: createPaneState(),
   };
   let activePaneState: PaneState = paneStates[activePane];
   let activeNote: NoteDocumentFile | null = null;
@@ -137,10 +150,9 @@
   let draggingTabId: string | null = null;
   let draggingTabPane: PaneId | null = null;
   let dropTargetTabId: string | null = null;
+  let dockTarget: { paneId: PaneId; side: DockSide } | null = null;
   let draggingNoteId: string | null = null;
   let dropTargetNoteId: string | null = null;
-  let primaryTitleInput: HTMLInputElement | null = null;
-  let secondaryTitleInput: HTMLInputElement | null = null;
   let isLoading = true;
   let saveState: "idle" | "saving" | "saved" = "idle";
   let mobileView: MobileView = "notes";
@@ -166,8 +178,24 @@
   const pendingSaveIds: Record<string, true> = {};
   let pendingSaveCount = 0;
 
+  // IndexedDB adapter writes update the project index via a read-modify-write
+  // cycle, so concurrent writes can clobber each other. Serialize adapter writes
+  // to keep the project metadata consistent.
+  let adapterWriteQueue: Promise<void> = Promise.resolve();
+  const enqueueAdapterWrite = async (
+    operation: () => Promise<void>
+  ): Promise<void> => {
+    const next = adapterWriteQueue
+      .catch(() => {
+        // Keep the queue alive even if a prior write failed.
+      })
+      .then(operation);
+    adapterWriteQueue = next;
+    await next;
+  };
+
   let projectId = "";
-  $: activePaneState = paneStates[activePane];
+  $: activePaneState = paneStates[activePane] ?? createPaneState();
   $: activeNote = activePaneState.note;
   $: activeTabId = activePaneState.activeTabId;
   $: activeTabs = activePaneState.tabs;
@@ -434,16 +462,27 @@
     };
   };
 
-  const getPaneState = (paneId: PaneId): PaneState => paneStates[paneId];
+  const ensurePaneState = (paneId: PaneId): PaneState => {
+    const existing = paneStates[paneId];
+    if (existing) {
+      return existing;
+    }
+    const created = createPaneState();
+    paneStates = { ...paneStates, [paneId]: created };
+    return created;
+  };
+
+  const getPaneState = (paneId: PaneId): PaneState => ensurePaneState(paneId);
 
   const updatePaneState = (
     paneId: PaneId,
     updates: Partial<PaneState>
   ): void => {
+    const current = ensurePaneState(paneId);
     paneStates = {
       ...paneStates,
       [paneId]: {
-        ...paneStates[paneId],
+        ...current,
         ...updates,
       },
     };
@@ -470,9 +509,9 @@
       saveState = "saving";
       return;
     }
-    const hasActiveNotes =
-      paneStates.primary.note !== null ||
-      (splitEnabled && paneStates.secondary.note !== null);
+    const hasActiveNotes = Object.values(paneStates).some(
+      (pane) => pane.note !== null
+    );
     saveState = hasActiveNotes ? "saved" : "idle";
   };
 
@@ -482,10 +521,17 @@
   };
 
   const setPaneNote = (paneId: PaneId, note: NoteDocumentFile | null): void => {
+    const resolvedDoc = note?.pmDoc ?? createEmptyDocument();
+    const editorContent = note
+      ? ensureTitleHeadingInPmDocument({
+          pmDocument: resolvedDoc,
+          title: note.title ?? "",
+        })
+      : createEmptyDocument();
     updatePaneState(paneId, {
       note,
       titleValue: note?.title ?? "",
-      editorContent: note?.pmDoc ?? createEmptyDocument(),
+      editorContent,
       editorPlainText: note?.derived?.plainText ?? "",
     });
     syncSaveState();
@@ -494,12 +540,17 @@
   const buildWorkspaceUiState = (): UIState => ({
     workspaceState: {
       projectId,
-      splitEnabled,
       focusedPane: activePane,
-      tabsPrimary: paneStates.primary.tabs,
-      tabsSecondary: paneStates.secondary.tabs,
-      activeTabPrimary: paneStates.primary.activeTabId,
-      activeTabSecondary: paneStates.secondary.activeTabId,
+      paneLayout,
+      panes: Object.fromEntries(
+        Object.entries(paneStates).map(([paneId, pane]) => [
+          paneId,
+          {
+            tabs: pane.tabs,
+            activeTabId: pane.activeTabId,
+          },
+        ])
+      ),
     },
   });
 
@@ -746,11 +797,9 @@
       return accumulator;
     }, {});
     if (availableIds.length === 0) {
-      updatePaneState("primary", { tabs: [], activeTabId: null });
-      updatePaneState("secondary", { tabs: [], activeTabId: null });
+      paneLayout = createLeaf("primary");
+      paneStates = { primary: createPaneState() };
       setPaneNote("primary", null);
-      setPaneNote("secondary", null);
-      splitEnabled = false;
       activePane = "primary";
       syncSaveState();
       return;
@@ -763,69 +812,190 @@
     const useStoredState =
       typeof storedProjectId === "string" && storedProjectId === projectId;
 
-    let primaryTabs = useStoredState
-      ? filterTabIds(storedState.tabsPrimary, availableIds)
-      : [];
-    const primaryActive = resolveActiveTabId(
-      useStoredState ? storedState.activeTabPrimary : null,
-      availableIds,
-      primaryTabs
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      typeof value === "object" && value !== null;
+
+    const parsePaneLayout = (value: unknown): PaneLayoutNode | null => {
+      if (!isRecord(value)) {
+        return null;
+      }
+      const type = value.type;
+      if (type === "leaf") {
+        const paneId = value.paneId;
+        return typeof paneId === "string" ? createLeaf(paneId) : null;
+      }
+      if (type !== "split") {
+        return null;
+      }
+      const direction = value.direction;
+      if (direction !== "row" && direction !== "column") {
+        return null;
+      }
+      const childrenRaw = value.children;
+      if (!Array.isArray(childrenRaw) || childrenRaw.length < 2) {
+        return null;
+      }
+      const children = childrenRaw
+        .map((child) => parsePaneLayout(child))
+        .filter((child): child is PaneLayoutNode => child !== null);
+      if (children.length < 2) {
+        return null;
+      }
+      const sizesRaw = value.sizes;
+      const sizes = Array.isArray(sizesRaw)
+        ? sizesRaw.filter((size): size is number => typeof size === "number")
+        : undefined;
+      return { type: "split", direction, children, ...(sizes ? { sizes } : {}) };
+    };
+
+    const fallbackNoteId = availableIds[0] ?? null;
+
+    let nextLayout: PaneLayoutNode = createLeaf("primary");
+    let nextPanes: Record<PaneId, PaneState> = { primary: createPaneState() };
+    let nextActivePane: PaneId = "primary";
+
+    if (useStoredState) {
+      const storedLayout = parsePaneLayout(storedState.paneLayout);
+      const storedPanesRaw = storedState.panes;
+
+      if (storedLayout && isRecord(storedPanesRaw)) {
+        nextLayout = storedLayout;
+        const leafIds = collectLeafPaneIds(nextLayout);
+        nextPanes = {};
+        for (const paneId of leafIds) {
+          nextPanes[paneId] = createPaneState();
+        }
+
+        for (const [paneId, paneRaw] of Object.entries(storedPanesRaw)) {
+          if (!(paneId in nextPanes) || !isRecord(paneRaw)) {
+            continue;
+          }
+          let tabs = filterTabIds(paneRaw.tabs, availableIds);
+          const activeTabId = resolveActiveTabId(
+            paneRaw.activeTabId,
+            availableIds,
+            tabs
+          );
+          if (activeTabId && !tabs.includes(activeTabId)) {
+            tabs = addTab(tabs, activeTabId);
+          }
+          nextPanes[paneId] = {
+            ...nextPanes[paneId],
+            tabs,
+            activeTabId,
+          };
+        }
+
+        const focusedPane =
+          typeof storedState.focusedPane === "string"
+            ? storedState.focusedPane
+            : null;
+        nextActivePane =
+          focusedPane && focusedPane in nextPanes
+            ? focusedPane
+            : collectLeafPaneIds(nextLayout)[0] ?? "primary";
+
+        const hasAnyActive = Object.values(nextPanes).some(
+          (pane) => pane.activeTabId
+        );
+        if (!hasAnyActive && fallbackNoteId) {
+          nextPanes[nextActivePane] = {
+            ...nextPanes[nextActivePane],
+            tabs: addTab(nextPanes[nextActivePane].tabs, fallbackNoteId),
+            activeTabId: fallbackNoteId,
+          };
+        }
+      } else {
+        // Migrate legacy primary/secondary split state into the new pane model.
+        let primaryTabs = filterTabIds(storedState.tabsPrimary, availableIds);
+        const primaryActive = resolveActiveTabId(
+          storedState.activeTabPrimary,
+          availableIds,
+          primaryTabs
+        );
+        const resolvedPrimaryActive = primaryActive ?? fallbackNoteId;
+        if (
+          resolvedPrimaryActive &&
+          !primaryTabs.includes(resolvedPrimaryActive)
+        ) {
+          primaryTabs = addTab(primaryTabs, resolvedPrimaryActive);
+        }
+
+        let secondaryTabs = filterTabIds(storedState.tabsSecondary, availableIds);
+        const secondaryActive = resolveActiveTabId(
+          storedState.activeTabSecondary,
+          availableIds,
+          secondaryTabs
+        );
+        if (secondaryActive && !secondaryTabs.includes(secondaryActive)) {
+          secondaryTabs = addTab(secondaryTabs, secondaryActive);
+        }
+
+        const legacySplitEnabled = storedState.splitEnabled === true;
+        if (legacySplitEnabled && secondaryActive) {
+          nextLayout = {
+            type: "split",
+            direction: "row",
+            children: [createLeaf("primary"), createLeaf("secondary")],
+            sizes: [1, 1],
+          };
+          nextPanes = {
+            primary: {
+              ...createPaneState(),
+              tabs: primaryTabs,
+              activeTabId: resolvedPrimaryActive,
+            },
+            secondary: {
+              ...createPaneState(),
+              tabs: secondaryTabs,
+              activeTabId: secondaryActive,
+            },
+          };
+          nextActivePane =
+            storedState.focusedPane === "secondary" ? "secondary" : "primary";
+        } else {
+          // Preserve any legacy secondary tabs by merging them into primary.
+          const mergedTabs = secondaryTabs.reduce(
+            (tabs, id) => addTab(tabs, id),
+            primaryTabs
+          );
+          nextLayout = createLeaf("primary");
+          nextPanes = {
+            primary: {
+              ...createPaneState(),
+              tabs: mergedTabs,
+              activeTabId: resolvedPrimaryActive ?? mergedTabs[0] ?? null,
+            },
+          };
+          nextActivePane = "primary";
+        }
+      }
+    } else if (fallbackNoteId) {
+      nextLayout = createLeaf("primary");
+      nextPanes = {
+        primary: {
+          ...createPaneState(),
+          tabs: [fallbackNoteId],
+          activeTabId: fallbackNoteId,
+        },
+      };
+      nextActivePane = "primary";
+    }
+
+    paneLayout = nextLayout;
+    paneStates = nextPanes;
+    activePane = nextActivePane;
+
+    await Promise.all(
+      Object.entries(nextPanes).map(async ([paneId, pane]) => {
+        if (!pane.activeTabId) {
+          setPaneNote(paneId, null);
+          return;
+        }
+        await loadNote(pane.activeTabId, paneId);
+      })
     );
-    const resolvedPrimaryActive = primaryActive ?? availableIds[0] ?? null;
-    if (resolvedPrimaryActive && !primaryTabs.includes(resolvedPrimaryActive)) {
-      primaryTabs = addTab(primaryTabs, resolvedPrimaryActive);
-    }
 
-    let secondaryTabs = useStoredState
-      ? filterTabIds(storedState.tabsSecondary, availableIds)
-      : [];
-    const preferredSecondary =
-      useStoredState && typeof storedState.activeTabSecondary === "string"
-        ? storedState.activeTabSecondary
-        : null;
-    const resolvedSecondaryActive = resolveSecondaryNoteId({
-      availableIds,
-      primaryId: resolvedPrimaryActive,
-      preferredId: preferredSecondary,
-      fallbackIds: [...secondaryTabs, ...primaryTabs],
-    });
-    if (
-      resolvedSecondaryActive &&
-      !secondaryTabs.includes(resolvedSecondaryActive)
-    ) {
-      secondaryTabs = addTab(secondaryTabs, resolvedSecondaryActive);
-    }
-
-    const storedSplitEnabled =
-      useStoredState && storedState.splitEnabled === true;
-    const shouldSplit = storedSplitEnabled && Boolean(resolvedSecondaryActive);
-    const storedFocusedPane =
-      useStoredState && storedState.focusedPane === "secondary"
-        ? "secondary"
-        : "primary";
-
-    updatePaneState("primary", {
-      tabs: primaryTabs,
-      activeTabId: resolvedPrimaryActive,
-    });
-    updatePaneState("secondary", {
-      tabs: secondaryTabs,
-      activeTabId: resolvedSecondaryActive,
-    });
-
-    if (resolvedPrimaryActive) {
-      await loadNote(resolvedPrimaryActive, "primary");
-    } else {
-      setPaneNote("primary", null);
-    }
-    if (shouldSplit && resolvedSecondaryActive) {
-      await loadNote(resolvedSecondaryActive, "secondary");
-    } else {
-      setPaneNote("secondary", null);
-    }
-
-    splitEnabled = shouldSplit;
-    activePane = shouldSplit ? storedFocusedPane : "primary";
     syncSaveState();
   };
 
@@ -885,9 +1055,9 @@
 
   const persistProject = async (nextProject: Project): Promise<void> => {
     project = nextProject;
-    await runAdapterVoid(() =>
-      adapter.writeProject(nextProject.id, nextProject)
-    );
+    await enqueueAdapterWrite(async () => {
+      await runAdapterVoid(() => adapter.writeProject(nextProject.id, nextProject));
+    });
   };
 
   const loadNote = async (
@@ -953,6 +1123,7 @@
       return;
     }
     setPaneNote(paneId, null);
+    removePaneIfEmpty(paneId);
   };
 
   const handleTabKeydown = (
@@ -969,6 +1140,11 @@
     event: KeyboardEvent,
     paneId: PaneId
   ): void => {
+    // Only treat Enter/Space as a "select pane" action when the pane container
+    // itself is focused. Otherwise we'd break typing (e.g. spaces) inside the editor.
+    if (event.target !== event.currentTarget) {
+      return;
+    }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       setActivePane(paneId);
@@ -985,6 +1161,10 @@
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", noteId);
+      event.dataTransfer.setData(
+        "application/x-embervault-tab",
+        JSON.stringify({ noteId, paneId: activePane })
+      );
     }
   };
 
@@ -1019,16 +1199,16 @@
     draggingTabId = null;
     draggingTabPane = null;
     dropTargetTabId = null;
+    dockTarget = null;
   };
 
   const resolveNoteDocument = async (
     noteId: string
   ): Promise<NoteDocumentFile | null> => {
-    if (paneStates.primary.note?.id === noteId) {
-      return paneStates.primary.note;
-    }
-    if (paneStates.secondary.note?.id === noteId) {
-      return paneStates.secondary.note;
+    for (const pane of Object.values(paneStates)) {
+      if (pane.note?.id === noteId) {
+        return pane.note;
+      }
     }
     return runAdapterTask(() => adapter.readNote(projectId, noteId), null);
   };
@@ -1037,16 +1217,11 @@
     noteId: string,
     note: NoteDocumentFile
   ): void => {
-    if (paneStates.primary.note?.id === noteId) {
-      updatePaneState("primary", {
-        note,
-        titleValue: note.title ?? "",
-        editorContent: note.pmDoc ?? createEmptyDocument(),
-        editorPlainText: note.derived?.plainText ?? "",
-      });
-    }
-    if (paneStates.secondary.note?.id === noteId) {
-      updatePaneState("secondary", {
+    for (const [paneId, pane] of Object.entries(paneStates)) {
+      if (pane.note?.id !== noteId) {
+        continue;
+      }
+      updatePaneState(paneId, {
         note,
         titleValue: note.title ?? "",
         editorContent: note.pmDoc ?? createEmptyDocument(),
@@ -1202,6 +1377,7 @@
   const handleNoteDragEnd = (): void => {
     draggingNoteId = null;
     dropTargetNoteId = null;
+    dockTarget = null;
   };
 
   const moveTabToPane = async (
@@ -1240,40 +1416,171 @@
       }
     }
     await loadNote(noteId, targetPane);
+    if (nextStates.source.activeTabId === null) {
+      removePaneIfEmpty(sourcePane);
+    }
   };
 
-  const handlePaneDragOver = (event: DragEvent, paneId: PaneId): void => {
-    if (!splitEnabled) {
+  const removePaneIfEmpty = (paneId: PaneId): void => {
+    const leafIds = collectLeafPaneIds(paneLayout);
+    if (leafIds.length <= 1) {
       return;
     }
-    const draggedId =
+    const pane = paneStates[paneId];
+    if (!pane || pane.tabs.length > 0) {
+      return;
+    }
+    paneLayout = removeLeaf({ layout: paneLayout, paneId });
+    const { [paneId]: _removed, ...rest } = paneStates;
+    paneStates = rest;
+    if (activePane === paneId) {
+      activePane = collectLeafPaneIds(paneLayout)[0] ?? "primary";
+    }
+    scheduleUiStateWrite();
+  };
+
+  const resolveDockSide = (event: DragEvent, element: HTMLElement): DockSide => {
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return "center";
+    }
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const left = x / rect.width;
+    const right = (rect.width - x) / rect.width;
+    const top = y / rect.height;
+    const bottom = (rect.height - y) / rect.height;
+    const threshold = 0.25;
+    const edges: Array<{ side: DockSide; value: number }> = [
+      { side: "left", value: left },
+      { side: "right", value: right },
+      { side: "top", value: top },
+      { side: "bottom", value: bottom },
+    ];
+    const nearest = edges.reduce((best, entry) =>
+      entry.value < best.value ? entry : best
+    );
+    return nearest.value < threshold ? nearest.side : "center";
+  };
+
+  const readDockPayload = (
+    event: DragEvent
+  ): { noteId: string; sourcePaneId: PaneId | null } => {
+    const raw = event.dataTransfer?.getData("application/x-embervault-tab") ?? "";
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          typeof (parsed as { noteId?: unknown }).noteId === "string"
+        ) {
+          const noteId = (parsed as { noteId: string }).noteId;
+          const sourcePaneId =
+            typeof (parsed as { paneId?: unknown }).paneId === "string"
+              ? ((parsed as { paneId: string }).paneId as PaneId)
+              : null;
+          return { noteId, sourcePaneId };
+        }
+      } catch {
+        // Ignore.
+      }
+    }
+    const noteId =
       draggingTabId || event.dataTransfer?.getData("text/plain") || "";
-    if (!draggedId || draggingTabPane === paneId) {
+    return { noteId, sourcePaneId: draggingTabPane };
+  };
+
+  const handleDockDragOver = (event: DragEvent, paneId: PaneId): void => {
+    if (event.dataTransfer?.types.includes("Files")) {
+      return;
+    }
+    const { noteId, sourcePaneId } = readDockPayload(event);
+    if (!noteId) {
+      return;
+    }
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const side = resolveDockSide(event, target);
+    if (sourcePaneId === paneId && side === "center") {
+      dockTarget = null;
       return;
     }
     event.preventDefault();
+    dockTarget = { paneId, side };
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = "move";
     }
   };
 
-  const handlePaneDrop = async (
+  const handleDockDragLeave = (event: DragEvent, paneId: PaneId): void => {
+    const current = event.currentTarget;
+    const related = event.relatedTarget;
+    if (
+      current instanceof HTMLElement &&
+      related instanceof Node &&
+      current.contains(related)
+    ) {
+      return;
+    }
+    if (dockTarget?.paneId === paneId) {
+      dockTarget = null;
+    }
+  };
+
+  const handleDockDrop = async (
     event: DragEvent,
     paneId: PaneId
   ): Promise<void> => {
-    if (!splitEnabled) {
+    if (event.dataTransfer?.types.includes("Files")) {
       return;
     }
     event.preventDefault();
-    const draggedId =
-      draggingTabId || event.dataTransfer?.getData("text/plain") || "";
-    const sourcePane = draggingTabPane;
-    if (!draggedId || !sourcePane || sourcePane === paneId) {
+    const { noteId, sourcePaneId } = readDockPayload(event);
+    if (!noteId) {
+      dockTarget = null;
       handleTabDragEnd();
       return;
     }
-    await moveTabToPane(draggedId, sourcePane, paneId);
+
+    const target = event.currentTarget;
+    const side =
+      dockTarget?.paneId === paneId
+        ? dockTarget.side
+        : target instanceof HTMLElement
+          ? resolveDockSide(event, target)
+          : "center";
+    dockTarget = null;
+
+    if (side === "center") {
+      if (sourcePaneId && sourcePaneId !== paneId) {
+        await moveTabToPane(noteId, sourcePaneId, paneId);
+      } else {
+        await activateTab(noteId, paneId);
+      }
+      handleTabDragEnd();
+      await flushUiStateWrite();
+      return;
+    }
+
+    const newPaneId = createUlid();
+    ensurePaneState(newPaneId);
+    paneLayout = dockLeaf({
+      layout: paneLayout,
+      targetPaneId: paneId,
+      side,
+      newPaneId,
+    });
+
+    if (sourcePaneId) {
+      await moveTabToPane(noteId, sourcePaneId, newPaneId);
+    } else {
+      await activateTab(noteId, newPaneId);
+    }
     handleTabDragEnd();
+    await flushUiStateWrite();
   };
 
   const persistNote = async (note: NoteDocumentFile): Promise<void> => {
@@ -1288,14 +1595,18 @@
         outgoingLinks,
       },
     };
-    await runAdapterVoid(() =>
-      adapter.writeNote({
-        projectId,
-        noteId: note.id,
-        noteDocument: resolvedNote,
-        derivedMarkdown: toDerivedMarkdown(note.title, resolvedPlainText),
-      })
-    );
+
+    await enqueueAdapterWrite(async () => {
+      await runAdapterVoid(() =>
+        adapter.writeNote({
+          projectId,
+          noteId: note.id,
+          noteDocument: resolvedNote,
+          derivedMarkdown: toDerivedMarkdown(note.title, resolvedPlainText),
+        })
+      );
+    });
+
     await updateSearchIndexForDocument(resolvedNote);
   };
 
@@ -1308,6 +1619,10 @@
       async (noteSnapshot: NoteDocumentFile) => {
         await persistNote(noteSnapshot);
         await loadNotes();
+        if (noteSnapshot.id in titleOverrides) {
+          const { [noteSnapshot.id]: _cleared, ...rest } = titleOverrides;
+          titleOverrides = rest;
+        }
         clearPendingSave(noteSnapshot.id);
         syncSaveState();
       },
@@ -1380,28 +1695,20 @@
       editorPlainText: resolvedPlainText,
     });
     tabTitles = { ...tabTitles, [updatedNote.id]: resolvedTitle };
+    if (resolvedTitle) {
+      if (titleOverrides[updatedNote.id] !== resolvedTitle) {
+        titleOverrides = { ...titleOverrides, [updatedNote.id]: resolvedTitle };
+      }
+    } else if (updatedNote.id in titleOverrides) {
+      const { [updatedNote.id]: _removed, ...rest } = titleOverrides;
+      titleOverrides = rest;
+    }
     scheduleSave(updatedNote);
   };
 
-  const handleTitleInput = (paneId: PaneId, event: Event): void => {
-    const target = event.currentTarget;
-    if (!(target instanceof HTMLInputElement)) {
-      return;
-    }
-    applyEdits(paneId, { title: target.value });
-  };
-
-  const handleTitleBlur = (paneId: PaneId, event: Event): void => {
-    handleTitleInput(paneId, event);
-    const pane = getPaneState(paneId);
-    if (pane.note) {
-      void flushPendingSaveForNote(pane.note.id);
-    }
-  };
-
   const removeNoteFromTabs = async (noteId: string): Promise<void> => {
-    const panes: PaneId[] = ["primary", "secondary"];
-    for (const paneId of panes) {
+    const paneIds = Object.keys(paneStates);
+    for (const paneId of paneIds) {
       const pane = getPaneState(paneId);
       if (!pane.tabs.includes(noteId)) {
         continue;
@@ -1418,6 +1725,7 @@
           await loadNote(nextState.activeTabId, paneId);
         } else {
           setPaneNote(paneId, null);
+          removePaneIfEmpty(paneId);
         }
       }
     }
@@ -1535,8 +1843,7 @@
   ): void => {
     const timestamp = Date.now();
     let updatedNote: NoteDocumentFile | null = null;
-    (["primary", "secondary"] as PaneId[]).forEach((paneId) => {
-      const pane = getPaneState(paneId);
+    Object.entries(paneStates).forEach(([paneId, pane]) => {
       if (!pane.note || pane.note.id !== noteId) {
         return;
       }
@@ -1613,8 +1920,7 @@
     noteId: string,
     favorite: boolean
   ): void => {
-    (["primary", "secondary"] as PaneId[]).forEach((paneId) => {
-      const pane = getPaneState(paneId);
+    Object.entries(paneStates).forEach(([paneId, pane]) => {
       if (!pane.note || pane.note.id !== noteId) {
         return;
       }
@@ -1631,13 +1937,10 @@
     noteId: string,
     favorite: boolean
   ): Promise<NoteDocumentFile | null> => {
-    const primaryNote = paneStates.primary.note;
-    if (primaryNote?.id === noteId) {
-      return { ...primaryNote, favorite };
-    }
-    const secondaryNote = paneStates.secondary.note;
-    if (secondaryNote?.id === noteId) {
-      return { ...secondaryNote, favorite };
+    for (const pane of Object.values(paneStates)) {
+      if (pane.note?.id === noteId) {
+        return { ...pane.note, favorite };
+      }
     }
     const note = await runAdapterTask(
       () => adapter.readNote(projectId, noteId),
@@ -1691,19 +1994,18 @@
       text: string;
     }
   ): void => {
-    const titleInput =
-      paneId === "primary" ? primaryTitleInput : secondaryTitleInput;
-    const titleValue = titleInput?.value;
+    const titleValue = extractTitleFromPmDocument(payload.json);
+    const { body } = splitEditorTextIntoTitleAndBody(payload.text);
     applyEdits(paneId, {
       pmDoc: payload.json,
-      plainText: payload.text,
+      plainText: body,
       title: titleValue,
     });
   };
 
   const createNote = async (): Promise<void> => {
     favoritesOnly = false;
-    await flushPendingSave();
+    void flushPendingSave();
     openNotesView();
     const note = createNoteDocument();
     setPaneNote(activePane, note);
@@ -1715,7 +2017,10 @@
     tabTitles = { ...tabTitles, [note.id]: note.title ?? "" };
     saveState = "saving";
     scheduleUiStateWrite();
-    await persistNote(note);
+    const latestSnapshot =
+      Object.values(paneStates).find((entry) => entry.note?.id === note.id)
+        ?.note ?? note;
+    await persistNote(latestSnapshot);
     await loadNotes();
     if (activeFolderId && project?.folders[activeFolderId]?.noteIds) {
       const currentOrder = resolveFolderNoteOrder(
@@ -1736,48 +2041,6 @@
       };
       await persistProject(updatedProject);
     }
-    syncSaveState();
-  };
-
-  const toggleSplitView = async (): Promise<void> => {
-    if (!splitEnabled) {
-      const availableIds = notes.map(note => note.id);
-      let primaryId = paneStates.primary.activeTabId;
-      if (!primaryId) {
-        primaryId = availableIds[0] ?? null;
-        if (primaryId) {
-          await activateTab(primaryId, "primary");
-        }
-      }
-      const secondaryId = resolveSecondaryNoteId({
-        availableIds,
-        primaryId,
-        preferredId: paneStates.secondary.activeTabId,
-        fallbackIds: [
-          ...paneStates.secondary.tabs,
-          ...paneStates.primary.tabs,
-        ],
-      });
-      if (secondaryId) {
-        const secondaryTabs = addTab(paneStates.secondary.tabs, secondaryId);
-        updatePaneState("secondary", {
-          tabs: secondaryTabs,
-          activeTabId: secondaryId,
-        });
-        await loadNote(secondaryId, "secondary");
-      } else {
-        updatePaneState("secondary", { tabs: [], activeTabId: null });
-        setPaneNote("secondary", null);
-      }
-      splitEnabled = true;
-      activePane = "primary";
-      scheduleUiStateWrite();
-      syncSaveState();
-      return;
-    }
-    splitEnabled = false;
-    activePane = "primary";
-    scheduleUiStateWrite();
     syncSaveState();
   };
 
@@ -1933,10 +2196,6 @@
         openGlobalSearch();
         return;
       }
-      if (event.shiftKey && (event.key === "\\" || event.key === "|")) {
-        event.preventDefault();
-        void toggleSplitView();
-      }
     };
 
     const handleVisibilityChange = (): void => {
@@ -2022,16 +2281,6 @@
       {/each}
     </div>
     <div class="topbar-actions">
-      <button
-        class="icon-button"
-        type="button"
-        aria-label="Toggle split view"
-        aria-pressed={splitEnabled}
-        data-testid="toggle-split"
-        on:click={() => void toggleSplitView()}
-      >
-        <Columns2 aria-hidden="true" size={16} />
-      </button>
       <RightPanelTabs
         activeTab={rightPanelTab}
         onSelect={handleRightPanelTabSelect}
@@ -2126,6 +2375,7 @@
       <NoteListVirtualized
         notes={filteredNotes}
         activeNoteId={activeTabId}
+        {titleOverrides}
         onSelect={noteId => void activateTab(noteId)}
         onToggleFavorite={handleFavoriteToggle}
         draggable={true}
@@ -2142,238 +2392,26 @@
   <div
     slot="editor"
     class="editor-content"
-    data-split={splitEnabled ? "true" : "false"}
+    data-pane-count={countLeaves(paneLayout)}
   >
-    {#if splitEnabled}
-        <div
-          class="editor-pane"
-          data-pane="primary"
-          data-active={activePane === "primary"}
-          data-testid="editor-pane-primary"
-          on:focusin={() => setActivePane("primary")}
-          on:click={() => setActivePane("primary")}
-          on:keydown={event => handlePaneKeydown(event, "primary")}
-          on:dragover={event => handlePaneDragOver(event, "primary")}
-          on:drop={event => void handlePaneDrop(event, "primary")}
-          role="button"
-          tabindex="0"
-        >
-          {#if isLoading}
-            <div class="editor-empty">Preparing editor...</div>
-          {:else if !paneStates.primary.note}
-            <div class="editor-empty">Select a note to start writing.</div>
-          {:else}
-            <div class="editor-header">
-              <div class="editor-header-row">
-                <input
-                  class="title-input field-input"
-                  data-testid="note-title"
-                  type="text"
-                  placeholder="Untitled"
-                  bind:this={primaryTitleInput}
-                  value={paneStates.primary.titleValue}
-                  on:input={event => handleTitleInput("primary", event)}
-                  on:blur={event => handleTitleBlur("primary", event)}
-                  aria-label="Note title"
-                />
-                <button
-                  class="icon-button editor-favorite"
-                  type="button"
-                  aria-pressed={paneStates.primary.note?.favorite ?? false}
-                  aria-label={
-                    paneStates.primary.note?.favorite
-                      ? "Remove from favorites"
-                      : "Add to favorites"
-                  }
-                  data-active={paneStates.primary.note?.favorite ? "true" : "false"}
-                  data-testid="note-favorite-toggle"
-                  on:click={() => toggleFavoriteForPane("primary")}
-                >
-                  <Star aria-hidden="true" size={16} />
-                </button>
-                {#if paneStates.primary.note?.deletedAt === null}
-                  <button
-                    class="icon-button note-delete"
-                    type="button"
-                    aria-label="Move note to trash"
-                    data-testid="note-delete"
-                    on:click={() => deleteNoteFromPane("primary")}
-                  >
-                    <Trash2 aria-hidden="true" size={16} />
-                  </button>
-                {/if}
-              </div>
-              <div class="chips-row" aria-label="Metadata chips">
-                {#each getCustomFieldChips(paneStates.primary.note) as chip (
-                  chip.key
-                )}
-                  <span class="metadata-chip">{chip.label}</span>
-                {/each}
-              </div>
-            </div>
-
-            <div class="field field-body">
-              <span class="field-label">Content</span>
-              <TiptapEditor
-                content={paneStates.primary.editorContent}
-                ariaLabel="Note content"
-                dataTestId="note-body"
-                linkCandidates={wikiLinkCandidates}
-                onImagePaste={handleImagePaste}
-                onUpdate={payload => handleEditorUpdate("primary", payload)}
-              />
-            </div>
-          {/if}
-        </div>
-
-        <div
-          class="editor-pane"
-          data-pane="secondary"
-          data-active={activePane === "secondary"}
-          data-testid="editor-pane-secondary"
-          on:focusin={() => setActivePane("secondary")}
-          on:click={() => setActivePane("secondary")}
-          on:keydown={event => handlePaneKeydown(event, "secondary")}
-          on:dragover={event => handlePaneDragOver(event, "secondary")}
-          on:drop={event => void handlePaneDrop(event, "secondary")}
-          role="button"
-          tabindex="0"
-        >
-          {#if isLoading}
-            <div class="editor-empty">Preparing editor...</div>
-          {:else if !paneStates.secondary.note}
-            <div class="editor-empty">Select a note to start writing.</div>
-          {:else}
-            <div class="editor-header">
-              <div class="editor-header-row">
-                <input
-                  class="title-input field-input"
-                  data-testid="note-title-secondary"
-                  type="text"
-                  placeholder="Untitled"
-                  bind:this={secondaryTitleInput}
-                  value={paneStates.secondary.titleValue}
-                  on:input={event => handleTitleInput("secondary", event)}
-                  on:blur={event => handleTitleBlur("secondary", event)}
-                  aria-label="Note title"
-                />
-                <button
-                  class="icon-button editor-favorite"
-                  type="button"
-                  aria-pressed={paneStates.secondary.note?.favorite ?? false}
-                  aria-label={
-                    paneStates.secondary.note?.favorite
-                      ? "Remove from favorites"
-                      : "Add to favorites"
-                  }
-                  data-active={paneStates.secondary.note?.favorite ? "true" : "false"}
-                  data-testid="note-favorite-toggle-secondary"
-                  on:click={() => toggleFavoriteForPane("secondary")}
-                >
-                  <Star aria-hidden="true" size={16} />
-                </button>
-                {#if paneStates.secondary.note?.deletedAt === null}
-                  <button
-                    class="icon-button note-delete"
-                    type="button"
-                    aria-label="Move note to trash"
-                    data-testid="note-delete-secondary"
-                    on:click={() => deleteNoteFromPane("secondary")}
-                  >
-                    <Trash2 aria-hidden="true" size={16} />
-                  </button>
-                {/if}
-              </div>
-              <div class="chips-row" aria-label="Metadata chips">
-                {#each getCustomFieldChips(paneStates.secondary.note) as chip (
-                  chip.key
-                )}
-                  <span class="metadata-chip">{chip.label}</span>
-                {/each}
-              </div>
-            </div>
-
-            <div class="field field-body">
-              <span class="field-label">Content</span>
-              <TiptapEditor
-                content={paneStates.secondary.editorContent}
-                ariaLabel="Note content"
-                dataTestId="note-body-secondary"
-                linkCandidates={wikiLinkCandidates}
-                onImagePaste={handleImagePaste}
-                onUpdate={payload => handleEditorUpdate("secondary", payload)}
-              />
-            </div>
-          {/if}
-        </div>
-      {:else}
-        {#if isLoading}
-          <div class="editor-empty">Preparing editor...</div>
-        {:else if !paneStates.primary.note}
-          <div class="editor-empty">Select a note to start writing.</div>
-        {:else}
-          <div class="editor-header">
-            <div class="editor-header-row">
-              <input
-                class="title-input field-input"
-                data-testid="note-title"
-                type="text"
-                placeholder="Untitled"
-                bind:this={primaryTitleInput}
-                value={paneStates.primary.titleValue}
-                on:input={event => handleTitleInput("primary", event)}
-                on:blur={event => handleTitleBlur("primary", event)}
-                aria-label="Note title"
-              />
-              <button
-                class="icon-button editor-favorite"
-                type="button"
-                aria-pressed={paneStates.primary.note?.favorite ?? false}
-                aria-label={
-                  paneStates.primary.note?.favorite
-                    ? "Remove from favorites"
-                    : "Add to favorites"
-                }
-                data-active={paneStates.primary.note?.favorite ? "true" : "false"}
-                data-testid="note-favorite-toggle"
-                on:click={() => toggleFavoriteForPane("primary")}
-              >
-                <Star aria-hidden="true" size={16} />
-              </button>
-              {#if paneStates.primary.note?.deletedAt === null}
-                <button
-                  class="icon-button note-delete"
-                  type="button"
-                  aria-label="Move note to trash"
-                  data-testid="note-delete"
-                  on:click={() => deleteNoteFromPane("primary")}
-                >
-                  <Trash2 aria-hidden="true" size={16} />
-                </button>
-              {/if}
-            </div>
-            <div class="chips-row" aria-label="Metadata chips">
-              {#each getCustomFieldChips(paneStates.primary.note) as chip (
-                chip.key
-              )}
-                <span class="metadata-chip">{chip.label}</span>
-              {/each}
-            </div>
-          </div>
-
-          <div class="field field-body">
-            <span class="field-label">Content</span>
-            <TiptapEditor
-              content={paneStates.primary.editorContent}
-              ariaLabel="Note content"
-              dataTestId="note-body"
-              linkCandidates={wikiLinkCandidates}
-              onImagePaste={handleImagePaste}
-              onUpdate={payload => handleEditorUpdate("primary", payload)}
-            />
-          </div>
-        {/if}
-      {/if}
+    <EditorPaneLayout
+      node={paneLayout}
+      paneStates={paneStates}
+      activePaneId={activePane}
+      {isLoading}
+      dockTarget={dockTarget}
+      linkCandidates={wikiLinkCandidates}
+      getChips={getCustomFieldChips}
+      onSetActive={setActivePane}
+      onKeydown={handlePaneKeydown}
+      onToggleFavorite={toggleFavoriteForPane}
+      onDeleteNote={deleteNoteFromPane}
+      onEditorUpdate={handleEditorUpdate}
+      onImagePaste={handleImagePaste}
+      onDockDragOver={handleDockDragOver}
+      onDockDrop={handleDockDrop}
+      onDockDragLeave={handleDockDragLeave}
+    />
   </div>
 
   <RightPanel
@@ -2400,7 +2438,6 @@
     onDeleteTrashedNotePermanent={openPermanentDeleteConfirm}
     onCreateNote={createNote}
     onOpenGlobalSearch={openGlobalSearch}
-    onToggleSplitView={toggleSplitView}
     onToggleRightPanel={handleRightPanelTabSelect}
     onGoToTrash={openTrashView}
   />
@@ -2706,123 +2743,9 @@
 
   .editor-content {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
-    min-height: 0;
-  }
-
-  .editor-content[data-split="true"] {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
-    height: 100%;
-  }
-
-  .editor-pane {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    min-width: 0;
-    min-height: 0;
-    overflow: auto;
-  }
-
-  .editor-header {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .editor-header-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .editor-header-row .title-input {
     flex: 1;
-    min-width: 0;
-    width: auto;
-  }
-
-  .title-input {
-    font-size: 22px;
-    font-weight: 500;
-    line-height: 1.2;
-  }
-
-  .editor-favorite[data-active="true"] {
-    color: var(--accent-0);
-  }
-
-  .editor-favorite[data-active="true"] :global(svg) {
-    fill: currentColor;
-  }
-
-  .note-delete:hover {
-    color: var(--danger);
-  }
-
-  .chips-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .metadata-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 8px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--stroke-0);
-    background: var(--bg-2);
-    color: var(--text-1);
-    font-size: 12px;
-    line-height: 1.2;
-  }
-
-  .editor-empty {
-    color: var(--text-2);
-  }
-
-  .field {
-    display: flex;
     flex-direction: column;
-    gap: 6px;
-  }
-
-  @media (max-width: 1023px) {
-    .editor-content[data-split="true"] {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .field-label {
-    font-size: 12px;
-    color: var(--text-2);
-  }
-
-  .field-input,
-  .field-input {
-    width: 100%;
-    height: 32px;
-    background: var(--bg-2);
-    border: 1px solid var(--stroke-0);
-    border-radius: var(--r-md);
-    color: var(--text-0);
-    padding: 0 12px;
-  }
-
-  .field-input:focus,
-  .field-input:focus {
-    border-color: rgba(255, 138, 42, 0.4);
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
-  }
-
-  .field-input::placeholder {
-    color: var(--text-2);
+    min-height: 0;
   }
 
   .button {

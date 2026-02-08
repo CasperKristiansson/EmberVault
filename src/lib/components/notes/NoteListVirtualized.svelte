@@ -4,6 +4,7 @@
   import NoteListRow from "$lib/components/notes/NoteListRow.svelte";
 
   export let notes: Array<{ id: string }> = [];
+  export let titleOverrides: Record<string, string> = {};
   export let activeNoteId: string | null = null;
   export let onSelect: (noteId: string) => void | Promise<void> = async () => {};
   export let onDragStart: (noteId: string, event: DragEvent) => void = () => {};
@@ -120,6 +121,7 @@
             <NoteListRow
               note={note as NoteIndexEntry}
               active={note.id === activeNoteId}
+              titleOverride={titleOverrides[note.id] ?? null}
               onSelect={noteId => void onSelect(noteId)}
               draggable={draggable}
               dragging={draggingNoteId === note.id}
@@ -149,6 +151,7 @@
           <NoteListRow
             note={note as NoteIndexEntry}
             active={note.id === activeNoteId}
+            titleOverride={titleOverrides[note.id] ?? null}
             onSelect={noteId => void onSelect(noteId)}
             draggable={draggable}
             dragging={draggingNoteId === note.id}

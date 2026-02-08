@@ -19,7 +19,6 @@
   export let onDeleteTrashedNotePermanent: (noteId: string) => void = () => {};
   export let onCreateNote: (() => void | Promise<void>) | null = null;
   export let onOpenGlobalSearch: (() => void | Promise<void>) | null = null;
-  export let onToggleSplitView: (() => void | Promise<void>) | null = null;
   export let onGoToTrash: (() => void | Promise<void>) | null = null;
   export let onToggleRightPanel:
     | ((panel: "outline" | "backlinks" | "metadata") => void | Promise<void>)
@@ -182,7 +181,6 @@
       onOpenNote={onOpenNote}
       {onCreateNote}
       {onOpenGlobalSearch}
-      {onToggleSplitView}
       {onGoToTrash}
       {onToggleRightPanel}
       {onOpenSettings}

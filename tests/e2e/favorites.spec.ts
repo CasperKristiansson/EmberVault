@@ -15,7 +15,11 @@ test("favorites filter shows starred notes", async ({ page }) => {
   await page.waitForURL(/\/app\/?$/);
 
   await page.getByTestId("new-note").click();
-  await page.getByTestId("note-title").fill(firstTitle);
+  const bodyEditor = page.getByTestId("note-body");
+  await bodyEditor.click();
+  await expect(bodyEditor).toBeFocused();
+  await page.keyboard.type(firstTitle);
+  await page.keyboard.press("Enter");
   await page.getByTestId("note-favorite-toggle").click();
   await expect(page.getByTestId("note-favorite-toggle")).toHaveAttribute(
     ariaPressed,
@@ -23,7 +27,10 @@ test("favorites filter shows starred notes", async ({ page }) => {
   );
 
   await page.getByTestId("new-note").click();
-  await page.getByTestId("note-title").fill(secondTitle);
+  await bodyEditor.click();
+  await expect(bodyEditor).toBeFocused();
+  await page.keyboard.type(secondTitle);
+  await page.keyboard.press("Enter");
 
   const noteList = page.getByTestId("note-list");
   const secondRow = noteList

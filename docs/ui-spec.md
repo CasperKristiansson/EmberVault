@@ -104,7 +104,7 @@ Virtualization:
 
 - Must virtualize when list > 100 items.
 
-## 5) Tabs + split view (top bar + editor)
+## 5) Tabs + pane docking (top bar + editor)
 
 Tabs row in top bar:
 
@@ -115,15 +115,19 @@ Tabs row in top bar:
   - Hover: --bg-3
 - Close button appears on hover; always visible for active tab
 
-Split view:
+Pane docking:
 
-- Toggle button in top bar (icon: split)
-- Modes:
-  1. Single editor
-  2. Split vertical (two editors side-by-side) Rules:
-- Split view only shows two notes at once (A and B)
-- Each split pane has its own tab context (active note per pane)
-- Drag a tab onto the other pane to open it there
+- No split view toggle button.
+- The editor workspace can be split into any number of panes (nested splits).
+- Each pane has its own tab context (active note per pane).
+- The top bar tabs show the tabs for the currently focused pane.
+- Drag and drop:
+  - Drag a tab (or a note from the note list) onto a pane.
+  - Drop center: open/move the note into that pane (no new pane created).
+  - Drop edge (left/right/top/bottom, 25% edge threshold): create a new pane in that direction and move the note into it.
+- When a pane has no tabs left, it collapses (unless it is the only remaining pane).
+- Responsive:
+  - On <= 1023px width, horizontal splits stack vertically.
 
 ## 6) Editor pane
 
@@ -235,7 +239,6 @@ Modal:
 - Group headings: Notes, Actions, Settings Actions (minimum):
 - New note
 - Search everywhere
-- Toggle split view
 - Go to Trash (opens Trash modal)
 - Toggle right panel: Outline/Backlinks/Metadata
 

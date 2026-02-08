@@ -5,6 +5,7 @@
   import type { NoteIndexEntry } from "$lib/core/storage/types";
 
   export let note: NoteIndexEntry;
+  export let titleOverride: string | null = null;
   export let active = false;
   export let motionEnabled = true;
   export let onSelect: (noteId: string) => void = () => {};
@@ -52,7 +53,9 @@
     onDragEnd(note.id, event);
   };
 
-  $: resolvedTitle = note.title?.trim() ? note.title : "Untitled";
+  $: resolvedTitle = (titleOverride ?? note.title)?.trim()
+    ? (titleOverride ?? note.title)
+    : "Untitled";
   $: formattedDate = new Date(note.updatedAt).toLocaleDateString();
 </script>
 

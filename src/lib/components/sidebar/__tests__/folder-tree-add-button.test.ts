@@ -8,7 +8,8 @@ afterEach(() => {
 
 describe("FolderTree", () => {
   it("shows an add folder button and creates a root folder when clicked", async () => {
-    const onCreate = vi.fn(() => null);
+    // eslint-disable-next-line @typescript-eslint/require-await
+    const onCreate = vi.fn(async () => null);
     const onOpenTrash = vi.fn();
 
     const { getByTestId } = render(FolderTree, {

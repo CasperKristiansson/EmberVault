@@ -60,7 +60,6 @@ describe("CommandPaletteModal", () => {
         notes: [noteA, noteB],
         onCreateNote: vi.fn(),
         onOpenGlobalSearch: vi.fn(),
-        onToggleSplitView: vi.fn(),
         onGoToTrash: vi.fn(),
         onToggleRightPanel: vi.fn(),
         onOpenSettings: vi.fn(),

@@ -116,7 +116,7 @@ const seedProject = async (): Promise<{
   return { project, notes: [noteA, noteB] };
 };
 
-describe("workspace tabs + split view", () => {
+describe("workspace tabs + panes", () => {
   beforeEach(async () => {
     await deleteIndexedDatabase();
   });
@@ -173,25 +173,20 @@ describe("workspace tabs + split view", () => {
     expect(remainingTab.getAttribute("data-active")).toBe("true");
   });
 
-  it("toggles split view from the top bar", async () => {
+  it("does not show a split view toggle button", async () => {
     await seedProject();
 
-    const { container, findByTestId, getByTestId, queryByTestId } =
-      render(Page);
+    const { container, findByTestId, queryByTestId } = render(Page);
 
     await findByTestId("tab-list");
 
-    expect(queryByTestId("editor-pane-secondary")).toBeNull();
-
-    const toggle = getByTestId("toggle-split");
-    await fireEvent.click(toggle);
+    expect(queryByTestId("toggle-split")).toBeNull();
 
     await waitFor(() => {
-      expect(getByTestId("editor-pane-secondary")).toBeTruthy();
-      expect(toggle.getAttribute("aria-pressed")).toBe("true");
+      const panes = container.querySelectorAll(
+        '[data-testid="editor-pane-leaf"]'
+      );
+      expect(panes.length).toBe(1);
     });
-
-    const editor = container.querySelector('[data-split="true"]');
-    expect(editor).toBeTruthy();
   });
 });

@@ -33,6 +33,12 @@ describe("tiptap config", () => {
   it("creates an empty doc shape", () => {
     const emptyDocument = createEmptyDocument();
 
-    expect(emptyDocument).toEqual({ type: "doc", content: [] });
+    expect(emptyDocument).toEqual({
+      type: "doc",
+      content: [
+        { type: "heading", attrs: { level: 1 }, content: [] },
+        { type: "paragraph", content: [] },
+      ],
+    });
   });
 });

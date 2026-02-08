@@ -20,5 +20,5 @@ test("mobile layout shows bottom nav and switches panes", async ({ page }) => {
 
   await expect(editorPane).toBeVisible();
   await expect(notesPane).toBeHidden();
-  await expect(page.getByTestId("note-title")).toBeVisible();
+  await expect(page.getByTestId("note-body")).toBeVisible();
 });
