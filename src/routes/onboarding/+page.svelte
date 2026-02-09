@@ -111,6 +111,7 @@
   <header class="hero">
     <h1>Choose where your notes live</h1>
     <p>Store everything locally. No accounts. No cloud.</p>
+    <p class="hero-note">You can switch storage later in Settings.</p>
   </header>
 
   <div class="cards">
@@ -122,13 +123,21 @@
 
     {#if supportsFileSystem}
       <div class="card">
-        <div class="card-icon" aria-hidden="true">
-          <Folder aria-hidden="true" size={16} />
+        <div class="card-head">
+          <div class="card-icon" aria-hidden="true">
+            <Folder aria-hidden="true" size={16} />
+          </div>
+          <span class="badge">Recommended</span>
         </div>
         <div class="card-copy">
           <h2>Use a folder on this device</h2>
           <p>Keep files in a folder you choose (best in Chrome/Edge).</p>
         </div>
+        <ul class="card-list">
+          <li>Files are visible in Finder</li>
+          <li>Best for large vaults</li>
+          <li>Requires one-time permission</li>
+        </ul>
         <button
           class="button primary"
           data-testid="use-folder-storage"
@@ -141,13 +150,20 @@
     {/if}
 
     <div class="card">
-      <div class="card-icon" aria-hidden="true">
-        <Database aria-hidden="true" size={16} />
+      <div class="card-head">
+        <div class="card-icon" aria-hidden="true">
+          <Database aria-hidden="true" size={16} />
+        </div>
       </div>
       <div class="card-copy">
         <h2>Store in this browser</h2>
         <p>IndexedDB keeps everything local and works everywhere.</p>
       </div>
+      <ul class="card-list">
+        <li>Fast setup, no permissions</li>
+        <li>Great for quick trials</li>
+        <li>Clears if browser data is erased</li>
+      </ul>
       <button
         class="button primary"
         data-testid="use-browser-storage"
@@ -157,6 +173,10 @@
         {activeMode === "idb" ? "Setting up..." : "Use browser storage"}
       </button>
     </div>
+  </div>
+
+  <div class="footer-note">
+    We never upload your data. Storage stays on this device.
   </div>
 
   {#if errorMessage}
@@ -185,6 +205,11 @@
     margin: 0;
   }
 
+  .hero-note {
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
   .cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -202,6 +227,12 @@
     border-radius: var(--r-lg);
   }
 
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
   .card-icon {
     width: 32px;
     height: 32px;
@@ -212,12 +243,38 @@
     place-items: center;
   }
 
+  .badge {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--bg-2);
+    border: 1px solid var(--stroke-0);
+    color: var(--text-1);
+  }
+
   .card-copy h2 {
     margin-bottom: 6px;
   }
 
   .card-copy p {
     margin: 0;
+    color: var(--text-1);
+  }
+
+  .card-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--text-2);
+    font-size: 12px;
+  }
+
+  .card-list li::before {
+    content: "•";
+    margin-right: 6px;
     color: var(--text-1);
   }
 
@@ -259,6 +316,11 @@
     border: 1px solid var(--stroke-0);
     background: var(--bg-2);
     color: var(--text-1);
+  }
+
+  .footer-note {
+    font-size: 12px;
+    color: var(--text-2);
   }
 
   .error {

@@ -46,6 +46,8 @@ Rules:
 - If FS Access not supported: hide option 1, show an info note “Your browser doesn’t support folder storage.”
 - After selection: create a default Vault.
 - If a stored storage choice exists and is valid, skip this onboarding view and open the workspace directly.
+- Storage cards include a short “what you get” bullet list and a recommended badge for folder storage (when supported).
+- Footer note: “We never upload your data. Storage stays on this device.”
 
 ## 3) Left Sidebar (Folders + Tags)
 
