@@ -16,7 +16,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Deploy static site via adapter-static + Pulumi (S3/CloudFront/Route53)
 - [x] Implement StorageAdapter interface
 - [x] Implement IndexedDBAdapter with object stores per storage.md
-- [x] Implement Project create/read/update, default “Personal”
+- [x] Implement Vault metadata create/read/update, default “Vault”
 - [x] Implement Note CRUD + soft delete + restore + permanent delete
 - [x] Implement Asset storage (blob) in IDB
 - [x] Unit tests for all IDB storage operations
@@ -26,7 +26,7 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 
 - [x] Build app shell layout (sidebar, note list, editor pane, right panel)
 - [x] Implement responsive rules (desktop + mobile layout)
-- [x] Implement project switcher (single project ok for now)
+- [x] No project switcher (single vault)
 - [x] Implement folder tree (create/rename/delete empty)
 - [x] Implement note list with virtualization
 - [x] Component tests for layout focus + basic navigation

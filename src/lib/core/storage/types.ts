@@ -42,9 +42,9 @@ export type TemplateIndexEntry = Omit<NoteIndexEntry, "isTemplate"> & {
   isTemplate: true;
 };
 
-export type ProjectSettings = Record<string, unknown>;
+export type VaultSettings = Record<string, unknown>;
 
-export type Project = {
+export type Vault = {
   id: string;
   name: string;
   createdAt: number;
@@ -53,7 +53,7 @@ export type Project = {
   tags: Record<string, Tag>;
   notesIndex: Record<string, NoteIndexEntry>;
   templatesIndex: Record<string, TemplateIndexEntry>;
-  settings: ProjectSettings;
+  settings: VaultSettings;
 };
 
 export type NoteDocumentDerived = {
@@ -102,46 +102,35 @@ export type AppSettings = {
 
 export type StorageAdapter = {
   init: () => Promise<void>;
-  listProjects: () => Promise<Project[]>;
-  createProject: (project: Project) => Promise<void>;
-  readProject: (projectId: string) => Promise<Project | null>;
-  writeProject: (projectId: string, projectMeta: Project) => Promise<void>;
-  listNotes: (projectId: string) => Promise<NoteIndexEntry[]>;
-  listTemplates: (projectId: string) => Promise<TemplateIndexEntry[]>;
-  readNote: (
-    projectId: string,
-    noteId: string
-  ) => Promise<NoteDocumentFile | null>;
-  readTemplate: (
-    projectId: string,
-    templateId: string
-  ) => Promise<NoteDocumentFile | null>;
+  readVault: () => Promise<Vault | null>;
+  writeVault: (vault: Vault) => Promise<void>;
+  listNotes: () => Promise<NoteIndexEntry[]>;
+  listTemplates: () => Promise<TemplateIndexEntry[]>;
+  readNote: (noteId: string) => Promise<NoteDocumentFile | null>;
+  readTemplate: (templateId: string) => Promise<NoteDocumentFile | null>;
   writeNote: (input: {
-    projectId: string;
     noteId: string;
     noteDocument: NoteDocumentFile;
     derivedMarkdown: string;
   }) => Promise<void>;
   writeTemplate: (input: {
-    projectId: string;
     templateId: string;
     noteDocument: NoteDocumentFile;
     derivedMarkdown: string;
   }) => Promise<void>;
-  deleteNoteSoft: (projectId: string, noteId: string) => Promise<void>;
-  restoreNote: (projectId: string, noteId: string) => Promise<void>;
-  deleteNotePermanent: (projectId: string, noteId: string) => Promise<void>;
-  deleteTemplate: (projectId: string, templateId: string) => Promise<void>;
+  deleteNoteSoft: (noteId: string) => Promise<void>;
+  restoreNote: (noteId: string) => Promise<void>;
+  deleteNotePermanent: (noteId: string) => Promise<void>;
+  deleteTemplate: (templateId: string) => Promise<void>;
   writeAsset: (input: {
-    projectId: string;
     assetId: string;
     blob: Blob;
     meta?: AssetMeta;
   }) => Promise<void>;
-  readAsset: (projectId: string, assetId: string) => Promise<Blob | null>;
-  listAssets: (projectId: string) => Promise<string[]>;
+  readAsset: (assetId: string) => Promise<Blob | null>;
+  listAssets: () => Promise<string[]>;
   writeUIState: (state: UIState) => Promise<void>;
   readUIState: () => Promise<UIState | null>;
-  writeSearchIndex: (projectId: string, snapshot: string) => Promise<void>;
-  readSearchIndex: (projectId: string) => Promise<string | null>;
+  writeSearchIndex: (snapshot: string) => Promise<void>;
+  readSearchIndex: () => Promise<string | null>;
 };

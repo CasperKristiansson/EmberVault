@@ -44,7 +44,7 @@ Links:
 ## 4) Required E2E tests (Playwright)
 
 - Onboarding:
-  - choose browser storage -> app opens default project
+  - choose browser storage -> app opens default vault
 - CRUD:
   - create note, type content, reload -> content persists
 - Editor blocks:

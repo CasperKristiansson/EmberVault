@@ -2,11 +2,10 @@
   import { motion } from "@motionone/svelte";
   import { prefersReducedMotion } from "$lib/state/motion.store";
   import { X } from "lucide-svelte";
-  import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
+  import type { NoteIndexEntry } from "$lib/core/storage/types";
   import NoteListVirtualized from "$lib/components/notes/NoteListVirtualized.svelte";
   import TrashNoteRow from "$lib/components/notes/TrashNoteRow.svelte";
 
-  export let project: Project | null = null;
   export let trashedNotes: NoteIndexEntry[] = [];
   export let activeNoteId: string | null = null;
   export let onClose: () => void = () => {};
@@ -37,9 +36,6 @@
         <div class="modal-title">Trash</div>
         <div class="modal-subtitle">
           {trashedNotes.length} total
-          {#if project}
-            <span class="modal-subtitle-project">in {project.name}</span>
-          {/if}
         </div>
       </div>
       <button
@@ -127,10 +123,6 @@
     gap: 6px;
     align-items: center;
     flex-wrap: wrap;
-  }
-
-  .modal-subtitle-project {
-    color: var(--text-2);
   }
 
   .icon-button {

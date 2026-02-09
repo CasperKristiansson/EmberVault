@@ -1,8 +1,8 @@
 export const databaseName = "local-notes";
-export const databaseVersion = 2;
+export const databaseVersion = 3;
 
 export const storeNames = {
-  projects: "projects",
+  vault: "vault",
   notes: "notes",
   templates: "templates",
   assets: "assets",
@@ -15,23 +15,22 @@ export type StoreName = (typeof storeNames)[keyof typeof storeNames];
 
 export type StoreKeyPath = string | string[] | null;
 
-const projectIdKey = "projectId";
+const vaultIdKey = "id";
 const noteIdKey = "noteId";
 const templateIdKey = "templateId";
 const assetIdKey = "assetId";
-const primaryIdKey = "id";
 
-const noteKeyPath: string[] = [projectIdKey, noteIdKey];
-const templateKeyPath: string[] = [projectIdKey, templateIdKey];
-const assetKeyPath: string[] = [projectIdKey, assetIdKey];
+const noteKeyPath = noteIdKey;
+const templateKeyPath = templateIdKey;
+const assetKeyPath = assetIdKey;
 
 export const storeKeyPaths: Record<StoreName, StoreKeyPath> = {
-  [storeNames.projects]: primaryIdKey,
+  [storeNames.vault]: vaultIdKey,
   [storeNames.notes]: noteKeyPath,
   [storeNames.templates]: templateKeyPath,
   [storeNames.assets]: assetKeyPath,
   [storeNames.uiState]: null,
-  [storeNames.searchIndex]: projectIdKey,
+  [storeNames.searchIndex]: null,
   [storeNames.appSettings]: null,
 };
 
@@ -52,7 +51,7 @@ const ensureObjectStore = (
 
 export const createObjectStores = (database: IDBDatabase): void => {
   const storeList: StoreName[] = [
-    storeNames.projects,
+    storeNames.vault,
     storeNames.notes,
     storeNames.templates,
     storeNames.assets,
@@ -67,3 +66,4 @@ export const createObjectStores = (database: IDBDatabase): void => {
 };
 export const uiStateKey = "ui";
 export const appSettingsKey = "app";
+export const searchIndexKey = "search";

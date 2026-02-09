@@ -20,41 +20,37 @@ export type SearchIndexState = {
 
 export type SearchIndexChangeInput = {
   adapter: StorageAdapter;
-  projectId: string;
   state: SearchIndexState;
   change: SearchIndexChange;
 };
 
 export const hydrateSearchIndex = async (
   adapter: StorageAdapter,
-  projectId: string,
   notes: NoteDocumentFile[]
 ): Promise<SearchIndexState> => {
-  const snapshot = await adapter.readSearchIndex(projectId);
+  const snapshot = await adapter.readSearchIndex();
   if (snapshot) {
     return { index: loadSearchIndex(snapshot) };
   }
   const index = buildSearchIndex(notes);
-  await adapter.writeSearchIndex(projectId, serializeSearchIndex(index));
+  await adapter.writeSearchIndex(serializeSearchIndex(index));
   return { index };
 };
 
 export const persistSearchIndex = async (
   adapter: StorageAdapter,
-  projectId: string,
   index: MiniSearch<SearchDocument>
 ): Promise<void> => {
-  await adapter.writeSearchIndex(projectId, serializeSearchIndex(index));
+  await adapter.writeSearchIndex(serializeSearchIndex(index));
 };
 
 export const applySearchIndexChange = async ({
   adapter,
-  projectId,
   state,
   change,
 }: SearchIndexChangeInput): Promise<SearchIndexState> => {
   const updatedIndex = updateSearchIndex(state.index, change);
-  await persistSearchIndex(adapter, projectId, updatedIndex);
+  await persistSearchIndex(adapter, updatedIndex);
   return { index: updatedIndex };
 };
 

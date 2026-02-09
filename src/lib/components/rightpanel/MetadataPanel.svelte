@@ -2,13 +2,13 @@
   import type {
     CustomFieldValue,
     NoteDocumentFile,
-    Project,
+    Vault,
   } from "$lib/core/storage/types";
   import { createCustomFieldKey } from "$lib/core/utils/custom-fields";
   import CustomFieldEditor from "$lib/components/rightpanel/CustomFieldEditor.svelte";
 
   export let note: NoteDocumentFile | null = null;
-  export let project: Project | null = null;
+  export let vault: Vault | null = null;
   export let onUpdateCustomFields: (
     noteId: string,
     fields: Record<string, CustomFieldValue>
@@ -21,7 +21,7 @@
     if (!noteValue.folderId) {
       return "No folder";
     }
-    const resolved = project?.folders[noteValue.folderId]?.name;
+    const resolved = vault?.folders[noteValue.folderId]?.name;
     return resolved ?? "Unknown folder";
   };
 
@@ -30,7 +30,7 @@
       return "No tags";
     }
     return noteValue.tagIds
-      .map((tagId) => project?.tags[tagId]?.name ?? "Unknown tag")
+      .map((tagId) => vault?.tags[tagId]?.name ?? "Unknown tag")
       .join(", ");
   };
 

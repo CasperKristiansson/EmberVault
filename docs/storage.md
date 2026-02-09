@@ -11,21 +11,25 @@
 Implement `StorageAdapter` with:
 
 - init()
-- listProjects()
-- createProject()
-- readProject(projectId)
-- writeProject(projectId, projectMeta)
-- listNotes(projectId)
-- readNote(projectId, noteId)
-- writeNote({ projectId, noteId, noteDocument, derivedMarkdown })
-- deleteNoteSoft(projectId, noteId)
-- restoreNote(projectId, noteId)
-- deleteNotePermanent(projectId, noteId)
-- writeAsset({ projectId, assetId, blob, meta })
-- readAsset(projectId, assetId)
-- listAssets(projectId)
+- readVault()
+- writeVault(vault)
+- listNotes()
+- readNote(noteId)
+- writeNote({ noteId, noteDocument, derivedMarkdown })
+- deleteNoteSoft(noteId)
+- restoreNote(noteId)
+- deleteNotePermanent(noteId)
+- listTemplates()
+- readTemplate(templateId)
+- writeTemplate({ templateId, noteDocument, derivedMarkdown })
+- deleteTemplate(templateId)
+- writeAsset({ assetId, blob, meta })
+- readAsset(assetId)
+- listAssets()
 - writeUIState(state)
 - readUIState()
+- writeSearchIndex(snapshot)
+- readSearchIndex()
 
 Adapters:
 
@@ -48,53 +52,51 @@ Selection logic:
 Vault root folder:
 
 - vault.json
-- projects/
-  - {projectId}/
-    - project.json
-    - notes/
-      - {noteId}.json (canonical ProseMirror doc + metadata)
-      - {noteId}.md (derived export, updated on save debounce)
-    - templates/
-      - {templateId}.json
-      - {templateId}.md
-      - (reserved; templates are not user-facing)
-    - assets/
-      - {assetId}.{ext}
-      - assets.json (asset registry optional; can derive by scanning)
-    - trash/
-      - {noteId}.json
-      - {noteId}.md
+- notes/
+  - {noteId}.json (canonical ProseMirror doc + metadata)
+  - {noteId}.md (derived export, updated on save debounce)
+- templates/
+  - {templateId}.json
+  - {templateId}.md
+  - (reserved; templates are not user-facing)
+- assets/
+  - {assetId}.{ext}
+  - assets.json (asset registry optional; can derive by scanning)
+- trash/
+  - {noteId}.json
+  - {noteId}.md
 
 Canonical rules:
 
 - Canonical content is `{noteId}.json` (ProseMirror/Tiptap document + note metadata).
 - Markdown is derived for export/interoperability and must be kept reasonably in sync.
 
-project.json contains:
+vault.json contains:
 
 - folder tree
 - note index (id -> title, folderId, tags, createdAt, updatedAt, favorite, deletedAt?)
 - tag dictionary
 - template index
   - (reserved; templates are not user-facing)
-- settings (per project)
+- settings (vault-level)
+- uiState (workspace layout + tabs)
+- searchIndex (serialized MiniSearch index)
 
 ## 4) IndexedDB layout (IndexedDBAdapter)
 
 DB name: `local-notes` Object stores:
-
-- projects (key: projectId)
-- notes (compound key: [projectId, noteId])
-- templates (compound key: [projectId, templateId])
+- vault (key: id = "vault")
+- notes (key: noteId)
+- templates (key: templateId)
   - (reserved; templates are not user-facing)
-- assets (compound key: [projectId, assetId]) -> Blob
+- assets (key: assetId) -> Blob
 - uiState (key: "ui")
-- searchIndex (key: projectId) -> serialized MiniSearch index
+- searchIndex (key: "search") -> serialized MiniSearch index
 - appSettings (key: "app") -> { storageMode: "filesystem" | "idb", fsHandle?: FileSystemDirectoryHandle, lastVaultName?: string, settings?: { startupView: "last-opened" | "all-notes", defaultSort: "updated" | "created" | "title", openNoteBehavior: "new-tab" | "reuse-tab", confirmTrash: boolean, spellcheck: boolean } }
 
 Notes:
 - appSettings lives in IndexedDB regardless of primary storage, and is used to remember the user’s storage choice across launches.
-- settings is reserved for future global settings (non-project-specific).
+- settings is reserved for future global settings (non-vault-specific).
 
 ## 5) Image handling
 
@@ -115,7 +117,7 @@ Notes:
     - Retry access
     - Switch to browser storage (IndexedDB)
 - Switching adapters:
-  - Provide “Export project to folder” and “Import from folder” utilities (post-MVP ok)
+  - Provide “Export vault to folder” and “Import from folder” utilities (post-MVP ok)
 
 ## 7) Autosave & consistency
 
@@ -124,7 +126,7 @@ Notes:
   1. Update note in memory store
   2. Persist note.json
   3. Persist derived note.md
-  4. Update project.json note index updatedAt/title/tags
+  4. Update vault.json note index updatedAt/title/tags
   5. Update MiniSearch index (incremental)
 - On crash:
   - Next load uses canonical note.json; markdown may lag (acceptable)

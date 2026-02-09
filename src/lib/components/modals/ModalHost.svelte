@@ -8,13 +8,13 @@
   import type {
     AppPreferences,
     NoteIndexEntry,
-    Project,
+    Vault,
   } from "$lib/core/storage/types";
   import type { StorageMode } from "$lib/state/adapter.store";
   import type { SearchIndexState } from "$lib/state/search.store";
   import { activeModal, closeTopModal, modalStackStore } from "$lib/state/ui.store";
 
-  export let project: Project | null = null;
+  export let vault: Vault | null = null;
   export let searchState: SearchIndexState | null = null;
   export let notes: NoteIndexEntry[] = [];
   export let trashedNotes: NoteIndexEntry[] = [];
@@ -204,7 +204,7 @@
   {#if GlobalSearchModalComponent}
     <svelte:component
       this={GlobalSearchModalComponent}
-      {project}
+      {vault}
       {searchState}
       onClose={handleClose}
       onOpenNote={onOpenNote}
@@ -229,7 +229,6 @@
   {#if TrashModalComponent}
     <svelte:component
       this={TrashModalComponent}
-      {project}
       {trashedNotes}
       {activeNoteId}
       onClose={handleClose}

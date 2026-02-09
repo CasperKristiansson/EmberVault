@@ -4,13 +4,11 @@ import { findAssetHandle, resolveAssetExtension } from "./filesystem/assets";
 import {
   assetsDirectoryName,
   notesDirectoryName,
-  projectsDirectoryName,
   templatesDirectoryName,
   trashDirectoryName,
   vaultFileName,
 } from "./filesystem/constants";
 import {
-  isDirectoryHandle,
   isFileHandle,
   isNotFoundError,
   listDirectoryEntries,
@@ -29,17 +27,17 @@ import {
   templateFileName,
   templateMarkdownName,
 } from "./filesystem/paths";
-import { readProjectFile, writeProjectFile } from "./filesystem/project-files";
-import type { ProjectDirectories, VaultManifest } from "./filesystem/types";
+import type { VaultDirectories, VaultManifest } from "./filesystem/types";
 import type {
   AssetMeta,
   NoteDocumentFile,
   NoteIndexEntry,
-  Project,
   StorageAdapter,
   TemplateIndexEntry,
   UIState,
+  Vault,
 } from "./types";
+import { createDefaultVault, defaultVaultId } from "./indexeddb/default-vault";
 
 const supportsIndexedDatabase = (): boolean => "indexedDB" in globalThis;
 
@@ -47,6 +45,7 @@ export class FileSystemAdapter implements StorageAdapter {
   private readonly root: FileSystemDirectoryHandle;
   private readonly cacheAdapter: IndexedDBAdapter | null;
   private cacheReady = false;
+  private manifestWriteQueue: Promise<void> = Promise.resolve();
 
   public constructor(rootHandle: FileSystemDirectoryHandle) {
     this.root = rootHandle;
@@ -57,7 +56,7 @@ export class FileSystemAdapter implements StorageAdapter {
 
   public async init(): Promise<void> {
     await this.ensureVaultManifest();
-    await this.getProjectsDirectory(true);
+    await this.ensureVaultDirectories();
     if (this.cacheAdapter) {
       try {
         await this.cacheAdapter.init();
@@ -68,80 +67,43 @@ export class FileSystemAdapter implements StorageAdapter {
     }
   }
 
-  public async listProjects(): Promise<Project[]> {
-    const projectsRoot = await this.getProjectsDirectory(true);
-    const entries = await listDirectoryEntries(projectsRoot);
-    const projects: Project[] = [];
-    for (const entry of entries) {
-      if (isDirectoryHandle(entry)) {
-        // eslint-disable-next-line no-await-in-loop
-        const project = await readProjectFile(entry);
-        if (project) {
-          projects.push(project);
-        }
-      }
-    }
-    return projects;
+  public async readVault(): Promise<Vault | null> {
+    const manifest = await this.readVaultManifest();
+    return manifest.vault ?? null;
   }
 
-  public async createProject(project: Project): Promise<void> {
-    const existing = await this.readProject(project.id);
-    if (existing) {
-      throw new Error(
-        `FileSystemAdapter.createProject project exists ${project.id}.`
-      );
+  public async writeVault(vault: Vault): Promise<void> {
+    if (vault.id !== defaultVaultId) {
+      throw new Error(`FileSystemAdapter.writeVault id mismatch for ${vault.id}.`);
     }
-    const directories = await this.ensureProjectDirectories(project.id);
-    await writeProjectFile(directories.project, project);
+    await this.enqueueManifestWrite(async () => {
+      const manifest = await this.readVaultManifest();
+      await this.writeVaultManifest({
+        ...manifest,
+        vault,
+      });
+    });
   }
 
-  public async readProject(projectId: string): Promise<Project | null> {
-    try {
-      const projectDirectory = await this.getProjectDirectory(projectId, false);
-      return await readProjectFile(projectDirectory);
-    } catch (error) {
-      if (isNotFoundError(error)) {
-        return null;
-      }
-      throw error;
-    }
-  }
-
-  public async writeProject(
-    projectId: string,
-    projectMeta: Project
-  ): Promise<void> {
-    if (projectMeta.id !== projectId) {
-      throw new Error(
-        `FileSystemAdapter.writeProject id mismatch for ${projectId}.`
-      );
-    }
-    const projectDirectory = await this.getProjectDirectory(projectId, false);
-    await writeProjectFile(projectDirectory, projectMeta);
-  }
-
-  public async listNotes(projectId: string): Promise<NoteIndexEntry[]> {
-    const project = await this.readProject(projectId);
-    if (!project) {
+  public async listNotes(): Promise<NoteIndexEntry[]> {
+    const vault = await this.readVault();
+    if (!vault) {
       return [];
     }
-    return Object.values(project.notesIndex);
+    return Object.values(vault.notesIndex);
   }
 
-  public async listTemplates(projectId: string): Promise<TemplateIndexEntry[]> {
-    const project = await this.readProject(projectId);
-    if (!project) {
+  public async listTemplates(): Promise<TemplateIndexEntry[]> {
+    const vault = await this.readVault();
+    if (!vault) {
       return [];
     }
-    return Object.values(project.templatesIndex);
+    return Object.values(vault.templatesIndex);
   }
 
-  public async readNote(
-    projectId: string,
-    noteId: string
-  ): Promise<NoteDocumentFile | null> {
+  public async readNote(noteId: string): Promise<NoteDocumentFile | null> {
     try {
-      const directories = await this.ensureProjectDirectories(projectId, false);
+      const directories = await this.ensureVaultDirectories(false);
       const fileName = noteFileName(noteId);
       const storedNote = await readJsonFile<NoteDocumentFile>(
         directories.notes,
@@ -160,11 +122,10 @@ export class FileSystemAdapter implements StorageAdapter {
   }
 
   public async readTemplate(
-    projectId: string,
     templateId: string
   ): Promise<NoteDocumentFile | null> {
     try {
-      const directories = await this.ensureProjectDirectories(projectId, false);
+      const directories = await this.ensureVaultDirectories(false);
       return await readJsonFile<NoteDocumentFile>(
         directories.templates,
         templateFileName(templateId)
@@ -178,23 +139,18 @@ export class FileSystemAdapter implements StorageAdapter {
   }
 
   public async writeNote(input: {
-    projectId: string;
     noteId: string;
     noteDocument: NoteDocumentFile;
     derivedMarkdown: string;
   }): Promise<void> {
     if (input.noteDocument.id !== input.noteId) {
-      throw new Error(
-        `FileSystemAdapter.writeNote id mismatch for ${input.projectId}:${input.noteId}.`
-      );
+      throw new Error(`FileSystemAdapter.writeNote id mismatch ${input.noteId}.`);
     }
-    const project = await this.readProject(input.projectId);
-    if (!project) {
-      throw new Error(
-        `FileSystemAdapter.writeNote missing project ${input.projectId}.`
-      );
+    const vault = await this.readVault();
+    if (!vault) {
+      throw new Error("FileSystemAdapter.writeNote missing vault.");
     }
-    const directories = await this.ensureProjectDirectories(input.projectId);
+    const directories = await this.ensureVaultDirectories();
     await writeJsonFile(
       directories.notes,
       noteFileName(input.noteId),
@@ -206,36 +162,34 @@ export class FileSystemAdapter implements StorageAdapter {
       input.derivedMarkdown
     );
 
-    const updatedProject: Project = {
-      ...project,
-      updatedAt: Math.max(project.updatedAt, input.noteDocument.updatedAt),
+    const updatedVault: Vault = {
+      ...vault,
+      updatedAt: Math.max(vault.updatedAt, input.noteDocument.updatedAt),
       notesIndex: {
-        ...project.notesIndex,
+        ...vault.notesIndex,
         [input.noteId]: toNoteIndexEntry(input.noteDocument),
       },
     };
 
-    await this.writeProject(input.projectId, updatedProject);
+    await this.writeVault(updatedVault);
   }
 
   public async writeTemplate(input: {
-    projectId: string;
     templateId: string;
     noteDocument: NoteDocumentFile;
     derivedMarkdown: string;
   }): Promise<void> {
     if (input.noteDocument.id !== input.templateId) {
       throw new Error(
-        `FileSystemAdapter.writeTemplate id mismatch for ${input.projectId}:${input.templateId}.`
+        `FileSystemAdapter.writeTemplate id mismatch ${input.templateId}.`
       );
     }
-    const project = await this.readProject(input.projectId);
-    if (!project) {
-      throw new Error(
-        `FileSystemAdapter.writeTemplate missing project ${input.projectId}.`
-      );
+    const vault = await this.readVault();
+    if (!vault) {
+      throw new Error("FileSystemAdapter.writeTemplate missing vault.");
     }
-    const directories = await this.ensureProjectDirectories(input.projectId);
+
+    const directories = await this.ensureVaultDirectories();
     await writeJsonFile(
       directories.templates,
       templateFileName(input.templateId),
@@ -247,34 +201,27 @@ export class FileSystemAdapter implements StorageAdapter {
       input.derivedMarkdown
     );
 
-    const updatedProject: Project = {
-      ...project,
-      updatedAt: Math.max(project.updatedAt, input.noteDocument.updatedAt),
+    const updatedVault: Vault = {
+      ...vault,
+      updatedAt: Math.max(vault.updatedAt, input.noteDocument.updatedAt),
       templatesIndex: {
-        ...project.templatesIndex,
+        ...vault.templatesIndex,
         [input.templateId]: toTemplateIndexEntry(input.noteDocument),
       },
     };
 
-    await this.writeProject(input.projectId, updatedProject);
+    await this.writeVault(updatedVault);
   }
 
-  public async deleteNoteSoft(
-    projectId: string,
-    noteId: string
-  ): Promise<void> {
-    const project = await this.readProject(projectId);
-    if (!project) {
-      throw new Error(
-        `FileSystemAdapter.deleteNoteSoft missing project ${projectId}.`
-      );
+  public async deleteNoteSoft(noteId: string): Promise<void> {
+    const vault = await this.readVault();
+    if (!vault) {
+      throw new Error("FileSystemAdapter.deleteNoteSoft missing vault.");
     }
-    const directories = await this.ensureProjectDirectories(projectId);
-    const existing = await this.readNote(projectId, noteId);
+    const directories = await this.ensureVaultDirectories();
+    const existing = await this.readNote(noteId);
     if (!existing) {
-      throw new Error(
-        `FileSystemAdapter.deleteNoteSoft missing note ${projectId}:${noteId}.`
-      );
+      throw new Error(`FileSystemAdapter.deleteNoteSoft missing note ${noteId}.`);
     }
 
     const timestamp = Date.now();
@@ -292,39 +239,35 @@ export class FileSystemAdapter implements StorageAdapter {
     await removeEntryIfExists(directories.notes, noteFileName(noteId));
     await removeEntryIfExists(directories.notes, noteMarkdownName(noteId));
 
-    const updatedProject: Project = {
-      ...project,
-      updatedAt: Math.max(project.updatedAt, timestamp),
+    const updatedVault: Vault = {
+      ...vault,
+      updatedAt: Math.max(vault.updatedAt, timestamp),
       notesIndex: {
-        ...project.notesIndex,
+        ...vault.notesIndex,
         [noteId]: toNoteIndexEntry(updatedNote),
       },
     };
 
-    await this.writeProject(projectId, updatedProject);
+    await this.writeVault(updatedVault);
   }
 
-  public async restoreNote(projectId: string, noteId: string): Promise<void> {
-    const project = await this.readProject(projectId);
-    if (!project) {
-      throw new Error(
-        `FileSystemAdapter.restoreNote missing project ${projectId}.`
-      );
+  public async restoreNote(noteId: string): Promise<void> {
+    const vault = await this.readVault();
+    if (!vault) {
+      throw new Error("FileSystemAdapter.restoreNote missing vault.");
     }
-    const directories = await this.ensureProjectDirectories(projectId);
+    const directories = await this.ensureVaultDirectories();
     const existing = await readJsonFile<NoteDocumentFile>(
       directories.trash,
       noteFileName(noteId)
     );
     if (!existing) {
-      throw new Error(
-        `FileSystemAdapter.restoreNote missing note ${projectId}:${noteId}.`
-      );
+      throw new Error(`FileSystemAdapter.restoreNote missing note ${noteId}.`);
     }
     const timestamp = Date.now();
     const currentFolderId = existing.folderId;
     const restoredFolderId =
-      currentFolderId && Object.hasOwn(project.folders, currentFolderId)
+      currentFolderId && Object.hasOwn(vault.folders, currentFolderId)
         ? currentFolderId
         : null;
     const updatedNote: NoteDocumentFile = {
@@ -342,31 +285,26 @@ export class FileSystemAdapter implements StorageAdapter {
     await removeEntryIfExists(directories.trash, noteFileName(noteId));
     await removeEntryIfExists(directories.trash, noteMarkdownName(noteId));
 
-    const updatedProject: Project = {
-      ...project,
-      updatedAt: Math.max(project.updatedAt, timestamp),
+    const updatedVault: Vault = {
+      ...vault,
+      updatedAt: Math.max(vault.updatedAt, timestamp),
       notesIndex: {
-        ...project.notesIndex,
+        ...vault.notesIndex,
         [noteId]: toNoteIndexEntry(updatedNote),
       },
     };
 
-    await this.writeProject(projectId, updatedProject);
+    await this.writeVault(updatedVault);
   }
 
-  public async deleteNotePermanent(
-    projectId: string,
-    noteId: string
-  ): Promise<void> {
-    const project = await this.readProject(projectId);
-    if (!project) {
-      throw new Error(
-        `FileSystemAdapter.deleteNotePermanent missing project ${projectId}.`
-      );
+  public async deleteNotePermanent(noteId: string): Promise<void> {
+    const vault = await this.readVault();
+    if (!vault) {
+      throw new Error("FileSystemAdapter.deleteNotePermanent missing vault.");
     }
-    const directories = await this.ensureProjectDirectories(projectId);
+    const directories = await this.ensureVaultDirectories();
     const remainingNotesIndex: Record<string, NoteIndexEntry> = {};
-    for (const [entryId, entry] of Object.entries(project.notesIndex)) {
+    for (const [entryId, entry] of Object.entries(vault.notesIndex)) {
       if (entryId !== noteId) {
         remainingNotesIndex[entryId] = entry;
       }
@@ -377,28 +315,23 @@ export class FileSystemAdapter implements StorageAdapter {
     await removeEntryIfExists(directories.trash, noteFileName(noteId));
     await removeEntryIfExists(directories.trash, noteMarkdownName(noteId));
 
-    const updatedProject: Project = {
-      ...project,
-      updatedAt: Math.max(project.updatedAt, Date.now()),
+    const updatedVault: Vault = {
+      ...vault,
+      updatedAt: Math.max(vault.updatedAt, Date.now()),
       notesIndex: remainingNotesIndex,
     };
 
-    await this.writeProject(projectId, updatedProject);
+    await this.writeVault(updatedVault);
   }
 
-  public async deleteTemplate(
-    projectId: string,
-    templateId: string
-  ): Promise<void> {
-    const project = await this.readProject(projectId);
-    if (!project) {
-      throw new Error(
-        `FileSystemAdapter.deleteTemplate missing project ${projectId}.`
-      );
+  public async deleteTemplate(templateId: string): Promise<void> {
+    const vault = await this.readVault();
+    if (!vault) {
+      throw new Error("FileSystemAdapter.deleteTemplate missing vault.");
     }
-    const directories = await this.ensureProjectDirectories(projectId);
+    const directories = await this.ensureVaultDirectories();
     const remainingTemplatesIndex: Record<string, TemplateIndexEntry> = {};
-    for (const [entryId, entry] of Object.entries(project.templatesIndex)) {
+    for (const [entryId, entry] of Object.entries(vault.templatesIndex)) {
       if (entryId !== templateId) {
         remainingTemplatesIndex[entryId] = entry;
       }
@@ -413,24 +346,23 @@ export class FileSystemAdapter implements StorageAdapter {
       templateMarkdownName(templateId)
     );
 
-    const updatedProject: Project = {
-      ...project,
-      updatedAt: Math.max(project.updatedAt, Date.now()),
+    const updatedVault: Vault = {
+      ...vault,
+      updatedAt: Math.max(vault.updatedAt, Date.now()),
       templatesIndex: remainingTemplatesIndex,
     };
 
-    await this.writeProject(projectId, updatedProject);
+    await this.writeVault(updatedVault);
   }
 
   public async writeAsset(input: {
-    projectId: string;
     assetId: string;
     blob: Blob;
     meta?: AssetMeta;
   }): Promise<void> {
-    const project = await this.readProject(input.projectId);
-    if (project) {
-      const directories = await this.ensureProjectDirectories(input.projectId);
+    const vault = await this.readVault();
+    if (vault) {
+      const directories = await this.ensureVaultDirectories();
       const extension = resolveAssetExtension(
         input.meta?.mime ?? input.blob.type
       );
@@ -438,16 +370,11 @@ export class FileSystemAdapter implements StorageAdapter {
       await writeBlobFile(directories.assets, fileName, input.blob);
       return;
     }
-    throw new Error(
-      `FileSystemAdapter.writeAsset missing project ${input.projectId}.`
-    );
+    throw new Error("FileSystemAdapter.writeAsset missing vault.");
   }
 
-  public async readAsset(
-    projectId: string,
-    assetId: string
-  ): Promise<Blob | null> {
-    const directories = await this.ensureProjectDirectories(projectId, false);
+  public async readAsset(assetId: string): Promise<Blob | null> {
+    const directories = await this.ensureVaultDirectories(false);
     const handle = await findAssetHandle(directories.assets, assetId);
     if (handle) {
       return handle.getFile();
@@ -455,9 +382,9 @@ export class FileSystemAdapter implements StorageAdapter {
     return null;
   }
 
-  public async listAssets(projectId: string): Promise<string[]> {
+  public async listAssets(): Promise<string[]> {
     try {
-      const directories = await this.ensureProjectDirectories(projectId, false);
+      const directories = await this.ensureVaultDirectories(false);
       const entries = await listDirectoryEntries(directories.assets);
       const assetIds = new Set<string>();
       for (const entry of entries) {
@@ -482,10 +409,12 @@ export class FileSystemAdapter implements StorageAdapter {
       await this.cacheAdapter.writeUIState(state);
       return;
     }
-    const manifest = await this.readVaultManifest();
-    await this.writeVaultManifest({
-      ...manifest,
-      uiState: state,
+    await this.enqueueManifestWrite(async () => {
+      const manifest = await this.readVaultManifest();
+      await this.writeVaultManifest({
+        ...manifest,
+        uiState: state,
+      });
     });
   }
 
@@ -504,36 +433,31 @@ export class FileSystemAdapter implements StorageAdapter {
     return legacy;
   }
 
-  public async writeSearchIndex(
-    projectId: string,
-    snapshot: string
-  ): Promise<void> {
+  public async writeSearchIndex(snapshot: string): Promise<void> {
     if (this.cacheAdapter && this.cacheReady) {
-      await this.cacheAdapter.writeSearchIndex(projectId, snapshot);
+      await this.cacheAdapter.writeSearchIndex(snapshot);
       return;
     }
-    const manifest = await this.readVaultManifest();
-    const searchIndex = manifest.searchIndex ?? {};
-    await this.writeVaultManifest({
-      ...manifest,
-      searchIndex: {
-        ...searchIndex,
-        [projectId]: snapshot,
-      },
+    await this.enqueueManifestWrite(async () => {
+      const manifest = await this.readVaultManifest();
+      await this.writeVaultManifest({
+        ...manifest,
+        searchIndex: snapshot,
+      });
     });
   }
 
-  public async readSearchIndex(projectId: string): Promise<string | null> {
+  public async readSearchIndex(): Promise<string | null> {
     if (this.cacheAdapter && this.cacheReady) {
-      const cached = await this.cacheAdapter.readSearchIndex(projectId);
+      const cached = await this.cacheAdapter.readSearchIndex();
       if (cached) {
         return cached;
       }
     }
     const manifest = await this.readVaultManifest();
-    const legacy = manifest.searchIndex?.[projectId] ?? null;
+    const legacy = manifest.searchIndex ?? null;
     if (legacy && this.cacheAdapter && this.cacheReady) {
-      await this.cacheAdapter.writeSearchIndex(projectId, legacy);
+      await this.cacheAdapter.writeSearchIndex(legacy);
     }
     return legacy;
   }
@@ -544,7 +468,17 @@ export class FileSystemAdapter implements StorageAdapter {
       vaultFileName
     );
     if (!manifest) {
-      await this.writeVaultManifest({ version: 1 });
+      await this.writeVaultManifest({
+        version: 1,
+        vault: createDefaultVault(),
+      });
+      return;
+    }
+    if (!manifest.vault) {
+      await this.writeVaultManifest({
+        ...manifest,
+        vault: createDefaultVault(),
+      });
     }
   }
 
@@ -553,44 +487,43 @@ export class FileSystemAdapter implements StorageAdapter {
       this.root,
       vaultFileName
     );
-    return manifest ?? { version: 1 };
+    return manifest ?? { version: 1, vault: createDefaultVault() };
   }
 
   private async writeVaultManifest(manifest: VaultManifest): Promise<void> {
     await writeJsonFile(this.root, vaultFileName, manifest);
   }
 
-  private async getProjectsDirectory(
-    create: boolean
-  ): Promise<FileSystemDirectoryHandle> {
-    return this.root.getDirectoryHandle(projectsDirectoryName, { create });
+  private async enqueueManifestWrite(
+    operation: () => Promise<void>
+  ): Promise<void> {
+    const next = this.manifestWriteQueue
+      .catch(() => {
+        // Keep the queue alive even if a prior write failed.
+      })
+      .then(operation);
+    this.manifestWriteQueue = next;
+    await next;
   }
 
-  private async getProjectDirectory(
-    projectId: string,
-    create: boolean
-  ): Promise<FileSystemDirectoryHandle> {
-    const projectsRoot = await this.getProjectsDirectory(create);
-    return projectsRoot.getDirectoryHandle(projectId, { create });
-  }
-
-  private async ensureProjectDirectories(
-    projectId: string,
+  private async ensureVaultDirectories(
     create = true
-  ): Promise<ProjectDirectories> {
-    const project = await this.getProjectDirectory(projectId, create);
-    const notes = await project.getDirectoryHandle(notesDirectoryName, {
+  ): Promise<VaultDirectories> {
+    const notes = await this.root.getDirectoryHandle(notesDirectoryName, {
       create,
     });
-    const templates = await project.getDirectoryHandle(templatesDirectoryName, {
+    const templates = await this.root.getDirectoryHandle(
+      templatesDirectoryName,
+      {
+        create,
+      }
+    );
+    const assets = await this.root.getDirectoryHandle(assetsDirectoryName, {
       create,
     });
-    const assets = await project.getDirectoryHandle(assetsDirectoryName, {
+    const trash = await this.root.getDirectoryHandle(trashDirectoryName, {
       create,
     });
-    const trash = await project.getDirectoryHandle(trashDirectoryName, {
-      create,
-    });
-    return { project, notes, templates, assets, trash };
+    return { notes, templates, assets, trash };
   }
 }

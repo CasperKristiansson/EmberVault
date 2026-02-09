@@ -11,12 +11,12 @@
     getRootFolderIds,
   } from "$lib/core/utils/folder-tree";
   import type { SearchResult } from "$lib/core/search/minisearch";
-  import type { Project } from "$lib/core/storage/types";
+  import type { Vault } from "$lib/core/storage/types";
   import { querySearch } from "$lib/state/search.store";
   import type { SearchIndexState } from "$lib/state/search.store";
   import { prefersReducedMotion } from "$lib/state/motion.store";
 
-  export let project: Project | null = null;
+  export let vault: Vault | null = null;
   export let searchState: SearchIndexState | null = null;
   export let onClose: () => void = () => {};
   export let onOpenNote: (noteId: string) => void | Promise<void> = async () => {};
@@ -41,11 +41,11 @@
     label: string;
   };
 
-  const buildFolderOptions = (currentProject: Project | null): FolderOption[] => {
-    if (!currentProject) {
+  const buildFolderOptions = (currentVault: Vault | null): FolderOption[] => {
+    if (!currentVault) {
       return [];
     }
-    const folders = currentProject.folders;
+    const folders = currentVault.folders;
     const rootIds = getRootFolderIds(folders);
     const options: FolderOption[] = [];
     const traverse = (folderId: string, depth: number): void => {
@@ -198,10 +198,10 @@
   };
 
   const resolveTagLabels = (result: SearchResult): string[] => {
-    if (!project) {
+    if (!vault) {
       return [];
     }
-    const tagLookup = project.tags;
+    const tagLookup = vault.tags;
     return (result.tagIds ?? [])
       .map((tagId) => tagLookup[tagId]?.name)
       .filter((tag): tag is string => Boolean(tag));
@@ -211,8 +211,8 @@
     return buildSnippet(result.content ?? "", result.terms ?? []);
   };
 
-  $: folderOptions = buildFolderOptions(project);
-  $: tagOptions = project ? Object.values(project.tags) : [];
+  $: folderOptions = buildFolderOptions(vault);
+  $: tagOptions = vault ? Object.values(vault.tags) : [];
   $: hasActiveFilters =
     selectedFolderId !== "all" ||
     selectedTagId !== "all" ||

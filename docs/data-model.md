@@ -2,13 +2,13 @@
 
 ## 1) IDs
 
-- projectId, folderId, noteId, templateId, assetId:
-  - ULID (time-sortable) for project/folder/note/template
+- vaultId, folderId, noteId, templateId, assetId:
+  - ULID (time-sortable) for vault/folder/note/template
   - assetId = sha-256(blob) hex
 
-## 2) Project
+## 2) Vault
 
-Project { id: string name: string createdAt: number updatedAt: number folders: FolderTree tags: Record<tagId, Tag> notesIndex: Record<noteId, NoteIndexEntry> templatesIndex: Record<templateId, TemplateIndexEntry> settings: ProjectSettings }
+Vault { id: string name: string createdAt: number updatedAt: number folders: FolderTree tags: Record<tagId, Tag> notesIndex: Record<noteId, NoteIndexEntry> templatesIndex: Record<templateId, TemplateIndexEntry> settings: VaultSettings }
 
 Folder { id: string name: string parentId: string | null childFolderIds: string[] noteIds: string[] (optional ordering) }
 
@@ -30,7 +30,7 @@ Wiki links syntax: [[Note Title]] and [[noteId]] (internal stable) Resolution st
 
 - Prefer [[noteId]] when created by UI
 - When user types [[Title]]:
-  - resolve by exact title match in project
+  - resolve by exact title match in vault
   - if ambiguous: link remains unresolved until user selects the intended note
 
 ## 6) Templates

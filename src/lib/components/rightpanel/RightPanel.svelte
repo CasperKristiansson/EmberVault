@@ -6,7 +6,7 @@
   import type {
     CustomFieldValue,
     NoteDocumentFile,
-    Project,
+    Vault,
   } from "$lib/core/storage/types";
 
   type RightPanelTab = "outline" | "backlinks" | "metadata";
@@ -20,7 +20,7 @@
   export let activeTab: RightPanelTab = "outline";
   export let activeNoteId: string | null = null;
   export let activeNote: NoteDocumentFile | null = null;
-  export let project: Project | null = null;
+  export let vault: Vault | null = null;
   export let linkedMentions: BacklinkEntry[] = [];
   export let backlinksLoading = false;
   export let onOpenNote: (noteId: string) => void = () => {};
@@ -43,7 +43,7 @@
   {:else}
     <MetadataPanel
       note={activeNote}
-      {project}
+      {vault}
       onUpdateCustomFields={onUpdateCustomFields}
     />
   {/if}

@@ -3,7 +3,7 @@
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
     import { Database, Folder } from "lucide-svelte";
-    import { createDefaultProject } from "$lib/core/storage/indexeddb.adapter";
+    import { createDefaultVault } from "$lib/core/storage/indexeddb.adapter";
     import {
       readAppSettings,
       writeAppSettings,
@@ -63,12 +63,10 @@
     try {
       const adapter = initAdapter("idb");
       await adapter.init();
-      const projects = await adapter.listProjects();
-      const project = projects[0] ?? createDefaultProject();
-      if (projects.length === 0) {
-        await adapter.createProject(project);
+      const existingVault = await adapter.readVault();
+      if (!existingVault) {
+        await adapter.writeVault(createDefaultVault());
       }
-      await adapter.writeUIState({ lastProjectId: project.id });
       await persistStorageChoice("idb");
       await goto(resolve("/app"));
     } catch (error) {
@@ -91,12 +89,10 @@
       const handle = await window.showDirectoryPicker();
       const adapter = initAdapter("filesystem", { directoryHandle: handle });
       await adapter.init();
-      const projects = await adapter.listProjects();
-      const project = projects[0] ?? createDefaultProject();
-      if (projects.length === 0) {
-        await adapter.createProject(project);
+      const existingVault = await adapter.readVault();
+      if (!existingVault) {
+        await adapter.writeVault(createDefaultVault());
       }
-      await adapter.writeUIState({ lastProjectId: project.id });
       await persistStorageChoice("filesystem", handle);
       await goto(resolve("/app"));
     } catch (error) {

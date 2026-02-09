@@ -83,7 +83,7 @@
     storageMode as storageModeStore,
     type StorageMode,
   } from "$lib/state/adapter.store";
-  import { createDefaultProject } from "$lib/core/storage/indexeddb.adapter";
+  import { createDefaultVault } from "$lib/core/storage/indexeddb.adapter";
   import {
     readAppSettings,
     writeAppSettings,
@@ -95,7 +95,7 @@
     CustomFieldValue,
     NoteDocumentFile,
     NoteIndexEntry,
-    Project,
+    Vault,
     StorageAdapter,
     UIState,
   } from "$lib/core/storage/types";
@@ -156,7 +156,7 @@
     editorPlainText: "",
   });
 
-  let project: Project | null = null;
+  let vault: Vault | null = null;
   let notes: NoteIndexEntry[] = [];
   let filteredNotes: NoteIndexEntry[] = [];
   let activePane: PaneId = "primary";
@@ -202,9 +202,9 @@
   const pendingSaveIds: Record<string, true> = {};
   let pendingSaveCount = 0;
 
-  // IndexedDB adapter writes update the project index via a read-modify-write
+  // IndexedDB adapter writes update the vault index via a read-modify-write
   // cycle, so concurrent writes can clobber each other. Serialize adapter writes
-  // to keep the project metadata consistent.
+  // to keep the vault metadata consistent.
   let adapterWriteQueue: Promise<void> = Promise.resolve();
   const enqueueAdapterWrite = async (
     operation: () => Promise<void>
@@ -218,7 +218,6 @@
     await next;
   };
 
-  let projectId = "";
   $: activePaneState = paneStates[activePane] ?? createPaneState();
   $: activeNote = activePaneState.note;
   $: activeTabId = activePaneState.activeTabId;
@@ -406,19 +405,16 @@
     };
   };
 
-  const ensureProjectForAdapter = async (
+  const ensureVaultForAdapter = async (
     activeAdapter: StorageAdapter
-  ): Promise<Project> => {
-    const projects = await runAdapterTask(
-      () => activeAdapter.listProjects(),
-      []
-    );
-    if (projects.length > 0) {
-      return projects[0] ?? createDefaultProject();
+  ): Promise<Vault | null> => {
+    const existing = await runAdapterTask(() => activeAdapter.readVault(), null);
+    if (existing) {
+      return existing;
     }
-    const project = createDefaultProject();
-    await runAdapterVoid(() => activeAdapter.createProject(project));
-    return project;
+    const vault = createDefaultVault();
+    const stored = await runAdapterVoid(() => activeAdapter.writeVault(vault));
+    return stored ? vault : null;
   };
 
   const retryFolderAccess = async (): Promise<void> => {
@@ -440,12 +436,11 @@
       if (!ready) {
         return;
       }
-      const project = await ensureProjectForAdapter(nextAdapter);
-      await runAdapterVoid(() =>
-        nextAdapter.writeUIState({ lastProjectId: project.id })
-      );
+      const ensured = await ensureVaultForAdapter(nextAdapter);
+      if (!ensured) {
+        return;
+      }
       await persistStorageChoice("filesystem", handle);
-      projectId = project.id;
       await initializeWorkspace();
     } catch (error) {
       if (isAbortError(error)) {
@@ -475,12 +470,11 @@
       if (!ready) {
         return;
       }
-      const project = await ensureProjectForAdapter(nextAdapter);
-      await runAdapterVoid(() =>
-        nextAdapter.writeUIState({ lastProjectId: project.id })
-      );
+      const ensured = await ensureVaultForAdapter(nextAdapter);
+      if (!ensured) {
+        return;
+      }
       await persistStorageChoice("idb");
-      projectId = project.id;
       await initializeWorkspace();
       if (notifyFallback) {
         notifyAdapterFailure(adapterFallbackToastMessage);
@@ -531,13 +525,13 @@
   };
 
   const rebuildSearchIndex = async (): Promise<void> => {
-    if (!projectId) {
+    if (!vault) {
       return;
     }
     const noteDocuments = await loadNoteDocumentsForIndex();
     const index = buildSearchIndex(noteDocuments);
     await runAdapterVoid(() =>
-      adapter.writeSearchIndex(projectId, serializeSearchIndex(index))
+      adapter.writeSearchIndex(serializeSearchIndex(index))
     );
     searchState = { index };
     pushToast("Search index rebuilt.", { tone: "success" });
@@ -587,14 +581,13 @@
     width?: number;
     height?: number;
   } | null> => {
-    if (!projectId) {
+    if (!vault) {
       return null;
     }
     const assetId = await hashBlobSha256(file);
     const meta = await readImageMeta(file);
     await runAdapterVoid(() =>
       adapter.writeAsset({
-        projectId,
         assetId,
         blob: file,
         meta,
@@ -689,7 +682,6 @@
 
   const buildWorkspaceUiState = (): UIState => ({
     workspaceState: {
-      projectId,
       focusedPane: activePane,
       paneLayout,
       panes: Object.fromEntries(
@@ -877,7 +869,7 @@
   const backlinksRefreshTask = createDebouncedTask(
     async (targetId: string, targetTitle: string | null) => {
       const requestId = (backlinkRequestId += 1);
-      if (!projectId || !targetId) {
+      if (!vault || !targetId) {
         linkedMentions = [];
         backlinksLoading = false;
         return;
@@ -895,7 +887,7 @@
       const results = await Promise.all(
         candidates.map(async (note) => {
           const document = await runAdapterTask(
-            () => adapter.readNote(projectId, note.id),
+            () => adapter.readNote(note.id),
             null
           );
           if (!document) {
@@ -952,19 +944,19 @@
   }
 
   $: activeFolderName =
-    activeFolderId && project
-      ? project.folders[activeFolderId]?.name ?? null
+    activeFolderId && vault
+      ? vault.folders[activeFolderId]?.name ?? null
       : null;
-  $: displayNotes = project
-    ? orderNotesForFolder(notes, activeFolderId, project.folders)
+  $: displayNotes = vault
+    ? orderNotesForFolder(notes, activeFolderId, vault.folders)
     : [];
   $: trashedNotes = sortTrashNotes(
     notes.filter((note) => note.deletedAt !== null)
   );
   $: filteredNotes = filterNotesByFavorites(displayNotes, favoritesOnly);
-  $: noteListTitle = project
-    ? `${project.name} / ${activeFolderName ?? "All notes"}`
-    : "Notes";
+  $: noteListTitle = activeFolderName
+    ? `All notes / ${activeFolderName}`
+    : "All notes";
   $: noteListCount = filteredNotes.length;
   $: noteListEmptyMessage = favoritesOnly ? "No favorites yet." : "No notes yet.";
   $: {
@@ -983,11 +975,8 @@
   }
 
   const loadNotes = async (): Promise<void> => {
-    if (!projectId) {
-      return;
-    }
     const loadedNotes = sortNotes(
-      await runAdapterTask(() => adapter.listNotes(projectId), [])
+      await runAdapterTask(() => adapter.listNotes(), [])
     );
     if (Object.keys(favoriteOverrides).length > 0) {
       notes = loadedNotes.map((note) => {
@@ -998,12 +987,12 @@
       notes = loadedNotes;
     }
     notesRevision += 1;
-    const storedProject = await runAdapterTask(
-      () => adapter.readProject(projectId),
+    const storedVault = await runAdapterTask(
+      () => adapter.readVault(),
       null
     );
-    if (storedProject) {
-      project = storedProject;
+    if (storedVault) {
+      vault = storedVault;
     }
   };
 
@@ -1068,9 +1057,7 @@
     const storedState = readWorkspaceState(
       await runAdapterTask(() => adapter.readUIState(), null)
     );
-    const storedProjectId = storedState.projectId;
-    const useStoredState =
-      typeof storedProjectId === "string" && storedProjectId === projectId;
+    const useStoredState = Object.keys(storedState).length > 0;
 
     const isRecord = (value: unknown): value is Record<string, unknown> =>
       typeof value === "object" && value !== null;
@@ -1260,12 +1247,12 @@
   };
 
   const loadNoteDocumentsForIndex = async (): Promise<NoteDocumentFile[]> => {
-    if (!projectId || notes.length === 0) {
+    if (!vault || notes.length === 0) {
       return [];
     }
     const noteDocuments = await Promise.all(
       notes.map(async (entry) =>
-        runAdapterTask(() => adapter.readNote(projectId, entry.id), null)
+        runAdapterTask(() => adapter.readNote(entry.id), null)
       )
     );
     return noteDocuments.filter(
@@ -1275,12 +1262,12 @@
   };
 
   const loadSearchIndex = async (): Promise<void> => {
-    if (!projectId) {
+    if (!vault) {
       return;
     }
     const noteDocuments = await loadNoteDocumentsForIndex();
     searchState = await runAdapterTask(
-      () => hydrateSearchIndex(adapter, projectId, [...noteDocuments]),
+      () => hydrateSearchIndex(adapter, [...noteDocuments]),
       null
     );
   };
@@ -1288,7 +1275,7 @@
   const updateSearchIndexForDocument = async (
     document: NoteDocumentFile
   ): Promise<void> => {
-    if (!projectId) {
+    if (!vault) {
       return;
     }
     if (!searchState) {
@@ -1302,7 +1289,6 @@
       () =>
         applySearchIndexChange({
           adapter,
-          projectId,
           state: currentSearchState,
           change: {
             type: "upsert",
@@ -1313,10 +1299,10 @@
     );
   };
 
-  const persistProject = async (nextProject: Project): Promise<void> => {
-    project = nextProject;
+  const persistVault = async (nextVault: Vault): Promise<void> => {
+    vault = nextVault;
     await enqueueAdapterWrite(async () => {
-      await runAdapterVoid(() => adapter.writeProject(nextProject.id, nextProject));
+      await runAdapterVoid(() => adapter.writeVault(nextVault));
     });
   };
 
@@ -1325,7 +1311,7 @@
     paneId: PaneId
   ): Promise<void> => {
     const note = await runAdapterTask(
-      () => adapter.readNote(projectId, noteId),
+      () => adapter.readNote(noteId),
       null
     );
     if (note) {
@@ -1470,7 +1456,7 @@
         return pane.note;
       }
     }
-    return runAdapterTask(() => adapter.readNote(projectId, noteId), null);
+    return runAdapterTask(() => adapter.readNote(noteId), null);
   };
 
   const syncPaneNoteFolder = (
@@ -1494,36 +1480,36 @@
     fromId: string,
     toId: string
   ): Promise<void> => {
-    if (!project || !activeFolderId) {
+    if (!vault || !activeFolderId) {
       return;
     }
     const currentOrder = resolveFolderNoteOrder(
       notes,
       activeFolderId,
-      project.folders
+      vault.folders
     );
     const nextOrder = reorderNoteIds(currentOrder, fromId, toId);
     if (nextOrder === currentOrder) {
       return;
     }
     const nextFolders = setFolderNoteOrder(
-      project.folders,
+      vault.folders,
       activeFolderId,
       nextOrder
     );
-    const updatedProject: Project = {
-      ...project,
+    const updatedVault: Vault = {
+      ...vault,
       folders: nextFolders,
       updatedAt: Date.now(),
     };
-    await persistProject(updatedProject);
+    await persistVault(updatedVault);
   };
 
   const moveNoteToFolder = async (
     noteId: string,
     targetFolderId: string
   ): Promise<void> => {
-    if (!project) {
+    if (!vault) {
       return;
     }
     await flushPendingSaveForNote(noteId);
@@ -1536,13 +1522,13 @@
       return;
     }
     const sourceOrder =
-      sourceFolderId && project
-        ? resolveFolderNoteOrder(notes, sourceFolderId, project.folders)
+      sourceFolderId && vault
+        ? resolveFolderNoteOrder(notes, sourceFolderId, vault.folders)
         : [];
     const targetOrder = resolveFolderNoteOrder(
       notes,
       targetFolderId,
-      project.folders
+      vault.folders
     );
     const nextSourceOrder = sourceFolderId
       ? sourceOrder.filter((id) => id !== noteId)
@@ -1556,14 +1542,14 @@
     syncPaneNoteFolder(noteId, updatedNote);
     await persistNote(updatedNote);
 
-    const storedProject = await runAdapterTask(
-      () => adapter.readProject(projectId),
+    const storedVault = await runAdapterTask(
+      () => adapter.readVault(),
       null
     );
-    if (!storedProject) {
+    if (!storedVault) {
       return;
     }
-    let nextFolders = storedProject.folders;
+    let nextFolders = storedVault.folders;
     if (sourceFolderId) {
       nextFolders = setFolderNoteOrder(
         nextFolders,
@@ -1576,12 +1562,12 @@
       targetFolderId,
       nextTargetOrder
     );
-    const updatedProject: Project = {
-      ...storedProject,
+    const updatedVault: Vault = {
+      ...storedVault,
       folders: nextFolders,
       updatedAt: Date.now(),
     };
-    await persistProject(updatedProject);
+    await persistVault(updatedVault);
     await loadNotes();
   };
 
@@ -1844,6 +1830,9 @@
   };
 
   const persistNote = async (note: NoteDocumentFile): Promise<void> => {
+    if (!vault) {
+      return;
+    }
     const activeNotes = notes.filter((entry) => entry.deletedAt === null);
     const resolvedPlainText = note.derived?.plainText ?? "";
     const outgoingLinks = resolveOutgoingLinks(resolvedPlainText, activeNotes);
@@ -1859,7 +1848,6 @@
     await enqueueAdapterWrite(async () => {
       await runAdapterVoid(() =>
         adapter.writeNote({
-          projectId,
           noteId: note.id,
           noteDocument: resolvedNote,
           derivedMarkdown: toDerivedMarkdown(note.title, resolvedPlainText),
@@ -1998,27 +1986,27 @@
   const removeNoteFromLocalState = (noteId: string): void => {
     notes = notes.filter((note) => note.id !== noteId);
     notesRevision += 1;
-    if (!project || !Object.hasOwn(project.notesIndex, noteId)) {
+    if (!vault || !Object.hasOwn(vault.notesIndex, noteId)) {
       return;
     }
-    const { [noteId]: _removed, ...remainingNotes } = project.notesIndex;
-    const updatedProject: Project = {
-      ...project,
+    const { [noteId]: _removed, ...remainingNotes } = vault.notesIndex;
+    const updatedVault: Vault = {
+      ...vault,
       notesIndex: remainingNotes,
-      updatedAt: Math.max(project.updatedAt, Date.now()),
+      updatedAt: Math.max(vault.updatedAt, Date.now()),
     };
-    project = updatedProject;
+    vault = updatedVault;
   };
 
   const deleteNoteToTrash = async (noteId: string): Promise<void> => {
-    if (!projectId) {
+    if (!vault) {
       return;
     }
     await flushPendingSaveForNote(noteId);
     await removeNoteFromTabs(noteId);
-    await runAdapterVoid(() => adapter.deleteNoteSoft(projectId, noteId));
+    await runAdapterVoid(() => adapter.deleteNoteSoft(noteId));
     const updatedNote = await runAdapterTask(
-      () => adapter.readNote(projectId, noteId),
+      () => adapter.readNote(noteId),
       null
     );
     if (updatedNote) {
@@ -2028,12 +2016,12 @@
   };
 
   const restoreTrashedNote = async (noteId: string): Promise<void> => {
-    if (!projectId) {
+    if (!vault) {
       return;
     }
-    await runAdapterVoid(() => adapter.restoreNote(projectId, noteId));
+    await runAdapterVoid(() => adapter.restoreNote(noteId));
     const restoredNote = await runAdapterTask(
-      () => adapter.readNote(projectId, noteId),
+      () => adapter.readNote(noteId),
       null
     );
     if (restoredNote) {
@@ -2043,15 +2031,13 @@
   };
 
   const deleteNotePermanently = async (noteId: string): Promise<void> => {
-    if (!projectId) {
+    if (!vault) {
       return;
     }
     removeNoteFromLocalState(noteId);
     await flushPendingSaveForNote(noteId);
     await removeNoteFromTabs(noteId);
-    await runAdapterVoid(() =>
-      adapter.deleteNotePermanent(projectId, noteId)
-    );
+    await runAdapterVoid(() => adapter.deleteNotePermanent(noteId));
     if (!searchState) {
       await loadSearchIndex();
     }
@@ -2061,7 +2047,6 @@
         () =>
           applySearchIndexChange({
             adapter,
-            projectId,
             state: currentSearchState,
             change: {
               type: "remove",
@@ -2217,7 +2202,7 @@
       }
     }
     const note = await runAdapterTask(
-      () => adapter.readNote(projectId, noteId),
+      () => adapter.readNote(noteId),
       null
     );
     return note ? { ...note, favorite } : null;
@@ -2227,7 +2212,7 @@
     noteId: string,
     favorite: boolean
   ): Promise<void> => {
-    if (!projectId) {
+    if (!vault) {
       return;
     }
     const noteSnapshot = await resolveNoteSnapshot(noteId, favorite);
@@ -2278,6 +2263,9 @@
   };
 
   const createNote = async (): Promise<void> => {
+    if (!vault) {
+      return;
+    }
     favoritesOnly = false;
     void flushPendingSave();
     openNotesView();
@@ -2296,44 +2284,44 @@
         ?.note ?? note;
     await persistNote(latestSnapshot);
     await loadNotes();
-    if (activeFolderId && project?.folders[activeFolderId]?.noteIds) {
+    if (activeFolderId && vault?.folders[activeFolderId]?.noteIds) {
       const currentOrder = resolveFolderNoteOrder(
         notes,
         activeFolderId,
-        project.folders
+        vault.folders
       );
       const nextOrder = [...currentOrder.filter((id) => id !== note.id), note.id];
       const nextFolders = setFolderNoteOrder(
-        project.folders,
+        vault.folders,
         activeFolderId,
         nextOrder
       );
-      const updatedProject: Project = {
-        ...project,
+      const updatedVault: Vault = {
+        ...vault,
         folders: nextFolders,
         updatedAt: Date.now(),
       };
-      await persistProject(updatedProject);
+      await persistVault(updatedVault);
     }
     syncSaveState();
   };
 
   const createFolder = async (parentId: string | null): Promise<string | null> => {
-    if (!project) {
+    if (!vault) {
       return null;
     }
     const folderId = createUlid();
-    const nextFolders = addFolder(project.folders, {
+    const nextFolders = addFolder(vault.folders, {
       id: folderId,
       name: "New folder",
       parentId,
     });
-    const updatedProject: Project = {
-      ...project,
+    const updatedVault: Vault = {
+      ...vault,
       folders: nextFolders,
       updatedAt: Date.now(),
     };
-    await persistProject(updatedProject);
+    await persistVault(updatedVault);
     return folderId;
   };
 
@@ -2341,75 +2329,38 @@
     folderId: string,
     name: string
   ): Promise<void> => {
-    if (!project) {
+    if (!vault) {
       return;
     }
-    const nextFolders = renameFolderEntry(project.folders, folderId, name);
-    if (nextFolders === project.folders) {
+    const nextFolders = renameFolderEntry(vault.folders, folderId, name);
+    if (nextFolders === vault.folders) {
       return;
     }
-    const updatedProject: Project = {
-      ...project,
+    const updatedVault: Vault = {
+      ...vault,
       folders: nextFolders,
       updatedAt: Date.now(),
     };
-    await persistProject(updatedProject);
+    await persistVault(updatedVault);
   };
 
   const deleteFolder = async (folderId: string): Promise<void> => {
-    if (!project) {
+    if (!vault) {
       return;
     }
-    if (!isFolderEmpty(folderId, project.folders, project.notesIndex)) {
+    if (!isFolderEmpty(folderId, vault.folders, vault.notesIndex)) {
       return;
     }
-    const nextFolders = removeFolder(project.folders, folderId);
-    const updatedProject: Project = {
-      ...project,
+    const nextFolders = removeFolder(vault.folders, folderId);
+    const updatedVault: Vault = {
+      ...vault,
       folders: nextFolders,
       updatedAt: Date.now(),
     };
-    await persistProject(updatedProject);
+    await persistVault(updatedVault);
     if (activeFolderId === folderId) {
       activeFolderId = null;
     }
-  };
-
-  const resolveWorkspaceProjectId = async (): Promise<string> => {
-    const writeUiStatePatch = async (
-      patch: Record<string, unknown>
-    ): Promise<void> => {
-      const current =
-        (await runAdapterTask(() => adapter.readUIState(), null)) ?? {};
-      await runAdapterVoid(() =>
-        adapter.writeUIState({
-          ...current,
-          ...patch,
-        })
-      );
-    };
-
-    const projects = await runAdapterTask(() => adapter.listProjects(), []);
-    if (projects.length === 0) {
-      const created = createDefaultProject();
-      await runAdapterVoid(() => adapter.createProject(created));
-      await writeUiStatePatch({ lastProjectId: created.id });
-      return created.id;
-    }
-
-    const state = (await runAdapterTask(() => adapter.readUIState(), null)) ?? {};
-    const lastProjectId =
-      typeof (state as { lastProjectId?: unknown }).lastProjectId === "string"
-        ? (state as { lastProjectId: string }).lastProjectId
-        : null;
-    const active = lastProjectId
-      ? projects.find((project) => project.id === lastProjectId)
-      : null;
-    const resolvedProjectId = (active ?? projects[0])?.id ?? "";
-    if (resolvedProjectId) {
-      await writeUiStatePatch({ lastProjectId: resolvedProjectId });
-    }
-    return resolvedProjectId;
   };
 
   const selectFolder = (folderId: string): void => {
@@ -2457,23 +2408,15 @@
       isLoading = false;
       return;
     }
-    projectId = await resolveWorkspaceProjectId();
-    if (!projectId) {
-      isLoading = false;
-      return;
-    }
-    const storedProject = await runAdapterTask(
-      () => adapter.readProject(projectId),
-      null
-    );
-    if (!storedProject) {
+    const storedVault = await ensureVaultForAdapter(adapter);
+    if (!storedVault) {
       if (!permissionModalId) {
         await goto(resolve("/onboarding"));
       }
       isLoading = false;
       return;
     }
-    project = storedProject;
+    vault = storedVault;
     await loadNotes();
     await loadSearchIndex();
     await restoreWorkspaceState();
@@ -2620,8 +2563,8 @@
       </button>
     </div>
     <FolderTree
-      folders={project?.folders ?? {}}
-      notesIndex={project?.notesIndex ?? {}}
+      folders={vault?.folders ?? {}}
+      notesIndex={vault?.notesIndex ?? {}}
       {activeFolderId}
       {draggingNoteId}
       onSelect={selectFolder}
@@ -2738,7 +2681,7 @@
     activeTab={rightPanelTab}
     activeNoteId={activeNote?.id ?? null}
     activeNote={activeNote}
-    {project}
+    {vault}
     linkedMentions={linkedMentions}
     backlinksLoading={backlinksLoading}
     onOpenNote={activateTab}
@@ -2747,7 +2690,7 @@
 
   <ModalHost
     slot="modal"
-    {project}
+    {vault}
     notes={notes}
     trashedNotes={trashedNotes}
     activeNoteId={activeTabId}

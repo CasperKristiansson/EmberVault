@@ -435,7 +435,7 @@
           <div class="settings-group">
             <div class="setting-row is-disabled">
               <div class="setting-copy">
-                <div class="setting-title">Export project</div>
+                <div class="setting-title">Export vault</div>
                 <div class="setting-description">
                   Export Markdown + assets to a folder.
                 </div>

@@ -32,7 +32,7 @@ Directory: `src/routes/`
     - Browser storage (IndexedDB) always
   - On completion:
     - Initialize adapter
-    - Create default project “Personal”
+    - Create default vault
     - Navigate to `/app`
 
 ### 1.3 Main workspace (single-page shell with internal state)
@@ -43,7 +43,7 @@ Directory: `src/routes/`
   - Render full shell (sidebar + note list + editor + right panel)
 - All internal navigation (folder/tag filters, note open, tabs, panes) is client-state driven (no subroutes required)
 
-- `/app/[projectId]`  
+- `/app/[projectId]` (legacy, deprecated)  
   File:
   - `src/routes/app/[projectId]/+page.ts` Behavior:
   - Redirect to `/app` (legacy URL support)
@@ -194,7 +194,6 @@ Directory: `src/lib/state/`
   - `initAdapter()` + `switchAdapter()`
 
 - `workspace.store.ts`
-  - Selected projectId
   - Selected folderId / tagId / view filter
   - Pane layout state:
     - `paneLayout` (tree: leaf paneId OR split row/column with children)
@@ -214,8 +213,8 @@ Directory: `src/lib/state/`
     - setFocusedPane()
     - etc.
 
-- `project.store.ts`
-  - Current project metadata
+- `vault.store.ts`
+  - Current vault metadata
   - Folder tree
   - Notes index (lightweight list)
   - Tags
@@ -231,7 +230,7 @@ Directory: `src/lib/state/`
   - readAssetUrl(assetId) => url
 
 - `search.store.ts`
-  - MiniSearch instance per project
+  - MiniSearch instance per vault
   - index hydration/persistence
   - query() with filters
 
@@ -244,7 +243,7 @@ Directory: `src/lib/state/`
 
 - Persist to adapter (uiState) on:
   - changes to pane widths
-  - last opened project
+  - last opened view state
 - last opened notes/tabs/pane layout state
   - right panel open/tab
 - Debounce uiState writes: 800ms.
@@ -275,7 +274,7 @@ Directory: `src/lib/core/`
 ### 4.3 Search
 
 - `core/search/minisearch.ts`
-  - buildIndex(projectNotes)
+  - buildIndex(vaultNotes)
   - updateIndex(noteChange)
   - serialize/deserialize
   - query(params)
@@ -346,7 +345,7 @@ components/ui/...
 state/
 adapter.store.ts
 workspace.store.ts
-project.store.ts
+vault.store.ts
 notes.store.ts
 assets.store.ts
 search.store.ts
@@ -428,8 +427,7 @@ The agent must write tests aligned with ownership:
 
 ## 8) Naming conventions (avoid drift)
 
-- “Project” is the user-facing workspace container.
-- “Vault” is the storage root (folder or browser storage namespace).
+- “Vault” is the workspace container and storage root (folder or browser storage namespace).
 - “Folder” is hierarchical; “Tag” is flat.
 - “NoteDocFile” is canonical content (ProseMirror JSON + meta).
 - “Derived Markdown” is secondary export format.

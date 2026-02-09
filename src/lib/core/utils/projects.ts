@@ -1,4 +1,6 @@
-import type { Project } from "$lib/core/storage/types";
+import type { Vault } from "$lib/core/storage/types";
 
-export const sortProjectsByUpdatedAt = (projects: Project[]): Project[] =>
+export const sortProjectsByUpdatedAt = (projects: Vault[]): Vault[] =>
   projects.toSorted((first, second) => second.updatedAt - first.updatedAt);
+
+export const sortVaultsByUpdatedAt = sortProjectsByUpdatedAt;

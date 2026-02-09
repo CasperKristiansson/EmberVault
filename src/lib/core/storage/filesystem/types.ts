@@ -1,13 +1,13 @@
-import type { UIState } from "../types";
+import type { UIState, Vault } from "../types";
 
 export type VaultManifest = {
   version: number;
+  vault?: Vault;
   uiState?: UIState;
-  searchIndex?: Record<string, string>;
+  searchIndex?: string;
 };
 
-export type ProjectDirectories = {
-  project: FileSystemDirectoryHandle;
+export type VaultDirectories = {
   notes: FileSystemDirectoryHandle;
   templates: FileSystemDirectoryHandle;
   assets: FileSystemDirectoryHandle;

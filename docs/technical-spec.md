@@ -16,7 +16,7 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
 
 ### 1.1 Core
 
-- Single workspace (folders; “projects” exist only as an internal storage detail)
+- Single workspace (folders only)
 - Folders + Tags (both)
 - Favorites (pinned notes)
 - Metadata panel (system fields + custom fields)
@@ -100,7 +100,6 @@ See `storage.md` for canonical on-disk structure and fallback rules.
 ### 3.1 Entities
 
 - Vault (storage root; either disk directory or IDB namespace)
-- Project
 - Folder (tree)
 - Note
 - Tag
@@ -109,9 +108,9 @@ See `storage.md` for canonical on-disk structure and fallback rules.
 - UI State (tabs, pane layout, last opened, sidebar widths)
 - App Settings (global settings such as storage mode + vault handle)
 
-### 3.2 Project structure
+### 3.2 Vault structure
 
-- Each project contains:
+- The vault contains:
   - Folder tree
   - Notes list
   - Tags dictionary
@@ -140,7 +139,7 @@ See `ui-spec.md` for pixel-level UI behavior.
   - No remote data dependencies required
 - If network is unavailable:
   - App loads from cache (after first visit)
-  - All project data accessible locally
+  - All vault data accessible locally
 - “First visit offline” is not required.
 
 ## 6) Performance budgets (hard targets)

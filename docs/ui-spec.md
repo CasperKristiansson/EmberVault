@@ -44,7 +44,7 @@ First launch view:
 Rules:
 
 - If FS Access not supported: hide option 1, show an info note “Your browser doesn’t support folder storage.”
-- After selection: create default Project “Personal”.
+- After selection: create a default Vault.
 - If a stored storage choice exists and is valid, skip this onboarding view and open the workspace directly.
 
 ## 3) Left Sidebar (Folders + Tags)
@@ -82,7 +82,7 @@ Tags list:
 
 Header (44px):
 
-- Breadcrumb: Project / Folder
+- Breadcrumb: All notes / Folder
 - Sort dropdown (Updated, Created, Title)
 - Filter chips (Tag / Favorites)
 
@@ -326,7 +326,7 @@ Shortcuts section content:
 
 Import/Export section content:
 
-- Export project (disabled placeholder)
+- Export vault (disabled placeholder)
 - Import from folder (disabled placeholder)
 
 Privacy section content:
