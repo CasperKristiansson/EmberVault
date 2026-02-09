@@ -37,6 +37,7 @@
   export let chrome: "boxed" | "flat" = "boxed";
   export let focusEmptyTitleOnClick = false;
   export let linkCandidates: WikiLinkCandidate[] = [];
+  export let spellcheck = true;
   export let onImagePaste: (file: File | Blob) => Promise<{
     assetId: string;
     src: string;
@@ -81,6 +82,10 @@
   const menuHeight = 320;
   const menuMargin = 8;
   const wikiMenuItemLimit = 12;
+
+  $: if (editor) {
+    editor.view.dom.setAttribute("spellcheck", spellcheck ? "true" : "false");
+  }
 
   const clamp = (value: number, min: number, max: number): number =>
     Math.min(Math.max(value, min), max);
@@ -400,7 +405,7 @@
           "aria-multiline": "true",
           "data-testid": dataTestId,
           role: "textbox",
-          spellcheck: "true",
+          spellcheck: spellcheck ? "true" : "false",
         },
         handleDOMEvents: {
           mousedown: (view, event) => {

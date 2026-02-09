@@ -1,19 +1,53 @@
 <script lang="ts">
   import { motion } from "@motionone/svelte";
-  import { HardDrive, Database, Keyboard, Settings, X } from "lucide-svelte";
+  import {
+    ArrowDownUp,
+    Database,
+    HardDrive,
+    Info,
+    Keyboard,
+    PenLine,
+    Shield,
+    SlidersHorizontal,
+    X,
+  } from "lucide-svelte";
   import { prefersReducedMotion } from "$lib/state/motion.store";
   import type { StorageMode } from "$lib/state/adapter.store";
+  import type { AppPreferences } from "$lib/core/storage/types";
+
+  const defaultPreferences: AppPreferences = {
+    startupView: "last-opened",
+    defaultSort: "updated",
+    openNoteBehavior: "new-tab",
+    confirmTrash: false,
+    spellcheck: true,
+  };
 
   export let storageMode: StorageMode = "idb";
   export let settingsVaultName: string | null = null;
   export let supportsFileSystem = true;
   export let settingsBusy = false;
+  export let preferences: AppPreferences = defaultPreferences;
   export let onClose: (() => void | Promise<void>) | null = null;
   export let onChooseFolder: (() => void | Promise<void>) | null = null;
   export let onChooseBrowserStorage: (() => void | Promise<void>) | null = null;
+  export let onUpdatePreferences:
+    | ((patch: Partial<AppPreferences>) => void | Promise<void>)
+    | null = null;
+  export let onRebuildSearchIndex: (() => void | Promise<void>) | null = null;
+  export let onClearWorkspaceState: (() => void | Promise<void>) | null = null;
+  export let onResetPreferences: (() => void | Promise<void>) | null = null;
 
-  type SettingsSection = "storage" | "general" | "shortcuts";
+  type SettingsSection =
+    | "storage"
+    | "general"
+    | "editor"
+    | "shortcuts"
+    | "import-export"
+    | "privacy"
+    | "about";
   let activeSection: SettingsSection = "storage";
+  $: preferencesDisabled = !onUpdatePreferences || settingsBusy;
 </script>
 
 <div
@@ -56,20 +90,56 @@
         <button
           class="settings-item"
           type="button"
-          disabled
-          aria-disabled="true"
+          data-active={activeSection === "general"}
+          on:click={() => (activeSection = "general")}
         >
-          <Settings aria-hidden="true" size={16} />
+          <SlidersHorizontal aria-hidden="true" size={16} />
           <span>General</span>
         </button>
         <button
           class="settings-item"
           type="button"
-          disabled
-          aria-disabled="true"
+          data-active={activeSection === "editor"}
+          on:click={() => (activeSection = "editor")}
+        >
+          <PenLine aria-hidden="true" size={16} />
+          <span>Editor</span>
+        </button>
+        <button
+          class="settings-item"
+          type="button"
+          data-active={activeSection === "shortcuts"}
+          on:click={() => (activeSection = "shortcuts")}
         >
           <Keyboard aria-hidden="true" size={16} />
           <span>Shortcuts</span>
+        </button>
+        <button
+          class="settings-item"
+          type="button"
+          data-active={activeSection === "import-export"}
+          on:click={() => (activeSection = "import-export")}
+        >
+          <ArrowDownUp aria-hidden="true" size={16} />
+          <span>Import/Export</span>
+        </button>
+        <button
+          class="settings-item"
+          type="button"
+          data-active={activeSection === "privacy"}
+          on:click={() => (activeSection = "privacy")}
+        >
+          <Shield aria-hidden="true" size={16} />
+          <span>Privacy</span>
+        </button>
+        <button
+          class="settings-item"
+          type="button"
+          data-active={activeSection === "about"}
+          on:click={() => (activeSection = "about")}
+        >
+          <Info aria-hidden="true" size={16} />
+          <span>About</span>
         </button>
       </nav>
 
@@ -134,10 +204,348 @@
               </button>
             </div>
           </div>
-        {:else}
-          <div class="placeholder">
-            <div class="placeholder-title">Coming soon</div>
-            <p>More settings will appear here.</p>
+        {:else if activeSection === "general"}
+          <div class="section-header">
+            <div class="section-title">General</div>
+            <div class="section-description">Tune your default behavior.</div>
+          </div>
+
+          <div class="settings-group">
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Startup view</div>
+                <div class="setting-description">
+                  Choose what opens when the app starts.
+                </div>
+              </div>
+              <div class="setting-control">
+                <div class="segmented" role="group" aria-label="Startup view">
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.startupView === "last-opened"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({ startupView: "last-opened" })}
+                  >
+                    Last opened
+                  </button>
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.startupView === "all-notes"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({ startupView: "all-notes" })}
+                  >
+                    All notes
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Default sort</div>
+                <div class="setting-description">
+                  Controls the note list order when no manual order is set.
+                </div>
+              </div>
+              <div class="setting-control">
+                <div class="segmented" role="group" aria-label="Default sort">
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.defaultSort === "updated"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({ defaultSort: "updated" })}
+                  >
+                    Updated
+                  </button>
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.defaultSort === "created"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({ defaultSort: "created" })}
+                  >
+                    Created
+                  </button>
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.defaultSort === "title"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({ defaultSort: "title" })}
+                  >
+                    Title
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Open notes</div>
+                <div class="setting-description">
+                  Behavior when selecting a note from the list.
+                </div>
+              </div>
+              <div class="setting-control">
+                <div class="segmented" role="group" aria-label="Open note behavior">
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.openNoteBehavior === "new-tab"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({ openNoteBehavior: "new-tab" })}
+                  >
+                    New tab
+                  </button>
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.openNoteBehavior === "reuse-tab"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({ openNoteBehavior: "reuse-tab" })}
+                  >
+                    Reuse tab
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Confirm move to Trash</div>
+                <div class="setting-description">
+                  Ask before moving a note to Trash.
+                </div>
+              </div>
+              <div class="setting-control">
+                <button
+                  class="toggle"
+                  type="button"
+                  aria-pressed={preferences.confirmTrash}
+                  data-active={preferences.confirmTrash}
+                  disabled={preferencesDisabled}
+                  on:click={() =>
+                    void onUpdatePreferences?.({
+                      confirmTrash: !preferences.confirmTrash,
+                    })}
+                >
+                  <span class="toggle-knob"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        {:else if activeSection === "editor"}
+          <div class="section-header">
+            <div class="section-title">Editor</div>
+            <div class="section-description">Writing and editing defaults.</div>
+          </div>
+
+          <div class="settings-group">
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Spellcheck</div>
+                <div class="setting-description">
+                  Enable browser spellcheck inside the editor.
+                </div>
+              </div>
+              <div class="setting-control">
+                <button
+                  class="toggle"
+                  type="button"
+                  aria-pressed={preferences.spellcheck}
+                  data-active={preferences.spellcheck}
+                  disabled={preferencesDisabled}
+                  on:click={() =>
+                    void onUpdatePreferences?.({
+                      spellcheck: !preferences.spellcheck,
+                    })}
+                >
+                  <span class="toggle-knob"></span>
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row is-disabled">
+              <div class="setting-copy">
+                <div class="setting-title">Markdown view by default</div>
+                <div class="setting-description">
+                  Start notes in read-only Markdown preview.
+                </div>
+              </div>
+              <div class="setting-control">
+                <span class="pill">Coming soon</span>
+              </div>
+            </div>
+
+            <div class="setting-row is-disabled">
+              <div class="setting-copy">
+                <div class="setting-title">Smart list continuation</div>
+                <div class="setting-description">
+                  Automatically continue lists on Enter.
+                </div>
+              </div>
+              <div class="setting-control">
+                <span class="pill">Coming soon</span>
+              </div>
+            </div>
+          </div>
+        {:else if activeSection === "shortcuts"}
+          <div class="section-header">
+            <div class="section-title">Shortcuts</div>
+            <div class="section-description">Keyboard reference.</div>
+          </div>
+
+          <div class="shortcut-list">
+            <div class="shortcut-row">
+              <span class="shortcut-action">Command palette</span>
+              <span class="shortcut-keys">
+                <kbd>Cmd</kbd> <kbd>K</kbd> / <kbd>Ctrl</kbd> <kbd>K</kbd>
+              </span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-action">New note</span>
+              <span class="shortcut-keys">
+                <kbd>Cmd</kbd> <kbd>N</kbd> / <kbd>Ctrl</kbd> <kbd>N</kbd>
+              </span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-action">Global search</span>
+              <span class="shortcut-keys">
+                <kbd>Cmd</kbd> <kbd>Shift</kbd> <kbd>F</kbd> / <kbd>Ctrl</kbd>
+                <kbd>Shift</kbd> <kbd>F</kbd>
+              </span>
+            </div>
+          </div>
+        {:else if activeSection === "import-export"}
+          <div class="section-header">
+            <div class="section-title">Import/Export</div>
+            <div class="section-description">Move data in and out of EmberVault.</div>
+          </div>
+
+          <div class="settings-group">
+            <div class="setting-row is-disabled">
+              <div class="setting-copy">
+                <div class="setting-title">Export project</div>
+                <div class="setting-description">
+                  Export Markdown + assets to a folder.
+                </div>
+              </div>
+              <div class="setting-control">
+                <button class="button secondary" type="button" disabled>
+                  Export
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row is-disabled">
+              <div class="setting-copy">
+                <div class="setting-title">Import from folder</div>
+                <div class="setting-description">
+                  Bring existing Markdown notes into a vault.
+                </div>
+              </div>
+              <div class="setting-control">
+                <button class="button secondary" type="button" disabled>
+                  Import
+                </button>
+              </div>
+            </div>
+          </div>
+        {:else if activeSection === "privacy"}
+          <div class="section-header">
+            <div class="section-title">Privacy & diagnostics</div>
+            <div class="section-description">Local-only tools and maintenance.</div>
+          </div>
+
+          <div class="settings-group">
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Rebuild search index</div>
+                <div class="setting-description">
+                  Refresh search data without touching notes.
+                </div>
+              </div>
+              <div class="setting-control">
+                <button
+                  class="button secondary"
+                  type="button"
+                  on:click={() => void onRebuildSearchIndex?.()}
+                  disabled={!onRebuildSearchIndex || settingsBusy}
+                >
+                  Rebuild
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Reset workspace layout</div>
+                <div class="setting-description">
+                  Clears panes, tabs, and focused note.
+                </div>
+              </div>
+              <div class="setting-control">
+                <button
+                  class="button secondary"
+                  type="button"
+                  on:click={() => void onClearWorkspaceState?.()}
+                  disabled={!onClearWorkspaceState || settingsBusy}
+                >
+                  Reset layout
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Reset preferences</div>
+                <div class="setting-description">
+                  Restore defaults for general and editor settings.
+                </div>
+              </div>
+              <div class="setting-control">
+                <button
+                  class="button danger"
+                  type="button"
+                  on:click={() => void onResetPreferences?.()}
+                  disabled={!onResetPreferences || settingsBusy}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
+        {:else if activeSection === "about"}
+          <div class="section-header">
+            <div class="section-title">About</div>
+            <div class="section-description">Local build information.</div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-row">
+              <div class="info-label">Storage</div>
+              <div class="info-value">
+                {storageMode === "filesystem" ? "Folder vault" : "Browser storage"}
+              </div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">Vault</div>
+              <div class="info-value">{settingsVaultName ?? "Not set"}</div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">Build</div>
+              <div class="info-value">Local</div>
+            </div>
           </div>
         {/if}
       </section>
@@ -358,6 +766,16 @@
     color: var(--text-0);
   }
 
+  .button.danger {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+    color: var(--danger);
+  }
+
+  .button.danger:hover:enabled {
+    background: color-mix(in srgb, var(--danger) 16%, transparent);
+  }
+
   .button.secondary:hover:enabled {
     background: var(--bg-3);
   }
@@ -370,6 +788,208 @@
   .button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  .settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-top: 1px solid var(--stroke-0);
+  }
+
+  .setting-row:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .setting-row.is-disabled {
+    opacity: 0.6;
+  }
+
+  .setting-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .setting-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-0);
+  }
+
+  .setting-description {
+    font-size: 12px;
+    color: var(--text-1);
+  }
+
+  .setting-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .segmented {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-1);
+    border: 1px solid var(--stroke-0);
+    border-radius: var(--r-md);
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .segmented-button {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: var(--r-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-1);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .segmented-button[data-active="true"] {
+    background: var(--bg-2);
+    color: var(--text-0);
+  }
+
+  .segmented-button:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
+  .segmented-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .toggle {
+    width: 40px;
+    height: 22px;
+    border-radius: 999px;
+    border: 1px solid var(--stroke-1);
+    background: var(--bg-1);
+    padding: 2px;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+
+  .toggle[data-active="true"] {
+    background: color-mix(in srgb, var(--accent-0) 35%, var(--bg-1));
+    border-color: color-mix(in srgb, var(--accent-0) 60%, var(--stroke-1));
+  }
+
+  .toggle-knob {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-0);
+    transform: translateX(0);
+    transition: transform 120ms ease;
+  }
+
+  .toggle[data-active="true"] .toggle-knob {
+    transform: translateX(18px);
+    background: #0b0d10;
+  }
+
+  .toggle:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--bg-1);
+    border: 1px solid var(--stroke-0);
+    font-size: 11px;
+    color: var(--text-2);
+  }
+
+  .shortcut-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--stroke-0);
+  }
+
+  .shortcut-row:last-child {
+    border-bottom: none;
+  }
+
+  .shortcut-action {
+    font-size: 13px;
+    color: var(--text-0);
+  }
+
+  .shortcut-keys {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-1);
+    font-size: 12px;
+  }
+
+  kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      "Liberation Mono", "Courier New", monospace;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-1);
+  }
+
+  .info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--stroke-0);
+  }
+
+  .info-row:last-child {
+    border-bottom: none;
+  }
+
+  .info-label {
+    font-size: 12px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .info-value {
+    font-size: 13px;
+    color: var(--text-0);
   }
 
   .icon-button {

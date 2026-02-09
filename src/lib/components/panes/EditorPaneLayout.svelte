@@ -19,6 +19,7 @@
   export let isLoading = false;
   export let dockTarget: { paneId: string; side: DockSide } | null = null;
   export let linkCandidates: WikiLinkCandidate[] = [];
+  export let spellcheck = true;
   export let getChips: (
     note: NoteDocumentFile | null
   ) => Array<{ key: string; label: string }> = () => [];
@@ -69,6 +70,7 @@
     isActive={activePaneId === paneId}
     chips={getChips(pane.note)}
     {linkCandidates}
+    {spellcheck}
     dockTargetActive={dockTarget?.paneId === paneId}
     dockTargetSide={dockTarget && dockTarget.paneId === paneId ? dockTarget.side : null}
     {onSetActive}

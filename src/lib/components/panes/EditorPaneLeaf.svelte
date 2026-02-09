@@ -40,6 +40,7 @@
     width?: number;
     height?: number;
   } | null> = async () => null;
+  export let spellcheck = true;
 
   export let onDockDragOver: (event: DragEvent, paneId: string) => void =
     () => {};
@@ -118,6 +119,7 @@
         chrome="flat"
         focusEmptyTitleOnClick={true}
         linkCandidates={linkCandidates}
+        {spellcheck}
         {onImagePaste}
         onUpdate={payload => onEditorUpdate(paneId, payload)}
       />

@@ -63,6 +63,10 @@
     type SearchIndexState,
   } from "$lib/state/search.store";
   import {
+    buildSearchIndex,
+    serializeSearchIndex,
+  } from "$lib/core/search/minisearch";
+  import {
     closeModal,
     modalStackStore,
     openModal,
@@ -87,6 +91,7 @@
   import type {
     AssetMeta,
     AppSettings,
+    AppPreferences,
     CustomFieldValue,
     NoteDocumentFile,
     NoteIndexEntry,
@@ -233,8 +238,38 @@
     typeof window !== "undefined" &&
     typeof window.showDirectoryPicker === "function";
 
+  const defaultPreferences: AppPreferences = {
+    startupView: "last-opened",
+    defaultSort: "updated",
+    openNoteBehavior: "new-tab",
+    confirmTrash: false,
+    spellcheck: true,
+  };
+
+  const resolvePreferences = (
+    settings: AppSettings["settings"] | null | undefined
+  ): AppPreferences => {
+    const input = settings ?? defaultPreferences;
+    return {
+      startupView: input.startupView === "all-notes" ? "all-notes" : "last-opened",
+      defaultSort:
+        input.defaultSort === "created" || input.defaultSort === "title"
+          ? input.defaultSort
+          : "updated",
+      openNoteBehavior:
+        input.openNoteBehavior === "reuse-tab" ? "reuse-tab" : "new-tab",
+      confirmTrash: input.confirmTrash === true,
+      spellcheck: input.spellcheck !== false,
+    };
+  };
+
+  let preferences: AppPreferences = defaultPreferences;
+  let lastSortMode: AppPreferences["defaultSort"] =
+    defaultPreferences.defaultSort;
+
   const loadAppSettings = async (): Promise<AppSettings | null> => {
     appSettings = await readAppSettings();
+    preferences = resolvePreferences(appSettings?.settings);
     return appSettings;
   };
 
@@ -246,7 +281,7 @@
       storageMode: mode,
       fsHandle: mode === "filesystem" ? handle : undefined,
       lastVaultName: mode === "filesystem" ? handle?.name : undefined,
-      settings: appSettings?.settings,
+      settings: appSettings?.settings ?? preferences,
     };
     await writeAppSettings(nextSettings);
     appSettings = nextSettings;
@@ -495,6 +530,34 @@
     });
   };
 
+  const rebuildSearchIndex = async (): Promise<void> => {
+    if (!projectId) {
+      return;
+    }
+    const noteDocuments = await loadNoteDocumentsForIndex();
+    const index = buildSearchIndex(noteDocuments);
+    await runAdapterVoid(() =>
+      adapter.writeSearchIndex(projectId, serializeSearchIndex(index))
+    );
+    searchState = { index };
+    pushToast("Search index rebuilt.", { tone: "success" });
+  };
+
+  const clearWorkspaceState = async (): Promise<void> => {
+    const current =
+      (await runAdapterTask(() => adapter.readUIState(), null)) ?? {};
+    const nextState = { ...current };
+    delete (nextState as { workspaceState?: unknown }).workspaceState;
+    await runAdapterVoid(() => adapter.writeUIState(nextState));
+    paneLayout = createLeaf("primary");
+    paneStates = { primary: createPaneState() };
+    activePane = "primary";
+    tabTitles = {};
+    setPaneNote("primary", null);
+    syncSaveState();
+    pushToast("Workspace layout reset.", { tone: "success" });
+  };
+
   const readImageMeta = async (file: Blob): Promise<AssetMeta> => {
     const meta: AssetMeta = {
       mime: file.type,
@@ -704,9 +767,72 @@
     settingsModalId = null;
   };
 
+  const updatePreferences = async (
+    patch: Partial<AppPreferences>
+  ): Promise<void> => {
+    const nextPreferences = resolvePreferences({
+      ...preferences,
+      ...patch,
+    });
+    const nextSettings: AppSettings = {
+      storageMode: appSettings?.storageMode ?? activeStorageMode,
+      fsHandle: appSettings?.fsHandle,
+      lastVaultName: appSettings?.lastVaultName,
+      settings: nextPreferences,
+    };
+    await writeAppSettings(nextSettings);
+    appSettings = nextSettings;
+    preferences = nextPreferences;
+  };
+
+  const resetPreferences = async (): Promise<void> => {
+    openModal("confirm", {
+      title: "Reset preferences?",
+      message: "Restore default settings for General and Editor.",
+      confirmLabel: "Reset",
+      cancelLabel: "Cancel",
+      destructive: true,
+      onConfirm: async () => {
+        await updatePreferences(defaultPreferences);
+        pushToast("Preferences reset.", { tone: "success" });
+      },
+    });
+  };
+
   const openNotesView = (): void => {
     workspaceMode = "notes";
     mobileView = "notes";
+  };
+
+  const openNoteFromList = async (noteId: string): Promise<void> => {
+    if (!noteId) {
+      return;
+    }
+    if (preferences.openNoteBehavior !== "reuse-tab") {
+      await activateTab(noteId);
+      return;
+    }
+    openNotesView();
+    const pane = getPaneState(activePane);
+    if (pane.activeTabId === noteId) {
+      await loadNote(noteId, activePane);
+      return;
+    }
+    if (pane.tabs.includes(noteId)) {
+      await activateTab(noteId, activePane);
+      return;
+    }
+    await flushPendingSaveForNote(pane.activeTabId);
+    const nextTabs =
+      pane.activeTabId && pane.tabs.length > 0
+        ? pane.tabs.map((id) => (id === pane.activeTabId ? noteId : id))
+        : [noteId];
+    updatePaneState(activePane, {
+      tabs: nextTabs,
+      activeTabId: noteId,
+    });
+    scheduleUiStateWrite();
+    await loadNote(noteId, activePane);
   };
 
   const openAllNotesView = (): void => {
@@ -797,13 +923,33 @@
     backlinksDelay
   );
 
-  const sortNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] =>
-    [...list].sort((first, second) => second.updatedAt - first.updatedAt);
+  const sortNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] => {
+    const sorted = [...list];
+    if (preferences.defaultSort === "created") {
+      return sorted.sort((first, second) => second.createdAt - first.createdAt);
+    }
+    if (preferences.defaultSort === "title") {
+      return sorted.sort((first, second) => {
+        const firstTitle = (first.title ?? "").trim().toLowerCase();
+        const secondTitle = (second.title ?? "").trim().toLowerCase();
+        if (firstTitle !== secondTitle) {
+          return firstTitle.localeCompare(secondTitle);
+        }
+        return second.updatedAt - first.updatedAt;
+      });
+    }
+    return sorted.sort((first, second) => second.updatedAt - first.updatedAt);
+  };
 
   const sortTrashNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] =>
     [...list].sort(
       (first, second) => (second.deletedAt ?? 0) - (first.deletedAt ?? 0)
     );
+
+  $: if (preferences.defaultSort !== lastSortMode) {
+    notes = sortNotes(notes);
+    lastSortMode = preferences.defaultSort;
+  }
 
   $: activeFolderName =
     activeFolderId && project
@@ -903,6 +1049,18 @@
       paneStates = { primary: createPaneState() };
       setPaneNote("primary", null);
       activePane = "primary";
+      syncSaveState();
+      return;
+    }
+
+    if (preferences.startupView === "all-notes") {
+      paneLayout = createLeaf("primary");
+      paneStates = { primary: createPaneState() };
+      setPaneNote("primary", null);
+      activePane = "primary";
+      activeFolderId = null;
+      favoritesOnly = false;
+      openNotesView();
       syncSaveState();
       return;
     }
@@ -1936,7 +2094,21 @@
     if (!pane.note || pane.note.deletedAt !== null) {
       return;
     }
-    void deleteNoteToTrash(pane.note.id);
+    const noteId = pane.note.id;
+    if (!preferences.confirmTrash) {
+      void deleteNoteToTrash(noteId);
+      return;
+    }
+    const title = pane.note.title?.trim() || "Untitled";
+    openModal("confirm", {
+      title: "Move note to Trash?",
+      message: `Move "${title}" to Trash? You can restore it later.`,
+      confirmLabel: "Move to Trash",
+      cancelLabel: "Cancel",
+      onConfirm: async () => {
+        await deleteNoteToTrash(noteId);
+      },
+    });
   };
 
   const updateCustomFieldsForNote = (
@@ -2522,7 +2694,7 @@
         notes={filteredNotes}
         activeNoteId={activeTabId}
         {titleOverrides}
-        onSelect={noteId => void activateTab(noteId)}
+        onSelect={noteId => void openNoteFromList(noteId)}
         onToggleFavorite={handleFavoriteToggle}
         draggable={true}
         draggingNoteId={draggingNoteId}
@@ -2545,6 +2717,7 @@
       paneStates={paneStates}
       activePaneId={activePane}
       {isLoading}
+      spellcheck={preferences.spellcheck}
       dockTarget={dockTarget}
       linkCandidates={wikiLinkCandidates}
       getChips={getCustomFieldChips}
@@ -2590,12 +2763,17 @@
     onCloseSettings={closeSettings}
     onChooseFolder={requestFolderSwitch}
     onChooseBrowserStorage={requestBrowserStorageSwitch}
+    onUpdatePreferences={updatePreferences}
+    onRebuildSearchIndex={rebuildSearchIndex}
+    onClearWorkspaceState={clearWorkspaceState}
+    onResetPreferences={resetPreferences}
     storageMode={activeStorageMode}
     settingsVaultName={
       appSettings?.lastVaultName ?? appSettings?.fsHandle?.name ?? null
     }
     supportsFileSystem={supportsFileSystem}
     settingsBusy={isRecoveringStorage}
+    {preferences}
   />
 
   <ToastHost slot="toast" />

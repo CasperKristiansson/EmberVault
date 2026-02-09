@@ -288,9 +288,13 @@ Left rail (sections list):
 
 Sections (initial):
 
-- Storage (active)
-- General (disabled placeholder, “Coming soon” text in content area)
-- Shortcuts (disabled placeholder, “Coming soon” text in content area)
+- Storage
+- General
+- Editor
+- Shortcuts
+- Import/Export (placeholder actions)
+- Privacy (diagnostics)
+- About
 
 Storage section content:
 
@@ -302,6 +306,38 @@ Storage section content:
   2. “Store in this browser” (IndexedDB)
      - Secondary button: “Use browser storage”
 - Switching storage type requires a confirmation dialog if it would disconnect from the current vault (no silent migration).
+
+General section content:
+
+- Startup view: “Last opened” / “All notes”
+- Default sort: Updated / Created / Title
+- Open notes: New tab / Reuse tab (applies to note list selection)
+- Confirm move to Trash toggle
+
+Editor section content:
+
+- Spellcheck toggle
+- Markdown view default (coming soon)
+- Smart list continuation (coming soon)
+
+Shortcuts section content:
+
+- Read-only list of current global shortcuts (Cmd/Ctrl+K, Cmd/Ctrl+N, Cmd/Ctrl+Shift+F)
+
+Import/Export section content:
+
+- Export project (disabled placeholder)
+- Import from folder (disabled placeholder)
+
+Privacy section content:
+
+- Rebuild search index
+- Reset workspace layout
+- Reset preferences
+
+About section content:
+
+- Storage mode, vault name, build label
 
 ## 11) Graph view
 

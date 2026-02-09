@@ -5,7 +5,11 @@
   import type GlobalSearchModalType from "$lib/components/modals/GlobalSearchModal.svelte";
   import type SettingsModalType from "$lib/components/modals/SettingsModal.svelte";
   import type TrashModalType from "$lib/components/modals/TrashModal.svelte";
-  import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
+  import type {
+    AppPreferences,
+    NoteIndexEntry,
+    Project,
+  } from "$lib/core/storage/types";
   import type { StorageMode } from "$lib/state/adapter.store";
   import type { SearchIndexState } from "$lib/state/search.store";
   import { activeModal, closeTopModal, modalStackStore } from "$lib/state/ui.store";
@@ -29,10 +33,23 @@
   export let onCloseSettings: (() => void | Promise<void>) | null = null;
   export let onChooseFolder: (() => void | Promise<void>) | null = null;
   export let onChooseBrowserStorage: (() => void | Promise<void>) | null = null;
+  export let onUpdatePreferences:
+    | ((patch: Partial<AppPreferences>) => void | Promise<void>)
+    | null = null;
+  export let onRebuildSearchIndex: (() => void | Promise<void>) | null = null;
+  export let onClearWorkspaceState: (() => void | Promise<void>) | null = null;
+  export let onResetPreferences: (() => void | Promise<void>) | null = null;
   export let storageMode: StorageMode = "idb";
   export let settingsVaultName: string | null = null;
   export let supportsFileSystem = true;
   export let settingsBusy = false;
+  export let preferences: AppPreferences = {
+    startupView: "last-opened",
+    defaultSort: "updated",
+    openNoteBehavior: "new-tab",
+    confirmTrash: false,
+    spellcheck: true,
+  };
 
   let CommandPaletteModalComponent: typeof CommandPaletteModalType | null = null;
   let GlobalSearchModalComponent: typeof GlobalSearchModalType | null = null;
@@ -229,9 +246,14 @@
       {settingsVaultName}
       {supportsFileSystem}
       {settingsBusy}
+      {preferences}
       onClose={onCloseSettings ?? handleClose}
       onChooseFolder={onChooseFolder}
       onChooseBrowserStorage={onChooseBrowserStorage}
+      onUpdatePreferences={onUpdatePreferences}
+      onRebuildSearchIndex={onRebuildSearchIndex}
+      onClearWorkspaceState={onClearWorkspaceState}
+      onResetPreferences={onResetPreferences}
     />
   {/if}
 {:else if $activeModal?.type === "confirm"}

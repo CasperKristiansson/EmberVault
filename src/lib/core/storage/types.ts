@@ -85,11 +85,19 @@ export type AssetMeta = {
 
 export type UIState = Record<string, unknown>;
 
+export type AppPreferences = {
+  startupView: "last-opened" | "all-notes";
+  defaultSort: "updated" | "created" | "title";
+  openNoteBehavior: "new-tab" | "reuse-tab";
+  confirmTrash: boolean;
+  spellcheck: boolean;
+};
+
 export type AppSettings = {
   storageMode: "filesystem" | "idb";
   fsHandle?: FileSystemDirectoryHandle;
   lastVaultName?: string;
-  settings?: Record<string, unknown>;
+  settings?: AppPreferences;
 };
 
 export type StorageAdapter = {
