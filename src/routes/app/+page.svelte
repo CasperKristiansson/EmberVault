@@ -3,7 +3,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { get } from "svelte/store";
-  import { Search, X } from "lucide-svelte";
+  import { Search, Settings, X } from "lucide-svelte";
   import AppShell from "$lib/components/AppShell.svelte";
   import ToastHost from "$lib/components/ToastHost.svelte";
   import RightPanel from "$lib/components/rightpanel/RightPanel.svelte";
@@ -62,7 +62,12 @@
     hydrateSearchIndex,
     type SearchIndexState,
   } from "$lib/state/search.store";
-  import { modalStackStore, openModal, pushToast } from "$lib/state/ui.store";
+  import {
+    closeModal,
+    modalStackStore,
+    openModal,
+    pushToast,
+  } from "$lib/state/ui.store";
   import {
     resolveMobileView,
     type MobileView,
@@ -75,8 +80,13 @@
     type StorageMode,
   } from "$lib/state/adapter.store";
   import { createDefaultProject } from "$lib/core/storage/indexeddb.adapter";
+  import {
+    readAppSettings,
+    writeAppSettings,
+  } from "$lib/core/storage/app-settings";
   import type {
     AssetMeta,
+    AppSettings,
     CustomFieldValue,
     NoteDocumentFile,
     NoteIndexEntry,
@@ -93,6 +103,9 @@
     activeStorageMode = value;
   });
   let permissionModalId: string | null = null;
+  let settingsModalId: string | null = null;
+  let appSettings: AppSettings | null = null;
+  let supportsFileSystem = false;
   let modalStackEntries: { id: string }[] = [];
   const modalStackUnsubscribe = modalStackStore.subscribe((stack) => {
     modalStackEntries = stack;
@@ -101,6 +114,12 @@
       !modalStackEntries.some((entry) => entry.id === permissionModalId)
     ) {
       permissionModalId = null;
+    }
+    if (
+      settingsModalId &&
+      !modalStackEntries.some((entry) => entry.id === settingsModalId)
+    ) {
+      settingsModalId = null;
     }
   });
 
@@ -210,6 +229,29 @@
   const isAbortError = (error: unknown): boolean =>
     error instanceof Error && error.name === "AbortError";
 
+  const supportsFileSystemAccess = (): boolean =>
+    typeof window !== "undefined" &&
+    typeof window.showDirectoryPicker === "function";
+
+  const loadAppSettings = async (): Promise<AppSettings | null> => {
+    appSettings = await readAppSettings();
+    return appSettings;
+  };
+
+  const persistStorageChoice = async (
+    mode: StorageMode,
+    handle?: FileSystemDirectoryHandle
+  ): Promise<void> => {
+    const nextSettings: AppSettings = {
+      storageMode: mode,
+      fsHandle: mode === "filesystem" ? handle : undefined,
+      lastVaultName: mode === "filesystem" ? handle?.name : undefined,
+      settings: appSettings?.settings,
+    };
+    await writeAppSettings(nextSettings);
+    appSettings = nextSettings;
+  };
+
   const adapterErrorToastMessage = "Storage error. Please retry.";
   const adapterFallbackToastMessage =
     "Could not access folder, switched to browser storage.";
@@ -250,7 +292,7 @@
       },
       onCancel: async () => {
         permissionModalId = null;
-        await switchToBrowserStorage();
+        await switchToBrowserStorage({ notifyFallback: true });
       },
     });
   };
@@ -367,6 +409,7 @@
       await runAdapterVoid(() =>
         nextAdapter.writeUIState({ lastProjectId: project.id })
       );
+      await persistStorageChoice("filesystem", handle);
       projectId = project.id;
       await initializeWorkspace();
     } catch (error) {
@@ -383,7 +426,9 @@
     }
   };
 
-  const switchToBrowserStorage = async (): Promise<void> => {
+  const switchToBrowserStorage = async (
+    { notifyFallback = false }: { notifyFallback?: boolean } = {}
+  ): Promise<void> => {
     if (isRecoveringStorage) {
       return;
     }
@@ -399,13 +444,55 @@
       await runAdapterVoid(() =>
         nextAdapter.writeUIState({ lastProjectId: project.id })
       );
+      await persistStorageChoice("idb");
       projectId = project.id;
       await initializeWorkspace();
-      notifyAdapterFailure(adapterFallbackToastMessage);
+      if (notifyFallback) {
+        notifyAdapterFailure(adapterFallbackToastMessage);
+      }
     } finally {
       isRecoveringStorage = false;
       isLoading = false;
     }
+  };
+
+  const requestFolderSwitch = (): void => {
+    if (isRecoveringStorage || !supportsFileSystemAccess()) {
+      return;
+    }
+    const title =
+      activeStorageMode === "filesystem" ? "Change vault folder" : "Switch storage";
+    const message =
+      activeStorageMode === "filesystem"
+        ? "Choosing a different folder will disconnect from the current vault. Continue?"
+        : "Switching to folder storage will disconnect from the current vault. Continue?";
+    openModal("confirm", {
+      title,
+      message,
+      confirmLabel: "Choose folder",
+      cancelLabel: "Cancel",
+      onConfirm: async () => {
+        closeSettings();
+        await retryFolderAccess();
+      },
+    });
+  };
+
+  const requestBrowserStorageSwitch = (): void => {
+    if (isRecoveringStorage || activeStorageMode === "idb") {
+      return;
+    }
+    openModal("confirm", {
+      title: "Switch to browser storage",
+      message:
+        "Switching to browser storage will disconnect from the current vault. Continue?",
+      confirmLabel: "Use browser storage",
+      cancelLabel: "Cancel",
+      onConfirm: async () => {
+        closeSettings();
+        await switchToBrowserStorage();
+      },
+    });
   };
 
   const readImageMeta = async (file: Blob): Promise<AssetMeta> => {
@@ -600,6 +687,21 @@
 
   const openCommandPalette = (): void => {
     openModal("command-palette");
+  };
+
+  const openSettings = (): void => {
+    if (settingsModalId) {
+      return;
+    }
+    settingsModalId = openModal("settings");
+  };
+
+  const closeSettings = (): void => {
+    if (!settingsModalId) {
+      return;
+    }
+    closeModal(settingsModalId);
+    settingsModalId = null;
   };
 
   const openNotesView = (): void => {
@@ -2142,6 +2244,40 @@
     activeFolderId = folderId;
   };
 
+  const initializeFromAppSettings = async (): Promise<boolean> => {
+    const stored = await loadAppSettings();
+    if (!stored?.storageMode) {
+      isLoading = false;
+      await goto(resolve("/onboarding"));
+      return false;
+    }
+    if (stored.storageMode === "filesystem") {
+      if (!stored.fsHandle) {
+        isLoading = false;
+        await goto(resolve("/onboarding"));
+        return false;
+      }
+      if (!supportsFileSystemAccess()) {
+        await persistStorageChoice("idb");
+        initAdapter("idb");
+        notifyAdapterFailure(adapterFallbackToastMessage);
+        return true;
+      }
+      initAdapter("filesystem", { directoryHandle: stored.fsHandle });
+      return true;
+    }
+    initAdapter("idb");
+    return true;
+  };
+
+  const initializeApp = async (): Promise<void> => {
+    const ready = await initializeFromAppSettings();
+    if (!ready) {
+      return;
+    }
+    await initializeWorkspace();
+  };
+
   const initializeWorkspace = async (): Promise<void> => {
     isLoading = true;
     const ready = await runAdapterVoid(() => adapter.init());
@@ -2174,7 +2310,8 @@
   };
 
   onMount(() => {
-    void initializeWorkspace();
+    supportsFileSystem = supportsFileSystemAccess();
+    void initializeApp();
 
     const handleGlobalShortcut = (event: KeyboardEvent): void => {
       if (!(event.metaKey || event.ctrlKey)) {
@@ -2285,6 +2422,15 @@
         activeTab={rightPanelTab}
         onSelect={handleRightPanelTabSelect}
       />
+      <button
+        class="icon-button settings-button"
+        type="button"
+        aria-label="Open settings"
+        data-testid="open-settings"
+        on:click={openSettings}
+      >
+        <Settings aria-hidden="true" size={18} />
+      </button>
     </div>
   </div>
 
@@ -2440,6 +2586,16 @@
     onOpenGlobalSearch={openGlobalSearch}
     onToggleRightPanel={handleRightPanelTabSelect}
     onGoToTrash={openTrashView}
+    onOpenSettings={openSettings}
+    onCloseSettings={closeSettings}
+    onChooseFolder={requestFolderSwitch}
+    onChooseBrowserStorage={requestBrowserStorageSwitch}
+    storageMode={activeStorageMode}
+    settingsVaultName={
+      appSettings?.lastVaultName ?? appSettings?.fsHandle?.name ?? null
+    }
+    supportsFileSystem={supportsFileSystem}
+    settingsBusy={isRecoveringStorage}
   />
 
   <ToastHost slot="toast" />
@@ -2483,8 +2639,8 @@
       class="mobile-nav-button"
       type="button"
       data-testid="mobile-nav-settings"
-      aria-disabled="true"
-      disabled
+      aria-label="Open settings"
+      on:click={openSettings}
     >
       Settings
     </button>
@@ -2619,6 +2775,11 @@
     width: 16px;
     height: 16px;
     display: block;
+  }
+
+  .settings-button :global(svg) {
+    width: 18px;
+    height: 18px;
   }
 
   .icon-button[aria-pressed="true"] {

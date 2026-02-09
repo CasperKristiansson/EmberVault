@@ -85,6 +85,7 @@ Hybrid, capability-driven:
 - Primary (best): File System Access API (Chrome/Edge) — user selects a directory (“Vault”)
 - Universal fallback: IndexedDB (all browsers)
 - Optional performance add-on (Chrome): OPFS via Storage Foundation if available (not required)
+- Persist the user’s storage choice (and FS directory handle when applicable) in IndexedDB to avoid re-prompting on every launch
 
 See `storage.md` for canonical on-disk structure and fallback rules.
 
@@ -106,6 +107,7 @@ See `storage.md` for canonical on-disk structure and fallback rules.
 - Template (reserved; not user-facing)
 - Asset (image blob + metadata)
 - UI State (tabs, pane layout, last opened, sidebar widths)
+- App Settings (global settings such as storage mode + vault handle)
 
 ### 3.2 Project structure
 

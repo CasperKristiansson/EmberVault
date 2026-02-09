@@ -85,6 +85,13 @@ export type AssetMeta = {
 
 export type UIState = Record<string, unknown>;
 
+export type AppSettings = {
+  storageMode: "filesystem" | "idb";
+  fsHandle?: FileSystemDirectoryHandle;
+  lastVaultName?: string;
+  settings?: Record<string, unknown>;
+};
+
 export type StorageAdapter = {
   init: () => Promise<void>;
   listProjects: () => Promise<Project[]>;

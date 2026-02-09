@@ -6,7 +6,8 @@ export type ModalType =
   | "note-switcher"
   | "trash"
   | "confirm"
-  | "image-lightbox";
+  | "image-lightbox"
+  | "settings";
 
 export type ModalEntry = {
   id: string;

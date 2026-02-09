@@ -3,8 +3,10 @@
   import ConfirmDialog from "$lib/components/modals/ConfirmDialog.svelte";
   import type CommandPaletteModalType from "$lib/components/modals/CommandPaletteModal.svelte";
   import type GlobalSearchModalType from "$lib/components/modals/GlobalSearchModal.svelte";
+  import type SettingsModalType from "$lib/components/modals/SettingsModal.svelte";
   import type TrashModalType from "$lib/components/modals/TrashModal.svelte";
   import type { NoteIndexEntry, Project } from "$lib/core/storage/types";
+  import type { StorageMode } from "$lib/state/adapter.store";
   import type { SearchIndexState } from "$lib/state/search.store";
   import { activeModal, closeTopModal, modalStackStore } from "$lib/state/ui.store";
 
@@ -24,9 +26,17 @@
     | ((panel: "outline" | "backlinks" | "metadata") => void | Promise<void>)
     | null = null;
   export let onOpenSettings: (() => void | Promise<void>) | null = null;
+  export let onCloseSettings: (() => void | Promise<void>) | null = null;
+  export let onChooseFolder: (() => void | Promise<void>) | null = null;
+  export let onChooseBrowserStorage: (() => void | Promise<void>) | null = null;
+  export let storageMode: StorageMode = "idb";
+  export let settingsVaultName: string | null = null;
+  export let supportsFileSystem = true;
+  export let settingsBusy = false;
 
   let CommandPaletteModalComponent: typeof CommandPaletteModalType | null = null;
   let GlobalSearchModalComponent: typeof GlobalSearchModalType | null = null;
+  let SettingsModalComponent: typeof SettingsModalType | null = null;
   let TrashModalComponent: typeof TrashModalType | null = null;
 
   const ensureCommandPaletteLoaded = async (): Promise<void> => {
@@ -51,6 +61,14 @@
     }
     const module = await import("$lib/components/modals/TrashModal.svelte");
     TrashModalComponent = module.default;
+  };
+
+  const ensureSettingsLoaded = async (): Promise<void> => {
+    if (SettingsModalComponent) {
+      return;
+    }
+    const module = await import("$lib/components/modals/SettingsModal.svelte");
+    SettingsModalComponent = module.default;
   };
 
   type ConfirmDialogData = {
@@ -159,6 +177,10 @@
   $: if ($activeModal?.type === "trash") {
     void ensureTrashLoaded();
   }
+
+  $: if ($activeModal?.type === "settings") {
+    void ensureSettingsLoaded();
+  }
 </script>
 
 {#if $activeModal?.type === "global-search"}
@@ -197,6 +219,19 @@
       onOpenNote={onOpenNote}
       onRestore={onRestoreTrashedNote}
       onDeletePermanent={onDeleteTrashedNotePermanent}
+    />
+  {/if}
+{:else if $activeModal?.type === "settings"}
+  {#if SettingsModalComponent}
+    <svelte:component
+      this={SettingsModalComponent}
+      {storageMode}
+      {settingsVaultName}
+      {supportsFileSystem}
+      {settingsBusy}
+      onClose={onCloseSettings ?? handleClose}
+      onChooseFolder={onChooseFolder}
+      onChooseBrowserStorage={onChooseBrowserStorage}
     />
   {/if}
 {:else if $activeModal?.type === "confirm"}

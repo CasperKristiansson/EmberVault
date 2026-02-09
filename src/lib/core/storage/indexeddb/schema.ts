@@ -1,5 +1,5 @@
 export const databaseName = "local-notes";
-export const databaseVersion = 1;
+export const databaseVersion = 2;
 
 export const storeNames = {
   projects: "projects",
@@ -8,6 +8,7 @@ export const storeNames = {
   assets: "assets",
   uiState: "uiState",
   searchIndex: "searchIndex",
+  appSettings: "appSettings",
 } as const;
 
 export type StoreName = (typeof storeNames)[keyof typeof storeNames];
@@ -31,6 +32,7 @@ export const storeKeyPaths: Record<StoreName, StoreKeyPath> = {
   [storeNames.assets]: assetKeyPath,
   [storeNames.uiState]: null,
   [storeNames.searchIndex]: projectIdKey,
+  [storeNames.appSettings]: null,
 };
 
 const ensureObjectStore = (
@@ -56,6 +58,7 @@ export const createObjectStores = (database: IDBDatabase): void => {
     storeNames.assets,
     storeNames.uiState,
     storeNames.searchIndex,
+    storeNames.appSettings,
   ];
 
   for (const storeName of storeList) {
@@ -63,3 +66,4 @@ export const createObjectStores = (database: IDBDatabase): void => {
   }
 };
 export const uiStateKey = "ui";
+export const appSettingsKey = "app";

@@ -17,6 +17,7 @@ Top bar:
 
 - Height: 44px
 - Contains tabs row (left) and action icons (right)
+- Right action icons include a Settings icon (lucide, 18px) aligned to top-right; uses Ghost icon button style
 
 ### Mobile layout (< 768px width)
 
@@ -44,6 +45,7 @@ Rules:
 
 - If FS Access not supported: hide option 1, show an info note “Your browser doesn’t support folder storage.”
 - After selection: create default Project “Personal”.
+- If a stored storage choice exists and is valid, skip this onboarding view and open the workspace directly.
 
 ## 3) Left Sidebar (Folders + Tags)
 
@@ -54,7 +56,7 @@ Structure (top to bottom):
    - Clicking “Notes” clears folder selection and shows “All notes”
 3. Folder tree (scrollable)
 4. Tags list (collapsible section)
-5. Footer (sync/status + settings icon)
+5. Footer (sync/status)
 
 Folder tree:
 
@@ -241,6 +243,7 @@ Modal:
 - Search everywhere
 - Go to Trash (opens Trash modal)
 - Toggle right panel: Outline/Backlinks/Metadata
+- Open Settings
 
 Keyboard:
 
@@ -259,15 +262,56 @@ Keyboard:
   - matched snippet
   - tag pills (max 3)
 
-## 10) Graph view
+## 10) Settings modal
+
+Trigger:
+
+- Settings icon in the top-right action area
+- Command palette item: “Open Settings”
+- Mobile bottom nav: Settings
+
+Modal:
+
+- Centered, width 720px desktop, height 520px (max 80vh); full width minus 24px on mobile
+- Uses blur rules from `brand.md`
+- Two-column layout:
+  - Left rail: 180px fixed, vertical list of setting sections (macOS System Settings style)
+  - Right content: active section panel
+
+Left rail (sections list):
+
+- Row height: 32px
+- Each row: 16px icon + label
+- Active: background --bg-2 with 1px border --stroke-0
+- Inactive: hover --bg-3
+- Future-proof: allow additional sections here without redesigning the modal
+
+Sections (initial):
+
+- Storage (active)
+- General (disabled placeholder, “Coming soon” text in content area)
+- Shortcuts (disabled placeholder, “Coming soon” text in content area)
+
+Storage section content:
+
+- Header: “Storage” + 1-line description: “Choose where your notes live”
+- Two option cards (reuse onboarding card style):
+  1. “Use a folder on this device” (File System Access; Chrome/Edge)
+     - Shows current folder name (if set)
+     - Primary button: “Choose folder” (or “Change folder” if already set)
+  2. “Store in this browser” (IndexedDB)
+     - Secondary button: “Use browser storage”
+- Switching storage type requires a confirmation dialog if it would disconnect from the current vault (no silent migration).
+
+## 11) Graph view
 
 Removed.
 
-## 11) Templates
+## 12) Templates
 
 Removed.
 
-## 12) Trash
+## 13) Trash
 
 - Trash is a modal (opened from the sidebar Trash button or command palette)
 - Actions:
@@ -275,7 +319,7 @@ Removed.
   - Delete permanently (confirm dialog) Retention:
 - No auto-purge
 
-## 13) Notifications
+## 14) Notifications
 
 - Toasts bottom-right desktop, bottom-center mobile
 - Max 2 at a time
@@ -285,7 +329,7 @@ Removed.
   - “Restored”
   - “Could not access folder, switched to browser storage” (error)
 
-## 14) Accessibility (must)
+## 15) Accessibility (must)
 
 - Keyboard navigable everywhere
 - Visible focus ring using --focus-ring

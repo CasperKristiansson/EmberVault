@@ -36,6 +36,12 @@ Selection logic:
 
 - If FS API supported AND user chooses folder: FileSystemAdapter primary, plus IDB cache for index/state.
 - Else: IndexedDBAdapter only.
+- Persist the user’s storage choice and (if applicable) the directory handle in IndexedDB so we can restore without re-prompting.
+- On app start:
+  - If stored choice = FileSystemAdapter and the handle is still valid/permissioned, open it directly (no onboarding prompt).
+  - If stored choice = FileSystemAdapter but permission is denied or handle is invalid, show the blocking dialog (retry or switch to IDB).
+  - If stored choice = IndexedDBAdapter, skip onboarding and use IDB.
+  - If no stored choice, show onboarding selection.
 
 ## 3) On-disk layout (FileSystemAdapter)
 
@@ -84,6 +90,11 @@ DB name: `local-notes` Object stores:
 - assets (compound key: [projectId, assetId]) -> Blob
 - uiState (key: "ui")
 - searchIndex (key: projectId) -> serialized MiniSearch index
+- appSettings (key: "app") -> { storageMode: "filesystem" | "idb", fsHandle?: FileSystemDirectoryHandle, lastVaultName?: string, settings?: Record<string, unknown> }
+
+Notes:
+- appSettings lives in IndexedDB regardless of primary storage, and is used to remember the user’s storage choice across launches.
+- settings is reserved for future global settings (non-project-specific).
 
 ## 5) Image handling
 

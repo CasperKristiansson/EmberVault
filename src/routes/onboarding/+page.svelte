@@ -4,10 +4,12 @@
     import { resolve } from "$app/paths";
     import { Database, Folder } from "lucide-svelte";
     import { createDefaultProject } from "$lib/core/storage/indexeddb.adapter";
-  import {
-    initAdapter,
-    type StorageMode,
-  } from "$lib/state/adapter.store";
+    import {
+      readAppSettings,
+      writeAppSettings,
+    } from "$lib/core/storage/app-settings";
+    import type { AppSettings } from "$lib/core/storage/types";
+    import { initAdapter, type StorageMode } from "$lib/state/adapter.store";
 
   let supportsFileSystem = false;
   let isBusy = false;
@@ -17,10 +19,38 @@
   const isAbortError = (error: unknown): boolean =>
     error instanceof Error && error.name === "AbortError";
 
+  const persistStorageChoice = async (
+    mode: StorageMode,
+    handle?: FileSystemDirectoryHandle
+  ): Promise<void> => {
+    const existing = await readAppSettings();
+    const nextSettings: AppSettings = {
+      storageMode: mode,
+      fsHandle: mode === "filesystem" ? handle : undefined,
+      lastVaultName: mode === "filesystem" ? handle?.name : undefined,
+      settings: existing?.settings,
+    };
+    await writeAppSettings(nextSettings);
+  };
+
+  const attemptAutoEnter = async (): Promise<void> => {
+    const stored = await readAppSettings();
+    if (!stored?.storageMode) {
+      return;
+    }
+    if (stored.storageMode === "filesystem" && !stored.fsHandle) {
+      return;
+    }
+    isBusy = true;
+    activeMode = stored.storageMode;
+    await goto(resolve("/app"));
+  };
+
   onMount(() => {
     supportsFileSystem =
       typeof window !== "undefined" &&
       typeof window.showDirectoryPicker === "function";
+    void attemptAutoEnter();
   });
 
   const initBrowserStorage = async (): Promise<void> => {
@@ -39,6 +69,7 @@
         await adapter.createProject(project);
       }
       await adapter.writeUIState({ lastProjectId: project.id });
+      await persistStorageChoice("idb");
       await goto(resolve("/app"));
     } catch (error) {
       errorMessage =
@@ -66,6 +97,7 @@
         await adapter.createProject(project);
       }
       await adapter.writeUIState({ lastProjectId: project.id });
+      await persistStorageChoice("filesystem", handle);
       await goto(resolve("/app"));
     } catch (error) {
       if (!isAbortError(error)) {
