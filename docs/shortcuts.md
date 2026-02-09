@@ -17,7 +17,6 @@ Mac uses Cmd, Windows/Linux uses Ctrl.
 - Cmd/Ctrl+2: Focus note list
 - Cmd/Ctrl+3: Focus editor
 - Cmd/Ctrl+4: Toggle right panel
-- Cmd/Ctrl+B: Toggle backlinks panel (if right panel)
 - Cmd/Ctrl+O: Toggle outline panel
 
 ## Tabs / Panes

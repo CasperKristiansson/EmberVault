@@ -27,7 +27,7 @@
   export let onOpenGlobalSearch: (() => void | Promise<void>) | null = null;
   export let onGoToTrash: (() => void | Promise<void>) | null = null;
   export let onToggleRightPanel:
-    | ((panel: "outline" | "backlinks" | "metadata") => void | Promise<void>)
+    | ((panel: "outline" | "metadata") => void | Promise<void>)
     | null = null;
   export let onOpenSettings: (() => void | Promise<void>) | null = null;
   export let onCloseSettings: (() => void | Promise<void>) | null = null;
@@ -47,8 +47,10 @@
     startupView: "last-opened",
     defaultSort: "updated",
     openNoteBehavior: "new-tab",
-    confirmTrash: false,
+    newNoteLocation: "current-folder",
+    confirmTrash: true,
     spellcheck: true,
+    showNoteDates: true,
   };
 
   let CommandPaletteModalComponent: typeof CommandPaletteModalType | null = null;

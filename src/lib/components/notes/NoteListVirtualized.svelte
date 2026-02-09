@@ -20,6 +20,7 @@
   export let draggable = false;
   export let overscan = 6;
   export let virtualizeThreshold = 100;
+  export let showMeta = true;
 
   let container: HTMLDivElement | null = null;
   let scrollTop = 0;
@@ -131,6 +132,7 @@
               onDrop={onDrop}
               onDragEnd={onDragEnd}
               onToggleFavorite={onToggleFavorite}
+              {showMeta}
               {motionEnabled}
             />
           </slot>
@@ -161,6 +163,7 @@
             onDrop={onDrop}
             onDragEnd={onDragEnd}
             onToggleFavorite={onToggleFavorite}
+            {showMeta}
             {motionEnabled}
           />
         </slot>

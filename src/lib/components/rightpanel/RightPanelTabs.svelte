@@ -1,5 +1,5 @@
 <script lang="ts">
-  type RightPanelTab = "outline" | "backlinks" | "metadata";
+  type RightPanelTab = "outline" | "metadata";
 
   export let activeTab: RightPanelTab = "outline";
   export let onSelect: (tab: RightPanelTab) => void = () => {};
@@ -21,15 +21,6 @@
     on:click={() => handleSelect("outline")}
   >
     Outline
-  </button>
-  <button
-    class="right-panel-tab"
-    type="button"
-    aria-pressed={activeTab === "backlinks"}
-    data-testid="right-panel-tab-backlinks"
-    on:click={() => handleSelect("backlinks")}
-  >
-    Backlinks
   </button>
   <button
     class="right-panel-tab"

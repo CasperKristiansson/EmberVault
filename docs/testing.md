@@ -32,14 +32,13 @@ Markdown:
 Links:
 
 - parse outgoing links
-- backlinks remain stable after rename/title changes (id-based links remain valid)
 
 ## 3) Required component tests
 
 - Sidebar folder drag-and-drop indicator shows
 - Note list virtualization renders correct selection/hover
 - Command palette keyboard navigation
-- Right panel tabs (outline/backlinks/metadata) toggle correctly
+- Right panel tabs (outline/metadata) toggle correctly
 
 ## 4) Required E2E tests (Playwright)
 

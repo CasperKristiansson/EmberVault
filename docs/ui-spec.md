@@ -201,25 +201,17 @@ Math (LaTeX):
 - Render using KaTeX
 - Edit mode shows raw LaTeX; display mode shows rendered math
 
-## 7) Right panel (Outline / Backlinks / Metadata)
+## 7) Right panel (Outline / Metadata)
 
 Toggle:
 
-- Icon buttons in top bar: Outline, Backlinks, Metadata
+- Icon buttons in top bar: Outline, Metadata
 - Only one visible at a time; panel width fixed/resizable
 
 Outline:
 
-- Generated from headings (H1–H3)
-- Clicking scrolls editor to heading
-- Highlight current section while scrolling
-
-Backlinks:
-
-- Two sections:
-  - “Linked mentions” (explicit [[links]])
-  - “Unlinked mentions” (optional, can be postponed)
-- Each item shows note title + snippet with highlighted match
+- Generated from headings (H1–H6), excluding the title heading
+- Indented list only (no scroll-sync yet)
 
 Metadata:
 
@@ -242,7 +234,7 @@ Modal:
 - New note
 - Search everywhere
 - Go to Trash (opens Trash modal)
-- Toggle right panel: Outline/Backlinks/Metadata
+- Toggle right panel: Outline/Metadata
 - Open Settings
 
 Keyboard:
@@ -272,7 +264,7 @@ Trigger:
 
 Modal:
 
-- Centered, width 720px desktop, height 520px (max 80vh); full width minus 24px on mobile
+- Centered, width 860px desktop, height 600px (max 84vh); full width minus 24px on mobile
 - Uses blur rules from `brand.md`
 - Two-column layout:
   - Left rail: 180px fixed, vertical list of setting sections (macOS System Settings style)
@@ -290,7 +282,9 @@ Sections (initial):
 
 - Storage
 - General
+- Notes
 - Editor
+- Appearance
 - Shortcuts
 - Import/Export (placeholder actions)
 - Privacy (diagnostics)
@@ -314,11 +308,25 @@ General section content:
 - Open notes: New tab / Reuse tab (applies to note list selection)
 - Confirm move to Trash toggle
 
+Notes section content:
+
+- New notes go to: Current folder / All notes
+- Show updated date in list toggle
+- Show note preview (coming soon)
+- Show tag pills in list (coming soon)
+
 Editor section content:
 
 - Spellcheck toggle
 - Markdown view default (coming soon)
 - Smart list continuation (coming soon)
+
+Appearance section content:
+
+- Theme: Dark (locked)
+- Reduce motion: follows system preference (read-only)
+- Interface density (coming soon)
+- Accent color (coming soon)
 
 Shortcuts section content:
 

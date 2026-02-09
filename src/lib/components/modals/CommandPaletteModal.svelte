@@ -13,7 +13,7 @@
   export let onOpenGlobalSearch: (() => void | Promise<void>) | null = null;
   export let onGoToTrash: (() => void | Promise<void>) | null = null;
   export let onToggleRightPanel:
-    | ((panel: "outline" | "backlinks" | "metadata") => void | Promise<void>)
+    | ((panel: "outline" | "metadata") => void | Promise<void>)
     | null = null;
   export let onOpenSettings: (() => void | Promise<void>) | null = null;
 
@@ -173,16 +173,6 @@
         disabled: !onToggleRightPanel,
         perform: async () => {
           await onToggleRightPanel?.("outline");
-        },
-      },
-      {
-        type: "action",
-        id: "panel-backlinks",
-        label: "Toggle right panel: Backlinks",
-        group: "Settings",
-        disabled: !onToggleRightPanel,
-        perform: async () => {
-          await onToggleRightPanel?.("backlinks");
         },
       },
       {

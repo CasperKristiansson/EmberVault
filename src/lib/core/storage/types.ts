@@ -89,8 +89,10 @@ export type AppPreferences = {
   startupView: "last-opened" | "all-notes";
   defaultSort: "updated" | "created" | "title";
   openNoteBehavior: "new-tab" | "reuse-tab";
+  newNoteLocation: "current-folder" | "all-notes";
   confirmTrash: boolean;
   spellcheck: boolean;
+  showNoteDates: boolean;
 };
 
 export type AppSettings = {

@@ -20,7 +20,6 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
 - Folders + Tags (both)
 - Favorites (pinned notes)
 - Metadata panel (system fields + custom fields)
-- Backlinks
 - Tabs + Pane docking
 - Drag & drop (folders, notes, tabs)
 - Search: full-text + filters + fuzzy
@@ -123,7 +122,7 @@ See `storage.md` for canonical on-disk structure and fallback rules.
   - Sidebar (folder tree)
   - Note list pane
   - Editor pane (tabs + pane docking)
-  - Right panel (toggleable): Outline / Backlinks / Metadata
+  - Right panel (toggleable): Outline / Metadata
 - Command palette
 - Global search modal
 - Favorites view

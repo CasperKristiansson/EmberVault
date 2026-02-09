@@ -6,6 +6,8 @@
     HardDrive,
     Info,
     Keyboard,
+    FileText,
+    Palette,
     PenLine,
     Shield,
     SlidersHorizontal,
@@ -19,8 +21,10 @@
     startupView: "last-opened",
     defaultSort: "updated",
     openNoteBehavior: "new-tab",
-    confirmTrash: false,
+    newNoteLocation: "current-folder",
+    confirmTrash: true,
     spellcheck: true,
+    showNoteDates: true,
   };
 
   export let storageMode: StorageMode = "idb";
@@ -41,7 +45,9 @@
   type SettingsSection =
     | "storage"
     | "general"
+    | "notes"
     | "editor"
+    | "appearance"
     | "shortcuts"
     | "import-export"
     | "privacy"
@@ -99,11 +105,29 @@
         <button
           class="settings-item"
           type="button"
+          data-active={activeSection === "notes"}
+          on:click={() => (activeSection = "notes")}
+        >
+          <FileText aria-hidden="true" size={16} />
+          <span>Notes</span>
+        </button>
+        <button
+          class="settings-item"
+          type="button"
           data-active={activeSection === "editor"}
           on:click={() => (activeSection = "editor")}
         >
           <PenLine aria-hidden="true" size={16} />
           <span>Editor</span>
+        </button>
+        <button
+          class="settings-item"
+          type="button"
+          data-active={activeSection === "appearance"}
+          on:click={() => (activeSection = "appearance")}
+        >
+          <Palette aria-hidden="true" size={16} />
+          <span>Appearance</span>
         </button>
         <button
           class="settings-item"
@@ -344,6 +368,98 @@
               </div>
             </div>
           </div>
+        {:else if activeSection === "notes"}
+          <div class="section-header">
+            <div class="section-title">Notes</div>
+            <div class="section-description">List and capture behavior.</div>
+          </div>
+
+          <div class="settings-group">
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">New notes go to</div>
+                <div class="setting-description">
+                  Choose the default location for new notes.
+                </div>
+              </div>
+              <div class="setting-control">
+                <div class="segmented" role="group" aria-label="New note location">
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.newNoteLocation === "current-folder"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({
+                        newNoteLocation: "current-folder",
+                      })}
+                  >
+                    Current folder
+                  </button>
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.newNoteLocation === "all-notes"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({
+                        newNoteLocation: "all-notes",
+                      })}
+                  >
+                    All notes
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Show updated date</div>
+                <div class="setting-description">
+                  Display the last update date in the note list.
+                </div>
+              </div>
+              <div class="setting-control">
+                <button
+                  class="toggle"
+                  type="button"
+                  aria-pressed={preferences.showNoteDates}
+                  data-active={preferences.showNoteDates}
+                  disabled={preferencesDisabled}
+                  on:click={() =>
+                    void onUpdatePreferences?.({
+                      showNoteDates: !preferences.showNoteDates,
+                    })}
+                >
+                  <span class="toggle-knob"></span>
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row is-disabled">
+              <div class="setting-copy">
+                <div class="setting-title">Show note preview</div>
+                <div class="setting-description">
+                  One-line snippet beneath the title.
+                </div>
+              </div>
+              <div class="setting-control">
+                <span class="pill">Coming soon</span>
+              </div>
+            </div>
+
+            <div class="setting-row is-disabled">
+              <div class="setting-copy">
+                <div class="setting-title">Show tag pills in list</div>
+                <div class="setting-description">
+                  Display up to three tag chips on each row.
+                </div>
+              </div>
+              <div class="setting-control">
+                <span class="pill">Coming soon</span>
+              </div>
+            </div>
+          </div>
         {:else if activeSection === "editor"}
           <div class="section-header">
             <div class="section-title">Editor</div>
@@ -392,6 +508,61 @@
                 <div class="setting-title">Smart list continuation</div>
                 <div class="setting-description">
                   Automatically continue lists on Enter.
+                </div>
+              </div>
+              <div class="setting-control">
+                <span class="pill">Coming soon</span>
+              </div>
+            </div>
+          </div>
+        {:else if activeSection === "appearance"}
+          <div class="section-header">
+            <div class="section-title">Appearance</div>
+            <div class="section-description">Theme and motion preferences.</div>
+          </div>
+
+          <div class="settings-group">
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Theme</div>
+                <div class="setting-description">
+                  EmberVault is currently optimized for dark mode.
+                </div>
+              </div>
+              <div class="setting-control">
+                <span class="pill">Dark</span>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Reduce motion</div>
+                <div class="setting-description">
+                  Follows your system preference.
+                </div>
+              </div>
+              <div class="setting-control">
+                <span class="pill">{$prefersReducedMotion ? "On" : "Off"}</span>
+              </div>
+            </div>
+
+            <div class="setting-row is-disabled">
+              <div class="setting-copy">
+                <div class="setting-title">Interface density</div>
+                <div class="setting-description">
+                  Compact spacing for dense note workflows.
+                </div>
+              </div>
+              <div class="setting-control">
+                <span class="pill">Coming soon</span>
+              </div>
+            </div>
+
+            <div class="setting-row is-disabled">
+              <div class="setting-copy">
+                <div class="setting-title">Accent color</div>
+                <div class="setting-description">
+                  Choose a secondary accent color.
                 </div>
               </div>
               <div class="setting-control">
@@ -566,8 +737,8 @@
   }
 
   .modal-panel {
-    width: min(720px, calc(100% - 32px));
-    height: min(520px, 80vh);
+    width: min(860px, calc(100% - 32px));
+    height: min(600px, 84vh);
     background: var(--bg-1);
     border: 1px solid var(--stroke-0);
     border-radius: var(--r-lg);
@@ -1033,8 +1204,8 @@
 
   @media (max-width: 800px) {
     .modal-panel {
-      width: min(92vw, 720px);
-      height: min(78vh, 520px);
+      width: min(94vw, 820px);
+      height: min(82vh, 600px);
     }
 
     .modal-body {

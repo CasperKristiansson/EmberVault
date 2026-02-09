@@ -18,11 +18,6 @@
     extractTitleFromPmDocument,
     splitEditorTextIntoTitleAndBody,
   } from "$lib/core/editor/title-line";
-  import {
-    buildBacklinkSnippet,
-    resolveLinkedMentions,
-    type BacklinkSnippet,
-  } from "$lib/core/editor/links/backlinks";
   import { resolveOutgoingLinks } from "$lib/core/editor/links/parse";
   import type { WikiLinkCandidate } from "$lib/core/editor/wiki-links";
   import {
@@ -139,13 +134,7 @@
     editorPlainText: string;
   };
 
-  type RightPanelTab = "outline" | "backlinks" | "metadata";
-
-  type BacklinkEntry = {
-    id: string;
-    title: string;
-    snippet: BacklinkSnippet | null;
-  };
+  type RightPanelTab = "outline" | "metadata";
 
   const createPaneState = (): PaneState => ({
     tabs: [],
@@ -186,14 +175,9 @@
   let searchState: SearchIndexState | null = null;
   let wikiLinkCandidates: WikiLinkCandidate[] = [];
   let rightPanelTab: RightPanelTab = "outline";
-  let linkedMentions: BacklinkEntry[] = [];
-  let backlinksLoading = false;
-  let notesRevision = 0;
-  let backlinksKey = "";
 
   const saveDelay = 400;
   const uiStateDelay = 800;
-  const backlinksDelay = 200;
   const permissionErrorNames = new Set(["NotAllowedError", "SecurityError"]);
   let isRecoveringStorage = false;
 
@@ -241,8 +225,10 @@
     startupView: "last-opened",
     defaultSort: "updated",
     openNoteBehavior: "new-tab",
-    confirmTrash: false,
+    newNoteLocation: "current-folder",
+    confirmTrash: true,
     spellcheck: true,
+    showNoteDates: true,
   };
 
   const resolvePreferences = (
@@ -257,8 +243,11 @@
           : "updated",
       openNoteBehavior:
         input.openNoteBehavior === "reuse-tab" ? "reuse-tab" : "new-tab",
-      confirmTrash: input.confirmTrash === true,
+      newNoteLocation:
+        input.newNoteLocation === "all-notes" ? "all-notes" : "current-folder",
+      confirmTrash: input.confirmTrash !== false,
       spellcheck: input.spellcheck !== false,
+      showNoteDates: input.showNoteDates !== false,
     };
   };
 
@@ -307,6 +296,7 @@
     if (isAbortError(error)) {
       return;
     }
+    console.error("Storage adapter error:", error);
     notifyAdapterFailure();
   };
 
@@ -338,6 +328,7 @@
     if (!isPermissionError(error)) {
       return false;
     }
+    console.warn("Storage permission error:", error);
     openPermissionRecovery();
     return true;
   };
@@ -387,12 +378,14 @@
 
   const createNoteDocument = (): NoteDocumentFile => {
     const timestamp = Date.now();
+    const resolvedFolderId =
+      preferences.newNoteLocation === "all-notes" ? null : activeFolderId;
     return {
       id: createUlid(),
       title: "",
       createdAt: timestamp,
       updatedAt: timestamp,
-      folderId: activeFolderId,
+      folderId: resolvedFolderId,
       tagIds: [],
       favorite: false,
       deletedAt: null,
@@ -848,73 +841,6 @@
     rightPanelTab = tab;
   };
 
-  const resolveBacklinkTargets = (
-    targetId: string,
-    targetTitle: string | null
-  ): string[] => {
-    const targets: string[] = [];
-    if (targetTitle) {
-      const trimmedTitle = targetTitle.trim();
-      if (trimmedTitle) {
-        targets.push(trimmedTitle);
-      }
-    }
-    if (targetId) {
-      targets.push(targetId);
-    }
-    return targets;
-  };
-
-  let backlinkRequestId = 0;
-  const backlinksRefreshTask = createDebouncedTask(
-    async (targetId: string, targetTitle: string | null) => {
-      const requestId = (backlinkRequestId += 1);
-      if (!vault || !targetId) {
-        linkedMentions = [];
-        backlinksLoading = false;
-        return;
-      }
-      backlinksLoading = true;
-      const candidates = resolveLinkedMentions(notes, targetId, targetTitle);
-      if (candidates.length === 0) {
-        if (requestId === backlinkRequestId) {
-          linkedMentions = [];
-          backlinksLoading = false;
-        }
-        return;
-      }
-      const targets = resolveBacklinkTargets(targetId, targetTitle);
-      const results = await Promise.all(
-        candidates.map(async (note) => {
-          const document = await runAdapterTask(
-            () => adapter.readNote(note.id),
-            null
-          );
-          if (!document) {
-            return null;
-          }
-          const snippet = buildBacklinkSnippet(
-            document.derived?.plainText ?? "",
-            targets
-          );
-          return {
-            id: note.id,
-            title: note.title,
-            snippet,
-          };
-        })
-      );
-      if (requestId !== backlinkRequestId) {
-        return;
-      }
-      linkedMentions = results.filter(
-        (entry): entry is BacklinkEntry => entry !== null
-      );
-      backlinksLoading = false;
-    },
-    backlinksDelay
-  );
-
   const sortNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] => {
     const sorted = [...list];
     if (preferences.defaultSort === "created") {
@@ -959,20 +885,6 @@
     : "All notes";
   $: noteListCount = filteredNotes.length;
   $: noteListEmptyMessage = favoritesOnly ? "No favorites yet." : "No notes yet.";
-  $: {
-    const targetId = activeNote?.id ?? "";
-    const targetTitle = activeNote?.title ?? "";
-    const nextKey = `${targetId}:${targetTitle}:${notesRevision}`;
-    if (nextKey !== backlinksKey) {
-      backlinksKey = nextKey;
-      if (!targetId) {
-        linkedMentions = [];
-        backlinksLoading = false;
-      } else {
-        backlinksRefreshTask.schedule(targetId, targetTitle);
-      }
-    }
-  }
 
   const loadNotes = async (): Promise<void> => {
     const loadedNotes = sortNotes(
@@ -986,7 +898,6 @@
     } else {
       notes = loadedNotes;
     }
-    notesRevision += 1;
     const storedVault = await runAdapterTask(
       () => adapter.readVault(),
       null
@@ -1985,7 +1896,6 @@
 
   const removeNoteFromLocalState = (noteId: string): void => {
     notes = notes.filter((note) => note.id !== noteId);
-    notesRevision += 1;
     if (!vault || !Object.hasOwn(vault.notesIndex, noteId)) {
       return;
     }
@@ -2284,7 +2194,11 @@
         ?.note ?? note;
     await persistNote(latestSnapshot);
     await loadNotes();
-    if (activeFolderId && vault?.folders[activeFolderId]?.noteIds) {
+    if (
+      activeFolderId &&
+      note.folderId === activeFolderId &&
+      vault?.folders[activeFolderId]?.noteIds
+    ) {
       const currentOrder = resolveFolderNoteOrder(
         notes,
         activeFolderId,
@@ -2567,6 +2481,7 @@
       notesIndex={vault?.notesIndex ?? {}}
       {activeFolderId}
       {draggingNoteId}
+      loading={isLoading}
       onSelect={selectFolder}
       onCreate={createFolder}
       onRename={renameFolder}
@@ -2646,6 +2561,7 @@
         onDragOver={handleNoteDragOver}
         onDrop={handleNoteDrop}
         onDragEnd={handleNoteDragEnd}
+        showMeta={preferences.showNoteDates}
       />
     {/if}
   </div>
@@ -2679,12 +2595,8 @@
   <RightPanel
     slot="right-panel"
     activeTab={rightPanelTab}
-    activeNoteId={activeNote?.id ?? null}
     activeNote={activeNote}
     {vault}
-    linkedMentions={linkedMentions}
-    backlinksLoading={backlinksLoading}
-    onOpenNote={activateTab}
     onUpdateCustomFields={updateCustomFieldsForNote}
   />
 

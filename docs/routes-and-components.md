@@ -132,10 +132,8 @@ Directory: `src/lib/components/`
 ### 2.6 Right panel
 
 - `rightpanel/RightPanel.svelte`
-  - `RightPanelTabs.svelte` (Outline / Backlinks / Metadata)
+  - `RightPanelTabs.svelte` (Outline / Metadata)
   - `OutlinePanel.svelte`
-  - `BacklinksPanel.svelte`
-    - `BacklinkItem.svelte`
   - `MetadataPanel.svelte`
     - `CustomFieldEditor.svelte`
 
@@ -203,7 +201,7 @@ Directory: `src/lib/state/`
     - `panes[paneId].activeTabId`
   - Right panel:
     - open/closed
-    - active tab (outline|backlinks|metadata)
+    - active tab (outline|metadata)
   - UI sizes:
     - sidebarWidth, listWidth, rightPanelWidth
   - Actions:

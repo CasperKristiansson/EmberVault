@@ -70,10 +70,10 @@ Rule: each milestone must end with green CI (unit + e2e + typecheck + lint). No 
 - [x] Component tests for tab close + pane layout
 - [x] E2E: dock notes into multiple panes, reload persists
 
-## Milestone 7 — Backlinks (Graph Removed)
+## Milestone 7 — Backlinks (Removed)
 
 - [x] Wiki link syntax [[...]] creation UI (autocomplete)
-- [x] Backlinks panel (linked mentions)
+- [ ] Backlinks panel (removed from the product)
 - [x] Spec correction (Feb 6, 2026): Graph view removed from the product.
 
 ## Milestone 8 — Templates + metadata + favorites + trash polish

@@ -14,6 +14,7 @@
   export let folders: FolderTree = {};
   export let notesIndex: Record<string, NoteIndexEntry> = {};
   export let activeFolderId: string | null = null;
+  export let loading = false;
   export let onSelect: (folderId: string) => void = () => {};
   export let onCreate: (parentId: string | null) => Promise<string | null> =
     async () => null;
@@ -149,6 +150,7 @@
     type="button"
     data-testid="open-trash"
     on:click={() => void onOpenTrash?.()}
+    disabled={loading}
   >
     Trash
   </button>
@@ -158,6 +160,7 @@
     type="button"
     data-testid="folder-add"
     on:click={() => void handleCreate(null)}
+    disabled={loading}
   >
     Add new folder
   </button>
@@ -167,9 +170,14 @@
     data-testid="folder-tree"
     role="tree"
     tabindex="0"
+    aria-busy={loading}
     on:contextmenu|preventDefault={event => openMenu(null, event)}
   >
-    {#if rootFolderIds.length === 0}
+    {#if loading}
+      <div class="folder-empty" data-testid="folder-loading">
+        Loading folders...
+      </div>
+    {:else if rootFolderIds.length === 0}
       <div class="folder-empty" data-testid="folder-empty">No folders yet.</div>
     {:else}
       {#each rootFolderIds as folderId (folderId)}
@@ -254,6 +262,11 @@
   .folder-add:hover {
     background: var(--bg-3);
     color: var(--text-0);
+  }
+
+  .folder-add:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .folder-add:focus-visible {

@@ -8,6 +8,7 @@
   export let titleOverride: string | null = null;
   export let active = false;
   export let motionEnabled = true;
+  export let showMeta = true;
   export let onSelect: (noteId: string) => void = () => {};
   export let draggable = false;
   export let dragging = false;
@@ -92,7 +93,9 @@
     <Star aria-hidden="true" size={14} />
   </button>
   <span class="note-row-title">{resolvedTitle}</span>
-  <span class="note-row-meta">{formattedDate}</span>
+  {#if showMeta}
+    <span class="note-row-meta">{formattedDate}</span>
+  {/if}
 </div>
 
 <style>

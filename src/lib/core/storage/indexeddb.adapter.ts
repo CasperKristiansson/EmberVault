@@ -370,18 +370,45 @@ export class IndexedDBAdapter implements StorageAdapter {
     await this.withStore<IndexedDatabaseKey>(
       storeNames.searchIndex,
       "readwrite",
-      (store) => store.put(snapshot, searchIndexKey)
+      (store) => {
+        if (!store.keyPath) {
+          return store.put(snapshot, searchIndexKey);
+        }
+        if (typeof store.keyPath === "string") {
+          const payload: Record<string, unknown> = {
+            [store.keyPath]: searchIndexKey,
+            snapshot,
+          };
+          return store.put(payload);
+        }
+        const payload: Record<string, unknown> = { snapshot };
+        for (const key of store.keyPath) {
+          payload[key] = searchIndexKey;
+        }
+        return store.put(payload);
+      }
     );
   }
 
   public async readSearchIndex(): Promise<string | null> {
-    const snapshot = await this.withStore<string | undefined>(
+    const snapshot = await this.withStore<unknown>(
       storeNames.searchIndex,
       "readonly",
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       (store) => store.get(searchIndexKey)
     );
-    return snapshot ?? null;
+    if (typeof snapshot === "string") {
+      return snapshot;
+    }
+    if (snapshot && typeof snapshot === "object") {
+      const record = snapshot as Record<string, unknown>;
+      const candidate =
+        record.snapshot ?? record.value ?? record.index ?? record.data;
+      if (typeof candidate === "string") {
+        return candidate;
+      }
+    }
+    return null;
   }
 
   private async openAndCloseDatabase(): Promise<void> {
