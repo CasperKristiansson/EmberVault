@@ -3,6 +3,7 @@
   import { onMount } from "svelte";
   import { Editor, type JSONContent } from "@tiptap/core";
   import { TextSelection } from "@tiptap/pm/state";
+  import { TableColumnsSplit, TableRowsSplit } from "lucide-svelte";
   import {
     applySlashMenuCommand,
     getSlashMenuItems,
@@ -64,6 +65,12 @@
   let slashMenuSlashPosition: number | null = null;
   const slashMenuItems = getSlashMenuItems();
 
+  let tablePromptOpen = false;
+  let tablePromptPosition: { x: number; y: number } | null = null;
+  let tablePromptRows = 3;
+  let tablePromptCols = 3;
+  let tablePromptElement: HTMLDivElement | null = null;
+
   let wikiLinkOpen = false;
   let wikiLinkPosition: { x: number; y: number } | null = null;
   let wikiLinkSelectedIndex = 0;
@@ -77,6 +84,7 @@
   let lightboxAlt = "";
   let lightboxCaption = "";
   let lightboxBackdrop: HTMLDivElement | null = null;
+  let tableToolbarVisible = false;
 
   const menuWidth = 240;
   const menuHeight = 320;
@@ -147,6 +155,7 @@
       return;
     }
     closeWikiLinkMenu();
+    closeTablePrompt();
     const coords = editor.view.coordsAtPos(editor.state.selection.from);
     slashMenuPosition = resolveMenuPosition({
       left: coords.left,
@@ -161,6 +170,70 @@
     slashMenuOpen = false;
     slashMenuPosition = null;
     slashMenuSlashPosition = null;
+  };
+
+  const closeTablePrompt = (): void => {
+    tablePromptOpen = false;
+    tablePromptPosition = null;
+  };
+
+  const openTablePrompt = (): void => {
+    if (!editor) {
+      return;
+    }
+    const chain = editor.chain().focus() as SlashMenuChain;
+    deleteSlashIfPresent(chain);
+    const coords = editor.view.coordsAtPos(editor.state.selection.from);
+    tablePromptPosition = resolveMenuPosition({
+      left: coords.left,
+      bottom: coords.bottom,
+    });
+    tablePromptRows = 3;
+    tablePromptCols = 3;
+    tablePromptOpen = true;
+  };
+
+  const clampTableValue = (value: number): number => {
+    if (!Number.isFinite(value)) {
+      return 3;
+    }
+    return Math.min(12, Math.max(1, Math.round(value)));
+  };
+
+  const insertTableFromPrompt = (): void => {
+    if (!editor) {
+      return;
+    }
+    const rows = clampTableValue(tablePromptRows);
+    const cols = clampTableValue(tablePromptCols);
+    editor
+      .chain()
+      .focus()
+      .insertTable({ rows, cols, withHeaderRow: true })
+      .run();
+    closeTablePrompt();
+  };
+
+  const updateTableToolbar = (): void => {
+    if (!editor) {
+      tableToolbarVisible = false;
+      return;
+    }
+    tableToolbarVisible = editor.isActive("table");
+  };
+
+  const addTableRow = (): void => {
+    if (!editor) {
+      return;
+    }
+    editor.chain().focus().addRowAfter().run();
+  };
+
+  const addTableColumn = (): void => {
+    if (!editor) {
+      return;
+    }
+    editor.chain().focus().addColumnAfter().run();
   };
 
   const openWikiLinkMenu = (startPos: number): void => {
@@ -246,6 +319,11 @@
 
   const selectSlashMenuItem = (itemId: SlashMenuItemId): void => {
     if (!editor || !isSlashMenuItemEnabled(itemId)) {
+      return;
+    }
+    if (itemId === "table") {
+      closeSlashMenu();
+      openTablePrompt();
       return;
     }
     const chain = editor.chain().focus() as SlashMenuChain;
@@ -576,6 +654,7 @@
           wikiLinkStartPos = transaction.mapping.map(wikiLinkStartPos);
           updateWikiLinkQuery();
         }
+        updateTableToolbar();
         return;
       }
       slashMenuSlashPosition = transaction.mapping.map(slashMenuSlashPosition);
@@ -583,6 +662,10 @@
         wikiLinkStartPos = transaction.mapping.map(wikiLinkStartPos);
         updateWikiLinkQuery();
       }
+      updateTableToolbar();
+    });
+    editor.on("selectionUpdate", () => {
+      updateTableToolbar();
     });
     syntheticPasteHandler = (event: Event): void => {
       const file = resolveDetailFile(event);
@@ -608,12 +691,19 @@
     };
     element.addEventListener("click", imageClickHandler);
     lastContentKey = contentKey;
+    updateTableToolbar();
   };
 
   onMount(() => {
     initializeEditor();
     const handleClick = (event: MouseEvent) => {
       const target = event.target as Node;
+      if (tablePromptOpen) {
+        if (tablePromptElement && tablePromptElement.contains(target)) {
+          return;
+        }
+        closeTablePrompt();
+      }
       if (slashMenuOpen) {
         if (slashMenuElement && slashMenuElement.contains(target)) {
           return;
@@ -638,6 +728,10 @@
       }
       if (wikiLinkOpen) {
         closeWikiLinkMenu();
+        return;
+      }
+      if (tablePromptOpen) {
+        closeTablePrompt();
         return;
       }
       if (slashMenuOpen) {
@@ -692,6 +786,28 @@
 </script>
 
 <div class="editor-surface" data-testid="tiptap-surface" data-chrome={chrome}>
+  {#if tableToolbarVisible}
+    <div class="table-toolbar" role="group" aria-label="Table controls">
+      <button
+        class="table-action"
+        type="button"
+        aria-label="Add table row"
+        on:click={addTableRow}
+      >
+        <TableRowsSplit aria-hidden="true" size={14} />
+        <span>Add row</span>
+      </button>
+      <button
+        class="table-action"
+        type="button"
+        aria-label="Add table column"
+        on:click={addTableColumn}
+      >
+        <TableColumnsSplit aria-hidden="true" size={14} />
+        <span>Add column</span>
+      </button>
+    </div>
+  {/if}
   <div
     bind:this={element}
     class="editor-mount"
@@ -717,6 +833,60 @@
   onSelect={selectWikiLinkItem}
   onHighlight={handleWikiLinkHighlight}
 />
+
+{#if tablePromptOpen && tablePromptPosition}
+  <div
+    class="table-prompt"
+    bind:this={tablePromptElement}
+    style={`left:${tablePromptPosition.x}px; top:${tablePromptPosition.y}px;`}
+  >
+    <div class="table-prompt-title">Insert table</div>
+    <div class="table-prompt-field">
+      <label for="table-rows">Rows</label>
+      <input
+        id="table-rows"
+        type="number"
+        min="1"
+        max="12"
+        value={tablePromptRows}
+        on:input={(event) => {
+          const target = event.currentTarget;
+          if (target instanceof HTMLInputElement) {
+            tablePromptRows = Number.parseInt(target.value, 10);
+          }
+        }}
+      />
+    </div>
+    <div class="table-prompt-field">
+      <label for="table-cols">Columns</label>
+      <input
+        id="table-cols"
+        type="number"
+        min="1"
+        max="12"
+        value={tablePromptCols}
+        on:input={(event) => {
+          const target = event.currentTarget;
+          if (target instanceof HTMLInputElement) {
+            tablePromptCols = Number.parseInt(target.value, 10);
+          }
+        }}
+      />
+    </div>
+    <div class="table-prompt-actions">
+      <button class="table-prompt-button ghost" type="button" on:click={closeTablePrompt}>
+        Cancel
+      </button>
+      <button
+        class="table-prompt-button primary"
+        type="button"
+        on:click={insertTableFromPrompt}
+      >
+        Insert
+      </button>
+    </div>
+  </div>
+{/if}
 
 {#if lightboxOpen}
   <div
@@ -751,6 +921,7 @@
     border: 1px solid var(--stroke-0);
     border-radius: var(--r-md);
     padding: 8px 12px;
+    position: relative;
   }
 
   .editor-surface[data-chrome="flat"] {
@@ -771,6 +942,50 @@
     line-height: 1.55;
     color: var(--text-0);
     outline: none;
+  }
+
+  .table-toolbar {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--bg-1) 70%, transparent);
+    border: 1px solid var(--stroke-0);
+    z-index: 2;
+  }
+
+  .table-action {
+    height: 28px;
+    padding: 0 8px;
+    border-radius: var(--r-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-1);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .table-action:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
+  .table-action:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .table-action :global(svg) {
+    width: 14px;
+    height: 14px;
+    display: block;
   }
 
   .editor-surface[data-chrome="flat"] :global(.ProseMirror) {
@@ -865,6 +1080,82 @@
 
   .editor-surface :global(.ProseMirror tr:hover) {
     background: var(--bg-3);
+  }
+
+  .table-prompt {
+    position: fixed;
+    width: 220px;
+    padding: 12px;
+    border-radius: var(--r-md);
+    background: var(--bg-2);
+    border: 1px solid var(--stroke-0);
+    box-shadow: var(--shadow-popover);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 120;
+  }
+
+  .table-prompt-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-0);
+  }
+
+  .table-prompt-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-1);
+  }
+
+  .table-prompt-field input {
+    width: 72px;
+    height: 28px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-1);
+    color: var(--text-0);
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .table-prompt-field input:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .table-prompt-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .table-prompt-button {
+    height: 28px;
+    padding: 0 10px;
+    border-radius: var(--r-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-1);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .table-prompt-button.primary {
+    background: var(--accent-0);
+    color: #0b0d10;
+  }
+
+  .table-prompt-button.primary:hover {
+    background: var(--accent-1);
+  }
+
+  .table-prompt-button.ghost:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
   }
 
   .editor-surface :global(.ProseMirror ul[data-type="taskList"]) {

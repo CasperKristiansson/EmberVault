@@ -3,6 +3,7 @@
   import ConfirmDialog from "$lib/components/modals/ConfirmDialog.svelte";
   import type CommandPaletteModalType from "$lib/components/modals/CommandPaletteModal.svelte";
   import type GlobalSearchModalType from "$lib/components/modals/GlobalSearchModal.svelte";
+  import type HelpModalType from "$lib/components/modals/HelpModal.svelte";
   import type SettingsModalType from "$lib/components/modals/SettingsModal.svelte";
   import type TrashModalType from "$lib/components/modals/TrashModal.svelte";
   import type {
@@ -29,6 +30,7 @@
   export let onToggleRightPanel:
     | ((panel: "outline" | "metadata") => void | Promise<void>)
     | null = null;
+  export let onCloseHelp: (() => void | Promise<void>) | null = null;
   export let onOpenSettings: (() => void | Promise<void>) | null = null;
   export let onCloseSettings: (() => void | Promise<void>) | null = null;
   export let onChooseFolder: (() => void | Promise<void>) | null = null;
@@ -55,6 +57,7 @@
 
   let CommandPaletteModalComponent: typeof CommandPaletteModalType | null = null;
   let GlobalSearchModalComponent: typeof GlobalSearchModalType | null = null;
+  let HelpModalComponent: typeof HelpModalType | null = null;
   let SettingsModalComponent: typeof SettingsModalType | null = null;
   let TrashModalComponent: typeof TrashModalType | null = null;
 
@@ -72,6 +75,14 @@
     }
     const module = await import("$lib/components/modals/GlobalSearchModal.svelte");
     GlobalSearchModalComponent = module.default;
+  };
+
+  const ensureHelpLoaded = async (): Promise<void> => {
+    if (HelpModalComponent) {
+      return;
+    }
+    const module = await import("$lib/components/modals/HelpModal.svelte");
+    HelpModalComponent = module.default;
   };
 
   const ensureTrashLoaded = async (): Promise<void> => {
@@ -193,6 +204,10 @@
     void ensureCommandPaletteLoaded();
   }
 
+  $: if ($activeModal?.type === "help") {
+    void ensureHelpLoaded();
+  }
+
   $: if ($activeModal?.type === "trash") {
     void ensureTrashLoaded();
   }
@@ -225,6 +240,13 @@
       {onGoToTrash}
       {onToggleRightPanel}
       {onOpenSettings}
+    />
+  {/if}
+{:else if $activeModal?.type === "help"}
+  {#if HelpModalComponent}
+    <svelte:component
+      this={HelpModalComponent}
+      onClose={onCloseHelp ?? handleClose}
     />
   {/if}
 {:else if $activeModal?.type === "trash"}

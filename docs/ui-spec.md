@@ -17,7 +17,7 @@ Top bar:
 
 - Height: 44px
 - Contains tabs row (left) and action icons (right)
-- Right action icons include a Settings icon (lucide, 18px) aligned to top-right; uses Ghost icon button style
+- Right action icons include Help + Settings icons (lucide, 18px) aligned to top-right; uses Ghost icon button style
 
 ### Mobile layout (< 768px width)
 
@@ -176,7 +176,8 @@ Tables:
 
 - Minimal grid lines using --stroke-0
 - Row hover: --bg-3
-- Add row/column controls appear on hover
+- Inserting a table from the slash menu prompts for rows/columns (default 3x3)
+- Add row/column controls appear when the cursor is inside the table
 
 Checklists:
 
@@ -347,15 +348,38 @@ About section content:
 
 - Storage mode, vault name, build label
 
-## 11) Graph view
+## 11) Help modal
+
+Trigger:
+
+- Help icon in the top-right action area
+
+Modal:
+
+- Centered, width 860px desktop, height 600px (max 84vh); full width minus 24px on mobile
+- Uses blur rules from `brand.md`
+- Two-column layout:
+  - Left rail: 200px fixed, vertical list of help sections (macOS System Settings style)
+  - Right content: active section panel
+
+Sections (initial):
+
+- Overview (slash menu, wiki links, images)
+- Markdown (input rules + examples)
+- Blocks (slash menu items available now + coming soon)
+- Links & Media (wiki links, external links, image paste/drag)
+- Math (inline + block)
+- Shortcuts (undo/redo, open slash menu, escape)
+
+## 12) Graph view
 
 Removed.
 
-## 12) Templates
+## 13) Templates
 
 Removed.
 
-## 13) Trash
+## 14) Trash
 
 - Trash is a modal (opened from the sidebar Trash button or command palette)
 - Actions:
@@ -363,7 +387,7 @@ Removed.
   - Delete permanently (confirm dialog) Retention:
 - No auto-purge
 
-## 14) Notifications
+## 15) Notifications
 
 - Toasts bottom-right desktop, bottom-center mobile
 - Max 2 at a time
@@ -373,7 +397,7 @@ Removed.
   - “Restored”
   - “Could not access folder, switched to browser storage” (error)
 
-## 15) Accessibility (must)
+## 16) Accessibility (must)
 
 - Keyboard navigable everywhere
 - Visible focus ring using --focus-ring

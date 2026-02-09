@@ -7,6 +7,7 @@ export type ModalType =
   | "trash"
   | "confirm"
   | "image-lightbox"
+  | "help"
   | "settings";
 
 export type ModalEntry = {

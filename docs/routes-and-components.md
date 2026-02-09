@@ -142,6 +142,7 @@ Directory: `src/lib/components/`
 - `modals/ModalHost.svelte`
 - `modals/CommandPaletteModal.svelte`
 - `modals/GlobalSearchModal.svelte`
+- `modals/HelpModal.svelte`
 - `modals/NoteSwitcherModal.svelte` (Cmd/Ctrl+P)
 - `modals/ConfirmDialog.svelte`
 - `modals/ImageLightboxModal.svelte`

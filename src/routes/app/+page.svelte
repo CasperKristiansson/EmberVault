@@ -3,7 +3,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { get } from "svelte/store";
-  import { Search, Settings, X } from "lucide-svelte";
+  import { HelpCircle, Search, Settings, X } from "lucide-svelte";
   import AppShell from "$lib/components/AppShell.svelte";
   import ToastHost from "$lib/components/ToastHost.svelte";
   import RightPanel from "$lib/components/rightpanel/RightPanel.svelte";
@@ -104,6 +104,7 @@
   });
   let permissionModalId: string | null = null;
   let settingsModalId: string | null = null;
+  let helpModalId: string | null = null;
   let appSettings: AppSettings | null = null;
   let supportsFileSystem = false;
   let modalStackEntries: { id: string }[] = [];
@@ -120,6 +121,12 @@
       !modalStackEntries.some((entry) => entry.id === settingsModalId)
     ) {
       settingsModalId = null;
+    }
+    if (
+      helpModalId &&
+      !modalStackEntries.some((entry) => entry.id === helpModalId)
+    ) {
+      helpModalId = null;
     }
   });
 
@@ -750,6 +757,21 @@
     }
     closeModal(settingsModalId);
     settingsModalId = null;
+  };
+
+  const openHelp = (): void => {
+    if (helpModalId) {
+      return;
+    }
+    helpModalId = openModal("help");
+  };
+
+  const closeHelp = (): void => {
+    if (!helpModalId) {
+      return;
+    }
+    closeModal(helpModalId);
+    helpModalId = null;
   };
 
   const updatePreferences = async (
@@ -2452,6 +2474,15 @@
         onSelect={handleRightPanelTabSelect}
       />
       <button
+        class="icon-button"
+        type="button"
+        aria-label="Open help"
+        data-testid="open-help"
+        on:click={openHelp}
+      >
+        <HelpCircle aria-hidden="true" size={18} />
+      </button>
+      <button
         class="icon-button settings-button"
         type="button"
         aria-label="Open settings"
@@ -2616,6 +2647,7 @@
     onGoToTrash={openTrashView}
     onOpenSettings={openSettings}
     onCloseSettings={closeSettings}
+    onCloseHelp={closeHelp}
     onChooseFolder={requestFolderSwitch}
     onChooseBrowserStorage={requestBrowserStorageSwitch}
     onUpdatePreferences={updatePreferences}
