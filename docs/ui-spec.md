@@ -405,3 +405,43 @@ Removed.
 - Visible focus ring using --focus-ring
 - ARIA labels on icon buttons
 - Minimum contrast: text-1 on bg-1 must be readable
+
+## 17) Landing page (v2)
+
+Layout constants:
+
+- Max content width: 1120px
+- Horizontal padding: 28px desktop, 16px mobile
+- Section spacing: 110px desktop, 72px mobile
+- Hero top padding: 96px desktop, 72px mobile
+- Prefer 24/32/40px gaps inside sections
+
+Structure (no nav, no footer):
+
+1. Hero showpiece (wordmark, H1, CTAs, app preview)
+2. Feature rail (divider + 4 items with hairline separators)
+3. Storage choice (single segmented panel with local-only badge)
+4. Editor capabilities (single panel with tabs)
+5. Privacy/trust (statement + proof points + status strip)
+
+Hero rules:
+
+- Wordmark line above H1: accent dot + muted "EmberVault"
+- H1: 46-52px desktop, 34-36px mobile, tight tracking (-0.02em)
+- Subhead: 16px, line-height 1.65, max width 46ch
+- CTAs: primary "Choose storage", secondary "Learn how it works", 36px height
+- App preview: macOS-like frame with soft inner glow, subtle tilt, floating palette, tiny tooltip
+
+Background treatment:
+
+- Base: --bg-0
+- 2-3 radial gradients (cool top-left, warm orange near hero)
+- Subtle noise overlay and faint vignette
+- Slow gradient drift (18-26s) disabled for reduced motion
+
+Motion:
+
+- Window float (6-8s) and palette entrance once
+- Segmented and tab indicators slide
+- Tab and panel content crossfade with 120ms transition
+- Reduced motion: disable transforms, keep 80ms fades
