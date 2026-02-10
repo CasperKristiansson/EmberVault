@@ -26,6 +26,19 @@ vi.mock("$lib/state/adapter.store", () => {
   };
 });
 
+vi.mock("$lib/core/storage/app-settings", () => ({
+  // eslint-disable-next-line @typescript-eslint/require-await
+  readAppSettings: vi.fn(async () => ({
+    storageMode: "filesystem",
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    fsHandle: { name: "Vault" } as FileSystemDirectoryHandle,
+  })),
+  // eslint-disable-next-line @typescript-eslint/require-await
+  writeAppSettings: vi.fn(async () => null),
+  // eslint-disable-next-line @typescript-eslint/require-await
+  clearAppSettings: vi.fn(async () => null),
+}));
+
 vi.mock("$app/navigation", () => ({
   goto: vi.fn(),
 }));

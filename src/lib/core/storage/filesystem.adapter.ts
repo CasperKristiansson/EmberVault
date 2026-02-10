@@ -27,6 +27,7 @@ import {
   templateFileName,
   templateMarkdownName,
 } from "./filesystem/paths";
+import { createDefaultVault, defaultVaultId } from "./indexeddb/default-vault";
 import type { VaultDirectories, VaultManifest } from "./filesystem/types";
 import type {
   AssetMeta,
@@ -37,7 +38,6 @@ import type {
   UIState,
   Vault,
 } from "./types";
-import { createDefaultVault, defaultVaultId } from "./indexeddb/default-vault";
 
 const supportsIndexedDatabase = (): boolean => "indexedDB" in globalThis;
 
@@ -45,6 +45,7 @@ export class FileSystemAdapter implements StorageAdapter {
   private readonly root: FileSystemDirectoryHandle;
   private readonly cacheAdapter: IndexedDBAdapter | null;
   private cacheReady = false;
+  // eslint-disable-next-line compat/compat
   private manifestWriteQueue: Promise<void> = Promise.resolve();
 
   public constructor(rootHandle: FileSystemDirectoryHandle) {
@@ -74,7 +75,9 @@ export class FileSystemAdapter implements StorageAdapter {
 
   public async writeVault(vault: Vault): Promise<void> {
     if (vault.id !== defaultVaultId) {
-      throw new Error(`FileSystemAdapter.writeVault id mismatch for ${vault.id}.`);
+      throw new Error(
+        `FileSystemAdapter.writeVault id mismatch for ${vault.id}.`
+      );
     }
     await this.enqueueManifestWrite(async () => {
       const manifest = await this.readVaultManifest();
@@ -144,7 +147,9 @@ export class FileSystemAdapter implements StorageAdapter {
     derivedMarkdown: string;
   }): Promise<void> {
     if (input.noteDocument.id !== input.noteId) {
-      throw new Error(`FileSystemAdapter.writeNote id mismatch ${input.noteId}.`);
+      throw new Error(
+        `FileSystemAdapter.writeNote id mismatch ${input.noteId}.`
+      );
     }
     const vault = await this.readVault();
     if (!vault) {
@@ -221,7 +226,9 @@ export class FileSystemAdapter implements StorageAdapter {
     const directories = await this.ensureVaultDirectories();
     const existing = await this.readNote(noteId);
     if (!existing) {
-      throw new Error(`FileSystemAdapter.deleteNoteSoft missing note ${noteId}.`);
+      throw new Error(
+        `FileSystemAdapter.deleteNoteSoft missing note ${noteId}.`
+      );
     }
 
     const timestamp = Date.now();
@@ -497,11 +504,15 @@ export class FileSystemAdapter implements StorageAdapter {
   private async enqueueManifestWrite(
     operation: () => Promise<void>
   ): Promise<void> {
-    const next = this.manifestWriteQueue
-      .catch(() => {
+    const previousQueue = this.manifestWriteQueue;
+    const next = (async () => {
+      try {
+        await previousQueue;
+      } catch {
         // Keep the queue alive even if a prior write failed.
-      })
-      .then(operation);
+      }
+      await operation();
+    })();
     this.manifestWriteQueue = next;
     await next;
   }

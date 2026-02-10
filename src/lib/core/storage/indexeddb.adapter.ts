@@ -55,6 +55,9 @@ type AssetRecord = {
   bytes?: ArrayBuffer;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 export class IndexedDBAdapter implements StorageAdapter {
   private readonly adapterDatabaseName = databaseName;
 
@@ -186,7 +189,9 @@ export class IndexedDBAdapter implements StorageAdapter {
   public async deleteNoteSoft(noteId: string): Promise<void> {
     const record = await this.readNoteRecord(noteId);
     if (!record) {
-      throw new Error(`IndexedDBAdapter.deleteNoteSoft missing note ${noteId}.`);
+      throw new Error(
+        `IndexedDBAdapter.deleteNoteSoft missing note ${noteId}.`
+      );
     }
     const vault = await this.readVault();
     if (!vault) {
@@ -394,16 +399,14 @@ export class IndexedDBAdapter implements StorageAdapter {
     const snapshot = await this.withStore<unknown>(
       storeNames.searchIndex,
       "readonly",
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       (store) => store.get(searchIndexKey)
     );
     if (typeof snapshot === "string") {
       return snapshot;
     }
-    if (snapshot && typeof snapshot === "object") {
-      const record = snapshot as Record<string, unknown>;
+    if (isRecord(snapshot)) {
       const candidate =
-        record.snapshot ?? record.value ?? record.index ?? record.data;
+        snapshot.snapshot ?? snapshot.value ?? snapshot.index ?? snapshot.data;
       if (typeof candidate === "string") {
         return candidate;
       }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from "$app/paths";
   import AppPreviewFrame from "$lib/components/landing/AppPreviewFrame.svelte";
   import EditorInfographicStack from "$lib/components/landing/EditorInfographicStack.svelte";
   import FeatureHighlights from "$lib/components/landing/FeatureHighlights.svelte";
@@ -21,7 +22,7 @@
             private, and fast - even offline.
           </p>
           <div class="cta-row">
-            <a class="btn primary" href="/onboarding">Choose storage</a>
+            <a class="btn primary" href={resolve("/onboarding")}>Choose storage</a>
             <a class="btn secondary" href="#how-it-works">Learn how it works</a>
           </div>
         </div>

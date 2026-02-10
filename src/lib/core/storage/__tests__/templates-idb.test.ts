@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  createDefaultProject,
+  createDefaultVault,
   deleteIndexedDatabase,
   IndexedDBAdapter,
 } from "../indexeddb.adapter";
@@ -46,21 +46,20 @@ describe("IndexedDBAdapter template persistence", () => {
     const adapter = new IndexedDBAdapter();
     await adapter.init();
 
-    const project = createDefaultProject();
-    await adapter.createProject(project);
+    const vault = createDefaultVault();
+    await adapter.writeVault(vault);
 
     const template = createTemplateDocument();
     await adapter.writeTemplate({
-      projectId: project.id,
       templateId: template.id,
       noteDocument: template,
       derivedMarkdown: defaultMarkdown,
     });
 
-    const stored = await adapter.readTemplate(project.id, template.id);
+    const stored = await adapter.readTemplate(template.id);
     expect(stored).toEqual(template);
 
-    const listed = await adapter.listTemplates(project.id);
+    const listed = await adapter.listTemplates();
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       id: template.id,
@@ -74,28 +73,24 @@ describe("IndexedDBAdapter template persistence", () => {
     });
 
     await adapter.writeTemplate({
-      projectId: project.id,
       templateId: updatedTemplate.id,
       noteDocument: updatedTemplate,
       derivedMarkdown: updatedMarkdown,
     });
 
-    const refreshed = await adapter.readTemplate(
-      project.id,
-      updatedTemplate.id
-    );
+    const refreshed = await adapter.readTemplate(updatedTemplate.id);
     expect(refreshed?.title).toBe(updatedTemplateTitle);
 
-    const refreshedList = await adapter.listTemplates(project.id);
+    const refreshedList = await adapter.listTemplates();
     expect(refreshedList).toHaveLength(1);
     expect(refreshedList[0]?.title).toBe(updatedTemplateTitle);
 
-    await adapter.deleteTemplate(project.id, updatedTemplate.id);
+    await adapter.deleteTemplate(updatedTemplate.id);
 
-    const deleted = await adapter.readTemplate(project.id, updatedTemplate.id);
+    const deleted = await adapter.readTemplate(updatedTemplate.id);
     expect(deleted).toBeNull();
 
-    const remaining = await adapter.listTemplates(project.id);
+    const remaining = await adapter.listTemplates();
     expect(remaining).toHaveLength(0);
   });
 });

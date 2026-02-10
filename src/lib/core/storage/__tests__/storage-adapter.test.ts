@@ -3,19 +3,19 @@ import type {
   AssetMeta,
   NoteDocumentFile,
   NoteIndexEntry,
-  Project,
+  Vault,
   StorageAdapter,
   UIState,
 } from "../types";
 
-const projectId = "project-1";
-const projectName = "Personal";
+const vaultId = "vault-1";
+const vaultName = "Vault";
 const noteId = "note-1";
 const noteTitle = "First note";
 
-const sampleProject: Project = {
-  id: projectId,
-  name: projectName,
+const sampleVault: Vault = {
+  id: vaultId,
+  name: vaultName,
   createdAt: 1,
   updatedAt: 1,
   folders: {},
@@ -62,12 +62,12 @@ const assetMeta: AssetMeta = {
 };
 
 const uiState: UIState = {
-  lastProjectId: projectId,
+  lastVaultId: vaultId,
 };
 
 describe("StorageAdapter types", () => {
   it("accepts the expected shapes", () => {
-    expectTypeOf(sampleProject).toExtend<Project>();
+    expectTypeOf(sampleVault).toExtend<Vault>();
     expectTypeOf(noteIndex).toExtend<NoteIndexEntry>();
     expectTypeOf(noteDocument).toExtend<NoteDocumentFile>();
     expectTypeOf(assetMeta).toExtend<AssetMeta>();

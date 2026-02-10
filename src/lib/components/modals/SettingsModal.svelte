@@ -355,6 +355,7 @@
                 <button
                   class="toggle"
                   type="button"
+                  aria-label="Confirm move to Trash"
                   aria-pressed={preferences.confirmTrash}
                   data-active={preferences.confirmTrash}
                   disabled={preferencesDisabled}
@@ -423,6 +424,7 @@
                 <button
                   class="toggle"
                   type="button"
+                  aria-label="Show updated date"
                   aria-pressed={preferences.showNoteDates}
                   data-active={preferences.showNoteDates}
                   disabled={preferencesDisabled}
@@ -478,6 +480,7 @@
                 <button
                   class="toggle"
                   type="button"
+                  aria-label="Spellcheck"
                   aria-pressed={preferences.spellcheck}
                   data-active={preferences.spellcheck}
                   disabled={preferencesDisabled}
@@ -1185,21 +1188,6 @@
   .icon-button:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
-  }
-
-  .placeholder {
-    border-radius: var(--r-md);
-    border: 1px dashed var(--stroke-1);
-    padding: 24px;
-    text-align: center;
-    color: var(--text-1);
-    background: rgba(255, 255, 255, 0.01);
-  }
-
-  .placeholder-title {
-    font-weight: 500;
-    margin-bottom: 4px;
-    color: var(--text-0);
   }
 
   @media (max-width: 800px) {

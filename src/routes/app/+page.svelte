@@ -154,6 +154,7 @@
 
   let vault: Vault | null = null;
   let notes: NoteIndexEntry[] = [];
+  let activeNotes: NoteIndexEntry[] = [];
   let filteredNotes: NoteIndexEntry[] = [];
   let activePane: PaneId = "primary";
   let favoriteOverrides: Record<string, boolean> = {};
@@ -224,6 +225,34 @@
   const isAbortError = (error: unknown): boolean =>
     error instanceof Error && error.name === "AbortError";
 
+  const isCloneError = (error: unknown): boolean =>
+    (error instanceof DOMException && error.name === "DataCloneError") ||
+    (error instanceof Error && error.message.includes("could not be cloned"));
+
+  const getEphemeralHandle = (): FileSystemDirectoryHandle | null => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    const globalWithHandle = globalThis as typeof globalThis & {
+      __emberVaultFsHandle?: FileSystemDirectoryHandle;
+    };
+    return globalWithHandle.__emberVaultFsHandle ?? null;
+  };
+
+  const setEphemeralHandle = (handle?: FileSystemDirectoryHandle): void => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const globalWithHandle = globalThis as typeof globalThis & {
+      __emberVaultFsHandle?: FileSystemDirectoryHandle;
+    };
+    if (handle) {
+      globalWithHandle.__emberVaultFsHandle = handle;
+      return;
+    }
+    delete globalWithHandle.__emberVaultFsHandle;
+  };
+
   const supportsFileSystemAccess = (): boolean =>
     typeof window !== "undefined" &&
     typeof window.showDirectoryPicker === "function";
@@ -278,8 +307,22 @@
       lastVaultName: mode === "filesystem" ? handle?.name : undefined,
       settings: appSettings?.settings ?? preferences,
     };
-    await writeAppSettings(nextSettings);
-    appSettings = nextSettings;
+    setEphemeralHandle(mode === "filesystem" ? handle : undefined);
+    try {
+      await writeAppSettings(nextSettings);
+      appSettings = nextSettings;
+      return;
+    } catch (error) {
+      if (mode !== "filesystem" || !isCloneError(error)) {
+        throw error;
+      }
+      const fallbackSettings: AppSettings = {
+        ...nextSettings,
+        fsHandle: undefined,
+      };
+      await writeAppSettings(fallbackSettings);
+      appSettings = fallbackSettings;
+    }
   };
 
   const adapterErrorToastMessage = "Storage error. Please retry.";
@@ -895,8 +938,9 @@
     activeFolderId && vault
       ? vault.folders[activeFolderId]?.name ?? null
       : null;
+  $: activeNotes = notes.filter((note) => note.deletedAt === null);
   $: displayNotes = vault
-    ? orderNotesForFolder(notes, activeFolderId, vault.folders)
+    ? orderNotesForFolder(activeNotes, activeFolderId, vault.folders)
     : [];
   $: trashedNotes = sortTrashNotes(
     notes.filter((note) => note.deletedAt !== null)
@@ -2305,13 +2349,32 @@
 
   const initializeFromAppSettings = async (): Promise<boolean> => {
     const stored = await loadAppSettings();
+    const ephemeralHandle = getEphemeralHandle();
     if (!stored?.storageMode) {
+      if (ephemeralHandle && supportsFileSystemAccess()) {
+        appSettings = {
+          storageMode: "filesystem",
+          fsHandle: ephemeralHandle,
+          lastVaultName: ephemeralHandle.name,
+          settings: preferences,
+        };
+        initAdapter("filesystem", { directoryHandle: ephemeralHandle });
+        return true;
+      }
       isLoading = false;
       await goto(resolve("/onboarding"));
       return false;
     }
     if (stored.storageMode === "filesystem") {
-      if (!stored.fsHandle) {
+      const resolvedHandle = stored.fsHandle ?? ephemeralHandle;
+      if (resolvedHandle && !stored.fsHandle) {
+        appSettings = {
+          ...stored,
+          fsHandle: resolvedHandle,
+          lastVaultName: stored.lastVaultName ?? resolvedHandle.name,
+        };
+      }
+      if (!resolvedHandle) {
         isLoading = false;
         await goto(resolve("/onboarding"));
         return false;
@@ -2322,7 +2385,7 @@
         notifyAdapterFailure(adapterFallbackToastMessage);
         return true;
       }
-      initAdapter("filesystem", { directoryHandle: stored.fsHandle });
+      initAdapter("filesystem", { directoryHandle: resolvedHandle });
       return true;
     }
     initAdapter("idb");

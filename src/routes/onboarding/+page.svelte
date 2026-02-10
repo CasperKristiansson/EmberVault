@@ -19,6 +19,24 @@
   const isAbortError = (error: unknown): boolean =>
     error instanceof Error && error.name === "AbortError";
 
+  const isCloneError = (error: unknown): boolean =>
+    (error instanceof DOMException && error.name === "DataCloneError") ||
+    (error instanceof Error && error.message.includes("could not be cloned"));
+
+  const setEphemeralHandle = (handle?: FileSystemDirectoryHandle): void => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const globalWithHandle = globalThis as typeof globalThis & {
+      __emberVaultFsHandle?: FileSystemDirectoryHandle;
+    };
+    if (handle) {
+      globalWithHandle.__emberVaultFsHandle = handle;
+      return;
+    }
+    delete globalWithHandle.__emberVaultFsHandle;
+  };
+
   const persistStorageChoice = async (
     mode: StorageMode,
     handle?: FileSystemDirectoryHandle
@@ -30,7 +48,19 @@
       lastVaultName: mode === "filesystem" ? handle?.name : undefined,
       settings: existing?.settings,
     };
-    await writeAppSettings(nextSettings);
+    setEphemeralHandle(mode === "filesystem" ? handle : undefined);
+    try {
+      await writeAppSettings(nextSettings);
+      return;
+    } catch (error) {
+      if (mode !== "filesystem" || !isCloneError(error)) {
+        throw error;
+      }
+      await writeAppSettings({
+        ...nextSettings,
+        fsHandle: undefined,
+      });
+    }
   };
 
   const attemptAutoEnter = async (): Promise<void> => {

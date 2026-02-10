@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  createDefaultProject,
+  createDefaultVault,
   deleteIndexedDatabase,
   IndexedDBAdapter,
 } from "../indexeddb.adapter";
@@ -46,21 +46,20 @@ describe("IndexedDBAdapter note persistence", () => {
     const adapter = new IndexedDBAdapter();
     await adapter.init();
 
-    const project = createDefaultProject();
-    await adapter.createProject(project);
+    const vault = createDefaultVault();
+    await adapter.writeVault(vault);
 
     const note = createNoteDocument();
     await adapter.writeNote({
-      projectId: project.id,
       noteId: note.id,
       noteDocument: note,
       derivedMarkdown: defaultMarkdown,
     });
 
-    const stored = await adapter.readNote(project.id, note.id);
+    const stored = await adapter.readNote(note.id);
     expect(stored).toEqual(note);
 
-    const listed = await adapter.listNotes(project.id);
+    const listed = await adapter.listNotes();
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       id: note.id,
@@ -75,16 +74,15 @@ describe("IndexedDBAdapter note persistence", () => {
     });
 
     await adapter.writeNote({
-      projectId: project.id,
       noteId: updatedNote.id,
       noteDocument: updatedNote,
       derivedMarkdown: updatedMarkdown,
     });
 
-    const refreshed = await adapter.readNote(project.id, updatedNote.id);
+    const refreshed = await adapter.readNote(updatedNote.id);
     expect(refreshed?.title).toBe(updatedNoteTitle);
 
-    const refreshedList = await adapter.listNotes(project.id);
+    const refreshedList = await adapter.listNotes();
     expect(refreshedList).toHaveLength(1);
     expect(refreshedList[0]?.title).toBe(updatedNoteTitle);
   });
@@ -93,44 +91,43 @@ describe("IndexedDBAdapter note persistence", () => {
     const adapter = new IndexedDBAdapter();
     await adapter.init();
 
-    const project = createDefaultProject();
-    await adapter.createProject(project);
+    const vault = createDefaultVault();
+    await adapter.writeVault(vault);
 
     const note = createNoteDocument({ folderId: missingFolderId });
     await adapter.writeNote({
-      projectId: project.id,
       noteId: note.id,
       noteDocument: note,
       derivedMarkdown: defaultMarkdown,
     });
 
-    await adapter.deleteNoteSoft(project.id, note.id);
+    await adapter.deleteNoteSoft(note.id);
 
-    const trashed = await adapter.readNote(project.id, note.id);
+    const trashed = await adapter.readNote(note.id);
     expect(trashed).not.toBeNull();
     expect(trashed?.deletedAt).not.toBeNull();
 
-    const trashList = await adapter.listNotes(project.id);
+    const trashList = await adapter.listNotes();
     expect(trashList).toHaveLength(1);
     expect(trashList[0]?.deletedAt).not.toBeNull();
 
-    await adapter.restoreNote(project.id, note.id);
+    await adapter.restoreNote(note.id);
 
-    const restored = await adapter.readNote(project.id, note.id);
+    const restored = await adapter.readNote(note.id);
     expect(restored?.deletedAt).toBeNull();
     expect(restored?.folderId).toBeNull();
 
-    const restoredList = await adapter.listNotes(project.id);
+    const restoredList = await adapter.listNotes();
     expect(restoredList).toHaveLength(1);
     expect(restoredList[0]?.deletedAt).toBeNull();
     expect(restoredList[0]?.folderId).toBeNull();
 
-    await adapter.deleteNotePermanent(project.id, note.id);
+    await adapter.deleteNotePermanent(note.id);
 
-    const deleted = await adapter.readNote(project.id, note.id);
+    const deleted = await adapter.readNote(note.id);
     expect(deleted).toBeNull();
 
-    const remaining = await adapter.listNotes(project.id);
+    const remaining = await adapter.listNotes();
     expect(remaining).toHaveLength(0);
   });
 });

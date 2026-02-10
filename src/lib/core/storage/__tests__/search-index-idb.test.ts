@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  createDefaultProject,
+  createDefaultVault,
   deleteIndexedDatabase,
   IndexedDBAdapter,
 } from "../indexeddb.adapter";
@@ -41,16 +41,16 @@ describe("IndexedDBAdapter search index persistence", () => {
     const adapter = new IndexedDBAdapter();
     await adapter.init();
 
-    const project = createDefaultProject();
-    await adapter.createProject(project);
+    const vault = createDefaultVault();
+    await adapter.writeVault(vault);
 
     const notes = [createNoteDocument(1), createNoteDocument(2)];
     const index = buildSearchIndex(notes);
     const snapshot = serializeSearchIndex(index);
 
-    await adapter.writeSearchIndex(project.id, snapshot);
+    await adapter.writeSearchIndex(snapshot);
 
-    const stored = await adapter.readSearchIndex(project.id);
+    const stored = await adapter.readSearchIndex();
     expect(stored).toEqual(snapshot);
   });
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from "$app/paths";
   import { Menu } from "lucide-svelte";
 
   let menuOpen = false;
@@ -29,11 +30,11 @@
 
       <div class="actions">
         <a class="btn secondary" href="#how-it-works">Learn how it works</a>
-        <a class="btn primary" href="/onboarding">Choose storage</a>
+        <a class="btn primary" href={resolve("/onboarding")}>Choose storage</a>
       </div>
 
       <div class="mobile-actions">
-        <a class="btn primary" href="/onboarding">Choose storage</a>
+        <a class="btn primary" href={resolve("/onboarding")}>Choose storage</a>
         <button
           class="icon-btn"
           type="button"

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import GlobalSearchModal from "$lib/components/modals/GlobalSearchModal.svelte";
 import { buildSearchIndex } from "$lib/core/search/minisearch";
-import type { NoteDocumentFile, Project } from "$lib/core/storage/types";
+import type { NoteDocumentFile, Vault } from "$lib/core/storage/types";
 
 const folderAId = "folder-a";
 const folderBId = "folder-b";
@@ -36,10 +36,10 @@ const createNote = (input: {
   };
 };
 
-const createProject = (): Project => {
+const createVault = (): Vault => {
   const timestamp = Date.now();
   return {
-    id: "project-1",
+    id: "vault-1",
     name: "Personal",
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -72,10 +72,10 @@ describe("GlobalSearchModal", () => {
   });
 
   it("focuses the search input on mount", async () => {
-    const project = createProject();
+    const vault = createVault();
     const { getByLabelText } = render(GlobalSearchModal, {
       props: {
-        project,
+        vault,
       },
     });
 
@@ -111,11 +111,11 @@ describe("GlobalSearchModal", () => {
     const searchState = {
       index: buildSearchIndex([noteA, noteB]),
     };
-    const project = createProject();
+    const vault = createVault();
 
     const { getByLabelText, getByTestId } = render(GlobalSearchModal, {
       props: {
-        project,
+        vault,
         searchState,
       },
     });

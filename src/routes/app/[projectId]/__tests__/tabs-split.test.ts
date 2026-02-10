@@ -2,14 +2,16 @@ import "fake-indexeddb/auto";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyDocument } from "$lib/core/editor/tiptap-config";
+import { writeAppSettings } from "$lib/core/storage/app-settings";
 import {
+  createDefaultVault,
   deleteIndexedDatabase,
   IndexedDBAdapter,
 } from "$lib/core/storage/indexeddb.adapter";
 // eslint-disable-next-line sonarjs/no-implicit-dependencies
 import TiptapEditorMock from "$lib/components/editor/__mocks__/TiptapEditor.svelte";
 import Page from "../../+page.svelte";
-import type { NoteDocumentFile, Project } from "$lib/core/storage/types";
+import type { NoteDocumentFile, Vault } from "$lib/core/storage/types";
 
 vi.mock("$app/navigation", () => ({
   goto: vi.fn(),
@@ -42,20 +44,7 @@ const ResizeObserverMock: typeof ResizeObserver = class ResizeObserverMock {
 // eslint-disable-next-line compat/compat
 globalThis.ResizeObserver = ResizeObserverMock;
 
-const createProject = (id: string): Project => {
-  const timestamp = Date.now();
-  return {
-    id,
-    name: "Personal",
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    folders: {},
-    tags: {},
-    notesIndex: {},
-    templatesIndex: {},
-    settings: {},
-  };
-};
+const createVault = (): Vault => createDefaultVault();
 
 const createNoteDocument = (input: {
   id: string;
@@ -78,15 +67,15 @@ const createNoteDocument = (input: {
   },
 });
 
-const seedProject = async (): Promise<{
-  project: Project;
+const seedVault = async (): Promise<{
+  vault: Vault;
   notes: NoteDocumentFile[];
 }> => {
   const adapter = new IndexedDBAdapter();
   await adapter.init();
 
-  const project = createProject("project-1");
-  await adapter.createProject(project);
+  const vault = createVault();
+  await adapter.writeVault(vault);
 
   const noteA = createNoteDocument({
     id: "note-a",
@@ -100,20 +89,20 @@ const seedProject = async (): Promise<{
   });
 
   await adapter.writeNote({
-    projectId: project.id,
     noteId: noteA.id,
     noteDocument: noteA,
     derivedMarkdown: `# ${noteA.title}`,
   });
 
   await adapter.writeNote({
-    projectId: project.id,
     noteId: noteB.id,
     noteDocument: noteB,
     derivedMarkdown: `# ${noteB.title}`,
   });
 
-  return { project, notes: [noteA, noteB] };
+  await writeAppSettings({ storageMode: "idb" });
+
+  return { vault, notes: [noteA, noteB] };
 };
 
 describe("workspace tabs + panes", () => {
@@ -127,7 +116,7 @@ describe("workspace tabs + panes", () => {
   });
 
   it("closes the active tab and keeps the remaining tab active", async () => {
-    const { notes } = await seedProject();
+    const { notes } = await seedVault();
 
     const { container, findByTestId } = render(Page);
 
@@ -174,7 +163,7 @@ describe("workspace tabs + panes", () => {
   });
 
   it("does not show a split view toggle button", async () => {
-    await seedProject();
+    await seedVault();
 
     const { container, findByTestId, queryByTestId } = render(Page);
 

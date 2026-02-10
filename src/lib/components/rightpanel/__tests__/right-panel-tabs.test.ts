@@ -19,14 +19,14 @@ describe("RightPanelTabs", () => {
     });
 
     const outline = getByTestId("right-panel-tab-outline");
-    const backlinks = getByTestId("right-panel-tab-backlinks");
+    const metadata = getByTestId("right-panel-tab-metadata");
 
     expect(getPressedState(outline)).toBe("true");
-    expect(getPressedState(backlinks)).toBe("false");
+    expect(getPressedState(metadata)).toBe("false");
 
-    await fireEvent.click(backlinks);
+    await fireEvent.click(metadata);
 
-    expect(onSelect).toHaveBeenCalledWith("backlinks");
+    expect(onSelect).toHaveBeenCalledWith("metadata");
   });
 
   it("renders metadata as active when selected", () => {

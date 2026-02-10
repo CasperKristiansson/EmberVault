@@ -4,6 +4,8 @@ test("trash restores and deletes notes permanently", async ({ page }) => {
   const restoreTitle = "Restore Note";
   const deleteTitle = "Delete Note";
   const emptyCount = 0;
+  const confirmDialogTestId = "confirm-dialog";
+  const confirmSubmitTestId = "confirm-submit";
 
   await page.goto("/onboarding");
 
@@ -19,6 +21,9 @@ test("trash restores and deletes notes permanently", async ({ page }) => {
   const noteList = page.getByTestId("note-list");
   await expect(noteList.getByText(restoreTitle)).toBeVisible();
   await page.getByTestId("note-delete").click();
+  const moveConfirm = page.getByTestId(confirmDialogTestId);
+  await expect(moveConfirm).toBeVisible();
+  await moveConfirm.getByTestId(confirmSubmitTestId).click();
   await expect(noteList.getByText(restoreTitle)).toHaveCount(emptyCount);
 
   await page.getByTestId("new-note").click();
@@ -28,6 +33,9 @@ test("trash restores and deletes notes permanently", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(noteList.getByText(deleteTitle)).toBeVisible();
   await page.getByTestId("note-delete").click();
+  const secondMoveConfirm = page.getByTestId(confirmDialogTestId);
+  await expect(secondMoveConfirm).toBeVisible();
+  await secondMoveConfirm.getByTestId(confirmSubmitTestId).click();
   await expect(noteList.getByText(deleteTitle)).toHaveCount(emptyCount);
 
   await page.getByTestId("open-trash").click();

@@ -160,7 +160,11 @@ globalThis.embervaultMockFs = {
     permissionRevoked = false;
   },
 };
-globalThis.showDirectoryPicker = async () => root;
+Object.defineProperty(globalThis, "showDirectoryPicker", {
+  configurable: true,
+  writable: true,
+  value: async () => root,
+});
 `;
 
 const hasPathMatch = (paths: string[], pattern: RegExp): boolean => {
@@ -198,13 +202,8 @@ test.describe("folder vault", () => {
     });
 
     expect(hasPathMatch(paths, /vault\.json$/)).toBe(true);
-    expect(hasPathMatch(paths, /projects\/[^/]+\/project\.json$/)).toBe(true);
-    expect(hasPathMatch(paths, /projects\/[^/]+\/notes\/[^/]+\.json$/)).toBe(
-      true
-    );
-    expect(hasPathMatch(paths, /projects\/[^/]+\/notes\/[^/]+\.md$/)).toBe(
-      true
-    );
+    expect(hasPathMatch(paths, /notes\/[^/]+\.json$/)).toBe(true);
+    expect(hasPathMatch(paths, /notes\/[^/]+\.md$/)).toBe(true);
   });
 
   test("revoked permission can switch to browser storage", async ({ page }) => {

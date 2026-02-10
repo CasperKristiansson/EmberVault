@@ -1,10 +1,21 @@
+/* eslint-disable sonarjs/arrow-function-convention */
 import { openIndexedDatabase } from "./indexeddb/database";
 import { requestToPromise, waitForTransaction } from "./indexeddb/requests";
 import { appSettingsKey, storeNames } from "./indexeddb/schema";
 import type { AppSettings } from "./types";
 
-const isIndexedDbAvailable = (): boolean =>
+const isIndexedDatabaseAvailable = (): boolean =>
   typeof globalThis !== "undefined" && "indexedDB" in globalThis;
+
+const hasStorageMode = (value: unknown): value is { storageMode: unknown } =>
+  typeof value === "object" && value !== null && "storageMode" in value;
+
+const isAppSettings = (value: unknown): value is AppSettings => {
+  if (!hasStorageMode(value)) {
+    return false;
+  }
+  return value.storageMode === "filesystem" || value.storageMode === "idb";
+};
 
 const withAppSettingsStore = async <T>(
   mode: IDBTransactionMode,
@@ -24,15 +35,14 @@ const withAppSettingsStore = async <T>(
 };
 
 export const readAppSettings = async (): Promise<AppSettings | null> => {
-  if (!isIndexedDbAvailable()) {
+  if (!isIndexedDatabaseAvailable()) {
     return null;
   }
   try {
-    const stored = await withAppSettingsStore<AppSettings | undefined>(
-      "readonly",
-      (store) => store.get(appSettingsKey)
+    const stored = await withAppSettingsStore<unknown>("readonly", (store) =>
+      store.get(appSettingsKey)
     );
-    return stored ?? null;
+    return isAppSettings(stored) ? stored : null;
   } catch {
     return null;
   }
@@ -41,7 +51,7 @@ export const readAppSettings = async (): Promise<AppSettings | null> => {
 export const writeAppSettings = async (
   settings: AppSettings
 ): Promise<void> => {
-  if (!isIndexedDbAvailable()) {
+  if (!isIndexedDatabaseAvailable()) {
     return;
   }
   await withAppSettingsStore("readwrite", (store) =>
@@ -50,7 +60,7 @@ export const writeAppSettings = async (
 };
 
 export const clearAppSettings = async (): Promise<void> => {
-  if (!isIndexedDbAvailable()) {
+  if (!isIndexedDatabaseAvailable()) {
     return;
   }
   await withAppSettingsStore("readwrite", (store) =>

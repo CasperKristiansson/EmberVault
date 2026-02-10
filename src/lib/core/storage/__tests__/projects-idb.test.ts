@@ -1,15 +1,16 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  createDefaultProject,
+  createDefaultVault,
+  defaultVaultId,
   deleteIndexedDatabase,
   IndexedDBAdapter,
 } from "../indexeddb.adapter";
 
-const defaultProjectName = "Personal";
-const updatedProjectName = "Personal Updated";
+const defaultVaultName = "Vault";
+const updatedVaultName = "Vault Updated";
 
-describe("IndexedDBAdapter project persistence", () => {
+describe("IndexedDBAdapter vault persistence", () => {
   beforeEach(async () => {
     await deleteIndexedDatabase();
   });
@@ -18,32 +19,28 @@ describe("IndexedDBAdapter project persistence", () => {
     await deleteIndexedDatabase();
   });
 
-  it("creates, reads, updates, and lists projects", async () => {
+  it("writes, reads, and updates the vault", async () => {
     const adapter = new IndexedDBAdapter();
     await adapter.init();
 
-    const project = createDefaultProject();
-    expect(project.name).toBe(defaultProjectName);
+    const vault = createDefaultVault();
+    expect(vault.name).toBe(defaultVaultName);
+    expect(vault.id).toBe(defaultVaultId);
 
-    await adapter.createProject(project);
+    await adapter.writeVault(vault);
 
-    const projects = await adapter.listProjects();
-    expect(projects).toHaveLength(1);
-    expect(projects[0]?.id).toBe(project.id);
-    expect(projects[0]?.name).toBe(defaultProjectName);
+    const storedVault = await adapter.readVault();
+    expect(storedVault).toEqual(vault);
 
-    const storedProject = await adapter.readProject(project.id);
-    expect(storedProject).toEqual(project);
-
-    const updatedProject = {
-      ...project,
-      name: updatedProjectName,
-      updatedAt: project.updatedAt + 1,
+    const updatedVault = {
+      ...vault,
+      name: updatedVaultName,
+      updatedAt: vault.updatedAt + 1,
     };
 
-    await adapter.writeProject(project.id, updatedProject);
+    await adapter.writeVault(updatedVault);
 
-    const refreshedProject = await adapter.readProject(project.id);
-    expect(refreshedProject?.name).toBe(updatedProjectName);
+    const refreshedVault = await adapter.readVault();
+    expect(refreshedVault?.name).toBe(updatedVaultName);
   });
 });

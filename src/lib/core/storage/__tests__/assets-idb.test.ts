@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  createDefaultProject,
+  createDefaultVault,
   deleteIndexedDatabase,
   IndexedDBAdapter,
 } from "../indexeddb.adapter";
@@ -25,24 +25,23 @@ describe("IndexedDBAdapter asset persistence", () => {
     const adapter = new IndexedDBAdapter();
     await adapter.init();
 
-    const project = createDefaultProject();
-    await adapter.createProject(project);
+    const vault = createDefaultVault();
+    await adapter.writeVault(vault);
 
     const blob = createBlob(assetPayload);
     await adapter.writeAsset({
-      projectId: project.id,
       meta: { mime: "text/plain", size: blob.size },
       assetId,
       blob,
     });
 
-    const storedBlob = await adapter.readAsset(project.id, assetId);
+    const storedBlob = await adapter.readAsset(assetId);
     expect(storedBlob).not.toBeNull();
     expect(storedBlob).toBeInstanceOf(Blob);
     expect(storedBlob?.size).toBeGreaterThan(0);
     expect(storedBlob?.type).toBe(blob.type);
 
-    const assets = await adapter.listAssets(project.id);
+    const assets = await adapter.listAssets();
     expect(assets).toEqual([assetId]);
   });
 
@@ -50,22 +49,20 @@ describe("IndexedDBAdapter asset persistence", () => {
     const adapter = new IndexedDBAdapter();
     await adapter.init();
 
-    const project = createDefaultProject();
-    await adapter.createProject(project);
+    const vault = createDefaultVault();
+    await adapter.writeVault(vault);
 
     const blob = createBlob(assetPayload);
     await adapter.writeAsset({
-      projectId: project.id,
       assetId,
       blob,
     });
     await adapter.writeAsset({
-      projectId: project.id,
       assetId,
       blob,
     });
 
-    const assets = await adapter.listAssets(project.id);
+    const assets = await adapter.listAssets();
     expect(assets).toEqual([assetId]);
   });
 });

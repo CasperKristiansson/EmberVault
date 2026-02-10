@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MetadataPanel from "$lib/components/rightpanel/MetadataPanel.svelte";
-import type { NoteDocumentFile, Project } from "$lib/core/storage/types";
+import type { NoteDocumentFile, Vault } from "$lib/core/storage/types";
 
 const createNote = (
   overrides?: Partial<NoteDocumentFile>
@@ -27,11 +27,11 @@ const createNote = (
   };
 };
 
-const createProject = (): Project => {
+const createVault = (): Vault => {
   const timestamp = 1_700_000_000_000;
   return {
-    id: "project-1",
-    name: "Project",
+    id: "vault-1",
+    name: "Vault",
     createdAt: timestamp,
     updatedAt: timestamp,
     folders: {},
@@ -49,7 +49,7 @@ describe("MetadataPanel", () => {
     const { getByText } = render(MetadataPanel, {
       props: {
         note: null,
-        project: null,
+        vault: null,
       },
     });
 
@@ -58,13 +58,13 @@ describe("MetadataPanel", () => {
 
   it("adds a new custom field", async () => {
     const note = createNote();
-    const project = createProject();
+    const vault = createVault();
     const onUpdateCustomFields = vi.fn();
 
     const { getByTestId } = render(MetadataPanel, {
       props: {
         note,
-        project,
+        vault,
         onUpdateCustomFields,
       },
     });
@@ -78,13 +78,13 @@ describe("MetadataPanel", () => {
 
   it("updates a custom field value", async () => {
     const note = createNote({ customFields: { Mood: "Calm" } });
-    const project = createProject();
+    const vault = createVault();
     const onUpdateCustomFields = vi.fn();
 
     const { getByTestId } = render(MetadataPanel, {
       props: {
         note,
-        project,
+        vault,
         onUpdateCustomFields,
       },
     });
