@@ -45,7 +45,7 @@
       </div>
     </section>
 
-    <section class="section" id="storage">
+    <section class="section storage-section" id="storage">
       <div class="container split-grid">
         <div class="section-copy-block">
           <h2>Choose how your notes live locally</h2>
@@ -58,9 +58,9 @@
       </div>
     </section>
 
-    <section class="section" id="editor">
+    <section class="section editor-section" id="editor">
       <div class="container split-grid editor-grid">
-        <div class="section-copy-block">
+        <div class="section-copy-block editor-copy">
           <h2>Write fast. Structure when you want.</h2>
           <p class="section-copy">
             Block-based editing with Markdown-friendly workflows - headings, lists, checklists,
@@ -79,15 +79,12 @@
       </div>
     </section>
 
-    <section class="section" id="privacy">
+    <section class="section privacy-section" id="privacy">
       <div class="container privacy-head">
         <h2>Privacy you can verify</h2>
-        <ul class="privacy-bullets">
-          <li>No accounts. No cloud.</li>
-          <li>No analytics. No tracking.</li>
-          <li>Offline-first after first load.</li>
-          <li>Your data stays on your device.</li>
-        </ul>
+        <p class="section-copy">
+          Everything stays on your device, with zero telemetry and no hidden sync layer.
+        </p>
       </div>
       <div class="container privacy-strip">
         <PrivacyPanel />
@@ -133,7 +130,6 @@
       radial-gradient(900px 520px at 8% 12%, rgba(77, 163, 255, 0.14), transparent 60%),
       radial-gradient(800px 520px at 82% 18%, rgba(255, 138, 42, 0.18), transparent 62%),
       radial-gradient(700px 520px at 70% 72%, rgba(255, 138, 42, 0.12), transparent 65%);
-    animation: ember-drift 22s ease-in-out infinite;
     z-index: 0;
   }
 
@@ -306,7 +302,7 @@
   }
 
   .editor-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   }
 
   .editor-list {
@@ -324,28 +320,31 @@
     margin-bottom: 24px;
   }
 
-  .privacy-bullets {
-    margin: 0;
-    padding-left: 16px;
-    display: grid;
-    gap: 12px;
-    color: var(--text-1);
-    font-size: 13px;
-  }
-
   .privacy-strip {
     margin-top: 8px;
   }
 
-  @keyframes ember-drift {
-    0% {
-      transform: translate3d(0, 0, 0);
+  .storage-section {
+    padding-top: 48px;
+  }
+
+  .editor-section {
+    padding-top: 110px;
+  }
+
+  .privacy-section {
+    padding-top: 110px;
+  }
+
+  @media (min-width: 901px) {
+    .editor-visual {
+      grid-column: 1;
+      grid-row: 1;
     }
-    50% {
-      transform: translate3d(-2%, 1.5%, 0);
-    }
-    100% {
-      transform: translate3d(0, 0, 0);
+
+    .editor-copy {
+      grid-column: 2;
+      grid-row: 1;
     }
   }
 
@@ -388,13 +387,21 @@
     .main {
       padding-bottom: 96px;
     }
+
+    .storage-section {
+      padding-top: 32px;
+    }
+
+    .editor-section {
+      padding-top: 72px;
+    }
+
+    .privacy-section {
+      padding-top: 72px;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .landing::before {
-      animation: none;
-    }
-
     .btn {
       transition: opacity 80ms ease;
     }
