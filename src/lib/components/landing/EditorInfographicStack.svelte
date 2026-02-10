@@ -63,11 +63,13 @@
     </div>
 
     <div class="tab-content" id="editor-math" role="tabpanel" data-active={tab === "math"}>
-      <div class="math-source">Stress: $ \sigma = \frac{F}{A} $</div>
+      <div class="math-source">Stress: $ &#92;sigma = &#92;frac&#123;F&#125;&#123;A&#125; $</div>
       <div class="math-rendered">
         <MathInline latex={"\\sigma = \\frac{F}{A}"} />
       </div>
-      <div class="math-source">Strain: $ \varepsilon = \frac{\Delta L}{L_0} $</div>
+      <div class="math-source">
+        Strain: $ &#92;varepsilon = &#92;frac&#123;&#92;Delta L&#125;&#123;L_0&#125; $
+      </div>
       <div class="math-rendered">
         <MathInline latex={"\\varepsilon = \\frac{\\Delta L}{L_0}"} />
       </div>

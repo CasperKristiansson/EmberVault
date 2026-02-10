@@ -20,6 +20,16 @@ AWS_PROFILE=Personal aws cloudfront create-invalidation \
   --paths "/*"
 ```
 
+## One-command deploy (from repo root)
+
+```bash
+pnpm deploy:site
+```
+
+Notes:
+- Uses Pulumi stack outputs for bucket + distribution (no hardcoded IDs).
+- Uses `PULUMI_STACK` (default `dev`) and `AWS_PROFILE` from your environment.
+
 ## Notes
 
 The domain and hosted zone are hardcoded in `infra/index.ts`. To change them, edit that file and re-run `pulumi up`.

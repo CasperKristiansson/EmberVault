@@ -377,6 +377,11 @@
 
     h1 {
       font-size: 35px;
+      padding-right: 8px;
+    }
+
+    .hero-copy {
+      padding-right: 8px;
     }
 
     .cta-row {
