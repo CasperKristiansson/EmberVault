@@ -1,9 +1,9 @@
 <script lang="ts">
   import AppPreviewFrame from "$lib/components/landing/AppPreviewFrame.svelte";
-  import FeatureHighlights from "$lib/components/landing/FeatureHighlights.svelte";
-  import StorageExplainer from "$lib/components/landing/StorageExplainer.svelte";
   import EditorInfographicStack from "$lib/components/landing/EditorInfographicStack.svelte";
+  import FeatureHighlights from "$lib/components/landing/FeatureHighlights.svelte";
   import PrivacyPanel from "$lib/components/landing/PrivacyPanel.svelte";
+  import StorageExplainer from "$lib/components/landing/StorageExplainer.svelte";
 </script>
 
 <div class="landing">
@@ -381,7 +381,7 @@
     }
 
     .hero-copy {
-      padding-right: 8px;
+      padding-right: 80px;
     }
 
     .cta-row {

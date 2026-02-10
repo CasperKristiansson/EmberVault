@@ -1,11 +1,5 @@
 # Coding Agent Operating Rules (must follow)
 
-## Temporary review mode (as of February 9, 2026)
-
-- Do not run any tests.
-- Do not modify or update test files unless explicitly asked.
-- This temporarily overrides "Testing policy" and "Definition of done" below and will be removed later.
-
 ## 1) Source of truth
 
 - UI behavior: docs/ui-spec.md + docs/brand.md
