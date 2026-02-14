@@ -2767,52 +2767,52 @@
         tagsById={vault?.tags ?? {}}
       />
     {/if}
-  </div>
 
-  {#if projectsOverlayOpen}
-    <aside
-      class="projects-overlay"
-      data-testid="projects-overlay"
-      aria-label="Projects"
-      style={`left:${projectsOverlayLeft}px;`}
-    >
-      <header class="projects-overlay-header">
-        <div class="projects-overlay-title">Projects</div>
-        <button
-          class="icon-button"
-          type="button"
-          aria-label="Close projects"
-          data-testid="projects-close"
-          on:click={closeProjectsOverlay}
-        >
-          <X aria-hidden="true" size={16} />
-        </button>
-      </header>
-
-      <button
-        class="projects-all-notes"
-        type="button"
-        data-testid="projects-all-notes"
-        on:click={selectAllNotesFromProjects}
+    {#if projectsOverlayOpen}
+      <aside
+        class="projects-overlay"
+        data-testid="projects-overlay"
+        aria-label="Projects"
+        style={`left:${projectsOverlayLeft}px;`}
       >
-        All notes
-      </button>
+        <header class="projects-overlay-header">
+          <div class="projects-overlay-title">Projects</div>
+          <button
+            class="icon-button"
+            type="button"
+            aria-label="Close projects"
+            data-testid="projects-close"
+            on:click={closeProjectsOverlay}
+          >
+            <X aria-hidden="true" size={16} />
+          </button>
+        </header>
 
-      <FolderTree
-        folders={vault?.folders ?? {}}
-        notesIndex={vault?.notesIndex ?? {}}
-        {activeFolderId}
-        {draggingNoteId}
-        loading={isLoading}
-        onSelect={selectFolderFromProjects}
-        onCreate={createFolder}
-        onRename={renameFolder}
-        onDelete={deleteFolder}
-        onOpenTrash={openTrashFromProjects}
-        onNoteDrop={handleFolderNoteDrop}
-      />
-    </aside>
-  {/if}
+        <button
+          class="projects-all-notes"
+          type="button"
+          data-testid="projects-all-notes"
+          on:click={selectAllNotesFromProjects}
+        >
+          All notes
+        </button>
+
+        <FolderTree
+          folders={vault?.folders ?? {}}
+          notesIndex={vault?.notesIndex ?? {}}
+          {activeFolderId}
+          {draggingNoteId}
+          loading={isLoading}
+          onSelect={selectFolderFromProjects}
+          onCreate={createFolder}
+          onRename={renameFolder}
+          onDelete={deleteFolder}
+          onOpenTrash={openTrashFromProjects}
+          onNoteDrop={handleFolderNoteDrop}
+        />
+      </aside>
+    {/if}
+  </div>
 
   <div
     slot="editor"
