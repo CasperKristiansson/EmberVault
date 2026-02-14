@@ -592,15 +592,17 @@
             },
           };
 
-          await runAdapterVoid(() =>
+          const stored = await runAdapterVoid(() =>
             adapter.writeNote({
               noteId,
               noteDocument: note,
               derivedMarkdown: markdown,
             })
           );
-          importedNotes += 1;
-          await updateSearchIndexForDocument(note);
+          if (stored) {
+            importedNotes += 1;
+            await updateSearchIndexForDocument(note);
+          }
         }
 
         if (assetsRoot) {

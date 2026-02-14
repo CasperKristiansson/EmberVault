@@ -4,7 +4,7 @@ type Page = import("@playwright/test").Page;
 
 const installDirectoryPickerCapture = async (page: Page): Promise<void> => {
   await page.evaluate(() => {
-    /* eslint-disable no-unused-vars, unicorn/prevent-abbreviations */
+    /* eslint-disable no-unused-vars */
     type ExportCapture = {
       files: Record<string, string>;
     };
@@ -122,7 +122,7 @@ const installDirectoryPickerCapture = async (page: Page): Promise<void> => {
         showDirectoryPicker?: () => DirectoryHandle;
       }
     ).showDirectoryPicker = () => root;
-    /* eslint-enable no-unused-vars, unicorn/prevent-abbreviations */
+    /* eslint-enable no-unused-vars */
   });
 };
 
