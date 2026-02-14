@@ -1329,7 +1329,8 @@
   };
 
   const handleRepairVault = async (report: VaultIntegrityReport): Promise<void> => {
-    if (!vault) {
+    const vaultSnapshot = vault;
+    if (!vaultSnapshot) {
       pushToast("No vault loaded.", { tone: "error" });
       return;
     }
@@ -1337,7 +1338,7 @@
     const toastId = pushToast("Repairing vault...", { durationMs: 0 });
     try {
       await enqueueAdapterWrite(async () => {
-        await applyVaultIntegrityRepairs({ adapter, vault, report });
+        await applyVaultIntegrityRepairs({ adapter, vault: vaultSnapshot, report });
       });
       await initializeWorkspace();
       await rebuildSearchIndex();

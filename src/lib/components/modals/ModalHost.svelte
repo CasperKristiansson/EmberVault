@@ -12,6 +12,7 @@
     S3Config,
     Vault,
   } from "$lib/core/storage/types";
+  import type { VaultIntegrityReport } from "$lib/core/utils/vault-integrity";
   import type { StorageMode } from "$lib/state/adapter.store";
   import type { SearchIndexState } from "$lib/state/search.store";
   import { activeModal, closeTopModal, modalStackStore } from "$lib/state/ui.store";
@@ -47,10 +48,10 @@
   export let onRestoreBackup: ((file: File) => void | Promise<void>) | null =
     null;
   export let onRunIntegrityCheck:
-    | (() => Promise<{ checkedAt: number; issues: { severity: string; message: string }[] }>)
+    | (() => Promise<VaultIntegrityReport>)
     | null = null;
   export let onRepairVault:
-    | ((report: { checkedAt: number; issues: { severity: string; message: string }[] }) => void | Promise<void>)
+    | ((report: VaultIntegrityReport) => void | Promise<void>)
     | null = null;
   export let onRebuildSearchIndex: (() => void | Promise<void>) | null = null;
   export let onClearWorkspaceState: (() => void | Promise<void>) | null = null;

@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest";
 import { buildUnlinkedMentionSnippet } from "../unlinked-mentions";
 
 describe("buildUnlinkedMentionSnippet", () => {
@@ -24,4 +25,3 @@ describe("buildUnlinkedMentionSnippet", () => {
     expect(snippet?.match).toBe("alpha");
   });
 });
-

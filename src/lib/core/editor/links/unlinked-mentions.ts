@@ -22,24 +22,31 @@ const normalizeSnippetFragment = (
 
 type MatchResult = { index: number; length: number; matchText: string };
 
-const findWikiLinkRanges = (text: string): Array<{ start: number; end: number }> => {
-  const ranges: Array<{ start: number; end: number }> = [];
+const findWikiLinkRanges = (text: string): { start: number; end: number }[] => {
+  const ranges: { start: number; end: number }[] = [];
   if (!text) {
     return ranges;
   }
-  const pattern = /\[\[.*?\]\]/gu;
-  let match = pattern.exec(text);
-  while (match) {
-    ranges.push({ start: match.index, end: match.index + match[0].length });
-    match = pattern.exec(text);
+  let cursor = 0;
+  while (cursor < text.length) {
+    const start = text.indexOf("[[", cursor);
+    if (start === -1) {
+      return ranges;
+    }
+    const end = text.indexOf("]]", start + 2);
+    if (end === -1) {
+      return ranges;
+    }
+    ranges.push({ start, end: end + 2 });
+    cursor = end + 2;
   }
   return ranges;
 };
 
 const isInsideRanges = (
   index: number,
-  ranges: Array<{ start: number; end: number }>
-): boolean => ranges.some((range) => index >= range.start && index < range.end);
+  ranges: { start: number; end: number }[]
+): boolean => ranges.some(range => index >= range.start && index < range.end);
 
 const findFirstUnlinkedMention = (
   text: string,
@@ -59,7 +66,11 @@ const findFirstUnlinkedMention = (
       return null;
     }
     if (!isInsideRanges(index, ranges)) {
-      return { index, length: trimmed.length, matchText: text.slice(index, index + trimmed.length) };
+      return {
+        index,
+        length: trimmed.length,
+        matchText: text.slice(index, index + trimmed.length),
+      };
     }
     cursor = index + needle.length;
   }
@@ -113,4 +124,3 @@ export const buildUnlinkedMentionSnippet = (
     after,
   };
 };
-

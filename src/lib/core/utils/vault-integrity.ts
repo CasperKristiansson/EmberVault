@@ -1,4 +1,4 @@
-import { extractAssetIdsFromPmDoc } from "$lib/core/editor/images/extract-asset-ids";
+import { extractAssetIdsFromPmDocument } from "$lib/core/editor/images/extract-asset-ids";
 import { resolveOutgoingLinks } from "$lib/core/editor/links/parse";
 import type {
   Folder,
@@ -71,7 +71,7 @@ export const runVaultIntegrityCheck = async (input: {
       missingNoteIds.push(noteId);
       continue;
     }
-    for (const assetId of extractAssetIdsFromPmDoc(note.pmDoc)) {
+    for (const assetId of extractAssetIdsFromPmDocument(note.pmDoc)) {
       referencedAssetIds.add(assetId);
     }
 
@@ -182,7 +182,7 @@ export const applyVaultIntegrityRepairs = async (input: {
     if (!note) {
       continue;
     }
-    for (const assetId of extractAssetIdsFromPmDoc(note.pmDoc)) {
+    for (const assetId of extractAssetIdsFromPmDocument(note.pmDoc)) {
       referencedAssetIds.add(assetId);
     }
   }

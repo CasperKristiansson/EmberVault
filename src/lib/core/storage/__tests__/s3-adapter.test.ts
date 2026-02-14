@@ -29,7 +29,9 @@ const commandKey = (command: unknown): string | null => {
 const createNotFoundError = (): Error & {
   $metadata: { httpStatusCode: number };
 } => {
-  const error = new Error("NotFound");
+  const error = new Error("NotFound") as Error & {
+    $metadata: { httpStatusCode: number };
+  };
   error.$metadata = { httpStatusCode: 404 };
   return error;
 };

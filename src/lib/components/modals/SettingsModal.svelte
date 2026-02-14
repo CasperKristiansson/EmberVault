@@ -17,6 +17,7 @@
   import { prefersReducedMotion } from "$lib/state/motion.store";
   import type { StorageMode } from "$lib/state/adapter.store";
   import type { AppPreferences, S3Config } from "$lib/core/storage/types";
+  import type { VaultIntegrityReport } from "$lib/core/utils/vault-integrity";
 
   const defaultPreferences: AppPreferences = {
     startupView: "last-opened",
@@ -57,10 +58,10 @@
   export let onRestoreBackup: ((file: File) => void | Promise<void>) | null =
     null;
   export let onRunIntegrityCheck:
-    | (() => Promise<{ checkedAt: number; issues: { severity: string; message: string }[] }>)
+    | (() => Promise<VaultIntegrityReport>)
     | null = null;
   export let onRepairVault:
-    | ((report: { checkedAt: number; issues: { severity: string; message: string }[] }) => void | Promise<void>)
+    | ((report: VaultIntegrityReport) => void | Promise<void>)
     | null = null;
   export let onRebuildSearchIndex: (() => void | Promise<void>) | null = null;
   export let onClearWorkspaceState: (() => void | Promise<void>) | null = null;
@@ -119,9 +120,7 @@
     void onRestoreBackup?.(file);
   };
 
-  type IntegrityIssue = { severity: string; message: string };
-  type IntegrityReport = { checkedAt: number; issues: IntegrityIssue[] };
-  let integrityReport: IntegrityReport | null = null;
+  let integrityReport: VaultIntegrityReport | null = null;
   let integrityBusy = false;
 
   const runIntegrityCheck = async (): Promise<void> => {
@@ -931,6 +930,7 @@
                 <button
                   class="button secondary"
                   type="button"
+                  data-testid="download-backup"
                   on:click={() => void onDownloadBackup?.()}
                   disabled={!onDownloadBackup || settingsBusy}
                 >
@@ -939,6 +939,7 @@
                 <button
                   class="button secondary"
                   type="button"
+                  data-testid="restore-backup"
                   on:click={openRestoreBackupPicker}
                   disabled={!onRestoreBackup || settingsBusy}
                 >
@@ -1124,6 +1125,7 @@
 <input
   bind:this={restoreBackupInput}
   type="file"
+  data-testid="restore-backup-input"
   accept=".json,.gz,application/json,application/gzip"
   style="display: none"
   on:change={handleRestoreBackupChange}

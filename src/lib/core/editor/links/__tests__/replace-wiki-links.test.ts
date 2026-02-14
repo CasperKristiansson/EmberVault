@@ -1,8 +1,9 @@
-import { replaceWikiLinksInPmDoc } from "../replace-wiki-links";
+import { describe, expect, it } from "vitest";
+import { replaceWikiLinksInPmDocument } from "../replace-wiki-links";
 
-describe("replaceWikiLinksInPmDoc", () => {
+describe("replaceWikiLinksInPmDocument", () => {
   it("replaces matching wiki links with a stable id", () => {
-    const pmDoc: Record<string, unknown> = {
+    const pmDocument: Record<string, unknown> = {
       type: "doc",
       content: [
         {
@@ -12,8 +13,8 @@ describe("replaceWikiLinksInPmDoc", () => {
       ],
     };
 
-    const next = replaceWikiLinksInPmDoc({
-      pmDoc,
+    const next = replaceWikiLinksInPmDocument({
+      pmDocument,
       replacements: [
         { raw: "Alpha", targetId: "01AAA" },
         { raw: "Beta", targetId: "01BBB" },
@@ -26,10 +27,9 @@ describe("replaceWikiLinksInPmDoc", () => {
   });
 
   it("returns the original document when replacements are empty", () => {
-    const pmDoc: Record<string, unknown> = { type: "doc", content: [] };
-    expect(
-      replaceWikiLinksInPmDoc({ pmDoc, replacements: [] })
-    ).toBe(pmDoc);
+    const pmDocument: Record<string, unknown> = { type: "doc", content: [] };
+    expect(replaceWikiLinksInPmDocument({ pmDocument, replacements: [] })).toBe(
+      pmDocument
+    );
   });
 });
-

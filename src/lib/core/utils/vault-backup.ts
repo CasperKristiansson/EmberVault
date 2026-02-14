@@ -32,6 +32,38 @@ const hasCompressionStreams = (): boolean =>
   // eslint-disable-next-line compat/compat
   typeof DecompressionStream !== "undefined";
 
+const readBlobAsArrayBuffer = async (blob: Blob): Promise<ArrayBuffer> => {
+  const candidate = blob as Blob & { arrayBuffer?: () => Promise<ArrayBuffer> };
+  if (typeof candidate.arrayBuffer === "function") {
+    return candidate.arrayBuffer();
+  }
+  if (typeof FileReader !== "undefined") {
+    return await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error ?? new Error("Read failed."));
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.readAsArrayBuffer(blob);
+    });
+  }
+  return new Response(blob).arrayBuffer();
+};
+
+const readBlobAsText = async (blob: Blob): Promise<string> => {
+  const candidate = blob as Blob & { text?: () => Promise<string> };
+  if (typeof candidate.text === "function") {
+    return candidate.text();
+  }
+  if (typeof FileReader !== "undefined") {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error ?? new Error("Read failed."));
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.readAsText(blob);
+    });
+  }
+  return new Response(blob).text();
+};
+
 const bytesToBase64 = (bytes: Uint8Array): string => {
   // Chunk to avoid call stack and argument limits.
   const chunkSize = 0x8000;
@@ -53,7 +85,7 @@ const base64ToBytes = (value: string): Uint8Array => {
 };
 
 const blobToBase64 = async (blob: Blob): Promise<string> => {
-  const buffer = await blob.arrayBuffer();
+  const buffer = await readBlobAsArrayBuffer(blob);
   return bytesToBase64(new Uint8Array(buffer));
 };
 
@@ -72,7 +104,7 @@ const looksLikeGzip = async (blob: Blob): Promise<boolean> => {
   if (blob.type === "application/gzip") {
     return true;
   }
-  const header = await blob.slice(0, 2).arrayBuffer();
+  const header = await readBlobAsArrayBuffer(blob.slice(0, 2));
   const bytes = new Uint8Array(header);
   return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
 };
@@ -156,7 +188,7 @@ export const parseVaultBackup = async (input: {
   file: File | Blob;
 }): Promise<VaultBackupV1> => {
   const maybeJson = await gunzipBlobIfNeeded(input.file);
-  const text = await maybeJson.text();
+  const text = await readBlobAsText(maybeJson);
   const parsed: unknown = JSON.parse(text);
   if (
     !parsed ||
@@ -238,11 +270,13 @@ export const restoreVaultBackup = async (input: {
   for (const [index, entry] of input.backup.assets.entries()) {
     // eslint-disable-next-line no-await-in-loop
     const bytes = base64ToBytes(entry.dataBase64);
+    const copy = new Uint8Array(bytes.length);
+    copy.set(bytes);
     // eslint-disable-next-line no-await-in-loop
     await input.adapter.writeAsset({
       assetId: entry.assetId,
-      blob: new Blob([bytes], { type: entry.mime }),
-      meta: { mime: entry.mime, size: bytes.byteLength },
+      blob: new Blob([copy], { type: entry.mime }),
+      meta: { mime: entry.mime, size: copy.byteLength },
     });
     progress({
       phase: "write-assets",

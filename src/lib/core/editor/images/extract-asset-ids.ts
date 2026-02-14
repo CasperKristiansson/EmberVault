@@ -1,8 +1,8 @@
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-export const extractAssetIdsFromPmDoc = (
-  pmDoc: Record<string, unknown>
+export const extractAssetIdsFromPmDocument = (
+  pmDocument: Record<string, unknown>
 ): string[] => {
   const ids = new Set<string>();
 
@@ -10,14 +10,14 @@ export const extractAssetIdsFromPmDoc = (
     if (!isRecord(node)) {
       return;
     }
-    const type = node.type;
+    const { type } = node;
     if (type === "image") {
-      const attrs = node.attrs;
-      if (isRecord(attrs) && typeof attrs.assetId === "string") {
-        ids.add(attrs.assetId);
+      const { attrs: attributes } = node;
+      if (isRecord(attributes) && typeof attributes.assetId === "string") {
+        ids.add(attributes.assetId);
       }
     }
-    const content = node.content;
+    const { content } = node;
     if (Array.isArray(content)) {
       for (const child of content) {
         visit(child);
@@ -25,7 +25,6 @@ export const extractAssetIdsFromPmDoc = (
     }
   };
 
-  visit(pmDoc);
+  visit(pmDocument);
   return [...ids];
 };
-

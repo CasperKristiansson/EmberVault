@@ -24,7 +24,7 @@
     createEmptyDocument,
     createTiptapExtensions,
   } from "$lib/core/editor/tiptap-config";
-  import { replaceWikiLinksInPmDoc } from "$lib/core/editor/links/replace-wiki-links";
+  import { replaceWikiLinksInPmDocument } from "$lib/core/editor/links/replace-wiki-links";
   import { prefersReducedMotion } from "$lib/state/motion.store";
   import {
     editorCommandStore,
@@ -115,15 +115,15 @@
       return;
     }
     if (command.type === "replace-wiki-link") {
-      const next = replaceWikiLinksInPmDoc({
-        pmDoc: editor.getJSON() as Record<string, unknown>,
+      const next = replaceWikiLinksInPmDocument({
+        pmDocument: editor.getJSON() as Record<string, unknown>,
         replacements: [{ raw: command.raw, targetId: command.targetId }],
       });
       editor.commands.setContent(next as JSONContent, { emitUpdate: true });
     }
     if (command.type === "replace-wiki-links") {
-      const next = replaceWikiLinksInPmDoc({
-        pmDoc: editor.getJSON() as Record<string, unknown>,
+      const next = replaceWikiLinksInPmDocument({
+        pmDocument: editor.getJSON() as Record<string, unknown>,
         replacements: command.replacements,
       });
       editor.commands.setContent(next as JSONContent, { emitUpdate: true });

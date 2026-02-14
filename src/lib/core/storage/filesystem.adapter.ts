@@ -421,16 +421,15 @@ export class FileSystemAdapter implements StorageAdapter {
   public async deleteAsset(assetId: string): Promise<void> {
     const directories = await this.ensureVaultDirectories(false);
     const entries = await listDirectoryEntries(directories.assets);
-    const removals: Promise<void>[] = [];
     for (const entry of entries) {
       if (isFileHandle(entry)) {
         const { name } = entry;
         if (name === assetId || name.startsWith(`${assetId}.`)) {
-          removals.push(removeEntryIfExists(directories.assets, name));
+          // eslint-disable-next-line no-await-in-loop
+          await removeEntryIfExists(directories.assets, name);
         }
       }
     }
-    await Promise.all(removals);
   }
 
   public async writeUIState(state: UIState): Promise<void> {
