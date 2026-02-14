@@ -59,11 +59,11 @@
   } from "$lib/core/utils/pane-layout";
   import {
     applySearchIndexChange,
-    hydrateSearchIndex,
     type SearchIndexState,
   } from "$lib/state/search.store";
   import {
     buildSearchIndex,
+    loadSearchIndex as loadMiniSearchIndex,
     serializeSearchIndex,
   } from "$lib/core/search/minisearch";
   import {
@@ -96,6 +96,7 @@
     CustomFieldValue,
     NoteDocumentFile,
     NoteIndexEntry,
+    S3Config,
     Vault,
     StorageAdapter,
     UIState,
@@ -338,15 +339,21 @@
 
   const persistStorageChoice = async (
     mode: StorageMode,
-    handle?: FileSystemDirectoryHandle
+    options: { handle?: FileSystemDirectoryHandle; s3?: S3Config } = {}
   ): Promise<void> => {
     const nextSettings: AppSettings = {
       storageMode: mode,
-      fsHandle: mode === "filesystem" ? handle : undefined,
-      lastVaultName: mode === "filesystem" ? handle?.name : undefined,
+      fsHandle: mode === "filesystem" ? options.handle : undefined,
+      s3: mode === "s3" ? options.s3 : undefined,
+      lastVaultName:
+        mode === "filesystem"
+          ? options.handle?.name
+          : mode === "s3"
+            ? options.s3?.bucket
+            : undefined,
       settings: appSettings?.settings ?? preferences,
     };
-    setEphemeralHandle(mode === "filesystem" ? handle : undefined);
+    setEphemeralHandle(mode === "filesystem" ? options.handle : undefined);
     try {
       await writeAppSettings(nextSettings);
       appSettings = nextSettings;
@@ -773,7 +780,7 @@
       if (!ensured) {
         return;
       }
-      await persistStorageChoice("filesystem", handle);
+      await persistStorageChoice("filesystem", { handle });
       await initializeWorkspace();
     } catch (error) {
       if (isAbortError(error)) {
@@ -818,6 +825,36 @@
     }
   };
 
+  const switchToS3Storage = async (config: S3Config): Promise<void> => {
+    if (isRecoveringStorage) {
+      return;
+    }
+    isRecoveringStorage = true;
+    isLoading = true;
+    try {
+      const nextAdapter = initAdapter("s3", { s3Config: config });
+      const ready = await runAdapterVoid(() => nextAdapter.init());
+      if (!ready) {
+        return;
+      }
+      const ensured = await ensureVaultForAdapter(nextAdapter);
+      if (!ensured) {
+        return;
+      }
+      await persistStorageChoice("s3", { s3: config });
+      await initializeWorkspace();
+      pushToast("Connected to S3.", { tone: "success" });
+    } catch (error) {
+      const handled = await handleAdapterError(error);
+      if (!handled) {
+        handleNonBlockingAdapterError(error);
+      }
+    } finally {
+      isRecoveringStorage = false;
+      isLoading = false;
+    }
+  };
+
   const requestFolderSwitch = (): void => {
     if (isRecoveringStorage || !supportsFileSystemAccess()) {
       return;
@@ -853,6 +890,49 @@
       onConfirm: async () => {
         closeSettings();
         await switchToBrowserStorage();
+      },
+    });
+  };
+
+  const requestS3StorageSwitch = (config: S3Config): void => {
+    if (isRecoveringStorage) {
+      return;
+    }
+    const trimmed: S3Config = {
+      bucket: config.bucket.trim(),
+      region: config.region.trim(),
+      prefix: config.prefix?.trim() ? config.prefix.trim() : undefined,
+      accessKeyId: config.accessKeyId.trim(),
+      secretAccessKey: config.secretAccessKey.trim(),
+      sessionToken: config.sessionToken?.trim()
+        ? config.sessionToken.trim()
+        : undefined,
+    };
+    if (
+      !trimmed.bucket ||
+      !trimmed.region ||
+      !trimmed.accessKeyId ||
+      !trimmed.secretAccessKey
+    ) {
+      pushToast("Missing S3 config (bucket, region, access key, secret).", {
+        tone: "error",
+      });
+      return;
+    }
+    const title =
+      activeStorageMode === "s3" ? "Update S3 settings" : "Switch to S3 storage";
+    const message =
+      activeStorageMode === "s3"
+        ? "Updating S3 settings will reconnect the app. Continue?"
+        : "Switching to S3 will disconnect from the current vault. Continue?";
+    openModal("confirm", {
+      title,
+      message,
+      confirmLabel: activeStorageMode === "s3" ? "Update S3" : "Connect S3",
+      cancelLabel: "Cancel",
+      onConfirm: async () => {
+        closeSettings();
+        await switchToS3Storage(trimmed);
       },
     });
   };
@@ -1531,10 +1611,16 @@
     if (!vault) {
       return;
     }
+    const snapshot = await runAdapterTask(() => adapter.readSearchIndex(), null);
+    if (snapshot) {
+      searchState = { index: loadMiniSearchIndex(snapshot) };
+      return;
+    }
     const noteDocuments = await loadNoteDocumentsForIndex();
-    searchState = await runAdapterTask(
-      () => hydrateSearchIndex(adapter, [...noteDocuments]),
-      null
+    const index = buildSearchIndex(noteDocuments);
+    searchState = { index };
+    await runAdapterVoid(() =>
+      adapter.writeSearchIndex(serializeSearchIndex(index))
     );
   };
 
@@ -2486,6 +2572,15 @@
       initAdapter("filesystem", { directoryHandle: resolvedHandle });
       return true;
     }
+    if (stored.storageMode === "s3") {
+      if (!stored.s3) {
+        isLoading = false;
+        await goto(resolve("/onboarding"));
+        return false;
+      }
+      initAdapter("s3", { s3Config: stored.s3 });
+      return true;
+    }
     initAdapter("idb");
     return true;
   };
@@ -2865,6 +2960,7 @@
     onCloseHelp={closeHelp}
     onChooseFolder={requestFolderSwitch}
     onChooseBrowserStorage={requestBrowserStorageSwitch}
+    onConnectS3={requestS3StorageSwitch}
     onUpdatePreferences={updatePreferences}
     onRebuildSearchIndex={rebuildSearchIndex}
     onClearWorkspaceState={clearWorkspaceState}
@@ -2873,6 +2969,9 @@
     settingsVaultName={
       appSettings?.lastVaultName ?? appSettings?.fsHandle?.name ?? null
     }
+    settingsS3Bucket={appSettings?.s3?.bucket ?? null}
+    settingsS3Region={appSettings?.s3?.region ?? null}
+    settingsS3Prefix={appSettings?.s3?.prefix ?? null}
     supportsFileSystem={supportsFileSystem}
     settingsBusy={isRecoveringStorage || isExportingVault || isImportingFromFolder}
     {preferences}

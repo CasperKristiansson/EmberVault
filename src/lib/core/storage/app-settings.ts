@@ -2,19 +2,50 @@
 import { openIndexedDatabase } from "./indexeddb/database";
 import { requestToPromise, waitForTransaction } from "./indexeddb/requests";
 import { appSettingsKey, storeNames } from "./indexeddb/schema";
-import type { AppSettings } from "./types";
+import type { AppSettings, S3Config } from "./types";
 
 const isIndexedDatabaseAvailable = (): boolean =>
   typeof globalThis !== "undefined" && "indexedDB" in globalThis;
 
-const hasStorageMode = (value: unknown): value is { storageMode: unknown } =>
+const hasStorageMode = (
+  value: unknown
+): value is Record<string, unknown> & { storageMode: unknown } =>
   typeof value === "object" && value !== null && "storageMode" in value;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const hasStringField = (
+  value: Record<string, unknown>,
+  field: string
+): boolean => typeof value[field] === "string" && value[field] !== "";
+
+const isS3Config = (value: unknown): value is S3Config => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const requiredFields = ["bucket", "region", "accessKeyId", "secretAccessKey"];
+  const hasRequiredFields = requiredFields.every((field) =>
+    hasStringField(value, field)
+  );
+  const hasValidPrefix =
+    value.prefix === undefined || typeof value.prefix === "string";
+  const hasValidSessionToken =
+    value.sessionToken === undefined || typeof value.sessionToken === "string";
+  return hasRequiredFields && hasValidPrefix && hasValidSessionToken;
+};
 
 const isAppSettings = (value: unknown): value is AppSettings => {
   if (!hasStorageMode(value)) {
     return false;
   }
-  return value.storageMode === "filesystem" || value.storageMode === "idb";
+  if (value.storageMode === "filesystem" || value.storageMode === "idb") {
+    return true;
+  }
+  if (value.storageMode === "s3") {
+    return isS3Config(value.s3);
+  }
+  return false;
 };
 
 const withAppSettingsStore = async <T>(

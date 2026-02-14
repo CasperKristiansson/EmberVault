@@ -1,5 +1,5 @@
 export const databaseName = "local-notes";
-export const databaseVersion = 3;
+export const databaseVersion = 4;
 
 export const storeNames = {
   vault: "vault",
@@ -9,6 +9,7 @@ export const storeNames = {
   uiState: "uiState",
   searchIndex: "searchIndex",
   appSettings: "appSettings",
+  syncOutbox: "syncOutbox",
 } as const;
 
 export type StoreName = (typeof storeNames)[keyof typeof storeNames];
@@ -19,6 +20,7 @@ const vaultIdKey = "id";
 const noteIdKey = "noteId";
 const templateIdKey = "templateId";
 const assetIdKey = "assetId";
+const syncOutboxKey = "key";
 
 const noteKeyPath = noteIdKey;
 const templateKeyPath = templateIdKey;
@@ -32,6 +34,7 @@ export const storeKeyPaths: Record<StoreName, StoreKeyPath> = {
   [storeNames.uiState]: null,
   [storeNames.searchIndex]: null,
   [storeNames.appSettings]: null,
+  [storeNames.syncOutbox]: syncOutboxKey,
 };
 
 const ensureObjectStore = (
@@ -58,6 +61,7 @@ export const createObjectStores = (database: IDBDatabase): void => {
     storeNames.uiState,
     storeNames.searchIndex,
     storeNames.appSettings,
+    storeNames.syncOutbox,
   ];
 
   for (const storeName of storeList) {

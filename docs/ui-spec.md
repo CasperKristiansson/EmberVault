@@ -48,7 +48,10 @@ First launch view:
 - Title: “Choose where your notes live” Options (cards):
 
 1. “Use a folder on this device” (File System Access; Chrome/Edge)
-2. “Store in this browser” (IndexedDB fallback; works everywhere) Card layout:
+2. “Store in this browser” (IndexedDB fallback; works everywhere)
+3. “Sync with AWS S3” (user-provided bucket + credentials; no backend)
+
+Card layout:
 
 - 2 cards stacked on mobile, side-by-side on desktop
 - Each card has icon + title + 2-line description + primary button
@@ -59,7 +62,7 @@ Rules:
 - After selection: create a default Vault.
 - If a stored storage choice exists and is valid, skip this onboarding view and open the workspace directly.
 - Storage cards include a short “what you get” bullet list and a recommended badge for folder storage (when supported).
-- Footer note: “We never upload your data. Storage stays on this device.”
+- Footer note: “No accounts. If you enable S3 sync, data is written directly to your bucket.”
 
 ## 3) Navigation Pane (Projects + Notes)
 
@@ -305,12 +308,15 @@ Sections (initial):
 Storage section content:
 
 - Header: “Storage” + 1-line description: “Choose where your notes live”
-- Two option cards (reuse onboarding card style):
+- Three option cards (reuse onboarding card style):
   1. “Use a folder on this device” (File System Access; Chrome/Edge)
      - Shows current folder name (if set)
      - Primary button: “Choose folder” (or “Change folder” if already set)
   2. “Store in this browser” (IndexedDB)
      - Secondary button: “Use browser storage”
+  3. “Sync with AWS S3”
+     - Inline form fields: bucket, region, optional prefix, access key id, secret access key, optional session token
+     - Primary button: “Connect S3” (or “Update credentials” if already set)
 - Switching storage type requires a confirmation dialog if it would disconnect from the current vault (no silent migration).
 
 General section content:

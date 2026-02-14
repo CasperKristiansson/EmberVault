@@ -2,19 +2,25 @@
     import { onMount } from "svelte";
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
-    import { Database, Folder } from "lucide-svelte";
+    import { Cloud, Database, Folder } from "lucide-svelte";
     import { createDefaultVault } from "$lib/core/storage/indexeddb.adapter";
     import {
       readAppSettings,
       writeAppSettings,
     } from "$lib/core/storage/app-settings";
-    import type { AppSettings } from "$lib/core/storage/types";
+    import type { AppSettings, S3Config } from "$lib/core/storage/types";
     import { initAdapter, type StorageMode } from "$lib/state/adapter.store";
 
   let supportsFileSystem = false;
   let isBusy = false;
   let activeMode: StorageMode | null = null;
   let errorMessage = "";
+  let s3Bucket = "";
+  let s3Region = "";
+  let s3Prefix = "embervault/";
+  let s3AccessKeyId = "";
+  let s3SecretAccessKey = "";
+  let s3SessionToken = "";
 
   const isAbortError = (error: unknown): boolean =>
     error instanceof Error && error.name === "AbortError";
@@ -39,16 +45,22 @@
 
   const persistStorageChoice = async (
     mode: StorageMode,
-    handle?: FileSystemDirectoryHandle
+    options: { handle?: FileSystemDirectoryHandle; s3?: S3Config } = {}
   ): Promise<void> => {
     const existing = await readAppSettings();
     const nextSettings: AppSettings = {
       storageMode: mode,
-      fsHandle: mode === "filesystem" ? handle : undefined,
-      lastVaultName: mode === "filesystem" ? handle?.name : undefined,
+      fsHandle: mode === "filesystem" ? options.handle : undefined,
+      s3: mode === "s3" ? options.s3 : undefined,
+      lastVaultName:
+        mode === "filesystem"
+          ? options.handle?.name
+          : mode === "s3"
+            ? options.s3?.bucket
+            : undefined,
       settings: existing?.settings,
     };
-    setEphemeralHandle(mode === "filesystem" ? handle : undefined);
+    setEphemeralHandle(mode === "filesystem" ? options.handle : undefined);
     try {
       await writeAppSettings(nextSettings);
       return;
@@ -69,6 +81,9 @@
       return;
     }
     if (stored.storageMode === "filesystem" && !stored.fsHandle) {
+      return;
+    }
+    if (stored.storageMode === "s3" && !stored.s3) {
       return;
     }
     isBusy = true;
@@ -123,7 +138,7 @@
       if (!existingVault) {
         await adapter.writeVault(createDefaultVault());
       }
-      await persistStorageChoice("filesystem", handle);
+      await persistStorageChoice("filesystem", { handle });
       await goto(resolve("/app"));
     } catch (error) {
       if (!isAbortError(error)) {
@@ -135,12 +150,58 @@
       activeMode = null;
     }
   };
+
+  const buildS3Config = (): S3Config => ({
+    bucket: s3Bucket.trim(),
+    region: s3Region.trim(),
+    prefix: s3Prefix.trim() ? s3Prefix.trim() : undefined,
+    accessKeyId: s3AccessKeyId.trim(),
+    secretAccessKey: s3SecretAccessKey.trim(),
+    sessionToken: s3SessionToken.trim() ? s3SessionToken.trim() : undefined,
+  });
+
+  const initS3Storage = async (): Promise<void> => {
+    if (isBusy) {
+      return;
+    }
+    errorMessage = "";
+    const config = buildS3Config();
+    if (
+      !config.bucket ||
+      !config.region ||
+      !config.accessKeyId ||
+      !config.secretAccessKey
+    ) {
+      errorMessage = "Please fill in bucket, region, access key, and secret.";
+      return;
+    }
+    isBusy = true;
+    activeMode = "s3";
+    try {
+      const adapter = initAdapter("s3", { s3Config: config });
+      await adapter.init();
+      const existingVault = await adapter.readVault();
+      if (!existingVault) {
+        await adapter.writeVault(createDefaultVault());
+      }
+      await persistStorageChoice("s3", { s3: config });
+      await goto(resolve("/app"));
+    } catch (error) {
+      errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to S3 storage.";
+    } finally {
+      isBusy = false;
+      activeMode = null;
+    }
+  };
 </script>
 
 <div class="onboarding">
   <header class="hero">
     <h1>Choose where your notes live</h1>
-    <p>Store everything locally. No accounts. No cloud.</p>
+    <p>No accounts. Pick local storage, or sync directly to your S3 bucket.</p>
     <p class="hero-note">You can switch storage later in Settings.</p>
   </header>
 
@@ -203,10 +264,95 @@
         {activeMode === "idb" ? "Setting up..." : "Use browser storage"}
       </button>
     </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-icon" aria-hidden="true">
+          <Cloud aria-hidden="true" size={16} />
+        </div>
+      </div>
+      <div class="card-copy">
+        <h2>Sync with AWS S3</h2>
+        <p>Write directly to your bucket. Works across devices without a backend.</p>
+      </div>
+      <div class="form">
+        <label>
+          <span>Bucket</span>
+          <input
+            class="input"
+            type="text"
+            bind:value={s3Bucket}
+            autocomplete="off"
+            placeholder="my-bucket"
+            disabled={isBusy}
+          />
+        </label>
+        <label>
+          <span>Region</span>
+          <input
+            class="input"
+            type="text"
+            bind:value={s3Region}
+            autocomplete="off"
+            placeholder="us-east-1"
+            disabled={isBusy}
+          />
+        </label>
+        <label>
+          <span>Prefix (optional)</span>
+          <input
+            class="input"
+            type="text"
+            bind:value={s3Prefix}
+            autocomplete="off"
+            placeholder="embervault/"
+            disabled={isBusy}
+          />
+        </label>
+        <label>
+          <span>Access key ID</span>
+          <input
+            class="input"
+            type="text"
+            bind:value={s3AccessKeyId}
+            autocomplete="off"
+            disabled={isBusy}
+          />
+        </label>
+        <label>
+          <span>Secret access key</span>
+          <input
+            class="input"
+            type="password"
+            bind:value={s3SecretAccessKey}
+            autocomplete="off"
+            disabled={isBusy}
+          />
+        </label>
+        <label>
+          <span>Session token (optional)</span>
+          <input
+            class="input"
+            type="password"
+            bind:value={s3SessionToken}
+            autocomplete="off"
+            disabled={isBusy}
+          />
+        </label>
+      </div>
+      <button
+        class="button primary"
+        type="button"
+        on:click={initS3Storage}
+        disabled={isBusy}
+      >
+        {activeMode === "s3" ? "Connecting..." : "Connect S3"}
+      </button>
+    </div>
   </div>
 
   <div class="footer-note">
-    We never upload your data. Storage stays on this device.
+    No accounts. If you enable S3 sync, data is written directly to your bucket.
   </div>
 
   {#if errorMessage}
@@ -306,6 +452,34 @@
     content: "•";
     margin-right: 6px;
     color: var(--text-1);
+  }
+
+  .form {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
+  .input {
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-2);
+    color: var(--text-1);
+  }
+
+  .input:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .button {

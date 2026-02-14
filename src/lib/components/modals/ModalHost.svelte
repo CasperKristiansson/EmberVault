@@ -9,6 +9,7 @@
   import type {
     AppPreferences,
     NoteIndexEntry,
+    S3Config,
     Vault,
   } from "$lib/core/storage/types";
   import type { StorageMode } from "$lib/state/adapter.store";
@@ -35,6 +36,8 @@
   export let onCloseSettings: (() => void | Promise<void>) | null = null;
   export let onChooseFolder: (() => void | Promise<void>) | null = null;
   export let onChooseBrowserStorage: (() => void | Promise<void>) | null = null;
+  export let onConnectS3: ((config: S3Config) => void | Promise<void>) | null =
+    null;
   export let onUpdatePreferences:
     | ((patch: Partial<AppPreferences>) => void | Promise<void>)
     | null = null;
@@ -45,6 +48,9 @@
   export let onResetPreferences: (() => void | Promise<void>) | null = null;
   export let storageMode: StorageMode = "idb";
   export let settingsVaultName: string | null = null;
+  export let settingsS3Bucket: string | null = null;
+  export let settingsS3Region: string | null = null;
+  export let settingsS3Prefix: string | null = null;
   export let supportsFileSystem = true;
   export let settingsBusy = false;
   export let preferences: AppPreferences = {
@@ -275,12 +281,16 @@
       this={SettingsModalComponent}
       {storageMode}
       {settingsVaultName}
+      {settingsS3Bucket}
+      {settingsS3Region}
+      {settingsS3Prefix}
       {supportsFileSystem}
       {settingsBusy}
       {preferences}
       onClose={onCloseSettings ?? handleClose}
       onChooseFolder={onChooseFolder}
       onChooseBrowserStorage={onChooseBrowserStorage}
+      onConnectS3={onConnectS3}
       onUpdatePreferences={onUpdatePreferences}
       onExportVault={onExportVault}
       onImportFromFolder={onImportFromFolder}

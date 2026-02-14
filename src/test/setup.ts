@@ -1,5 +1,61 @@
 /* eslint-disable compat/compat */
 
+import { vi } from "vitest";
+
+const createAwsSdkEmptyResponse = (): Record<string, never> => ({});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+type AwsSdkCommandInstance = {
+  input: Record<string, unknown>;
+};
+
+const awsSdkBaseCommand = function awsSdkBaseCommand(
+  this: AwsSdkCommandInstance,
+  input: unknown
+): void {
+  this.input = isRecord(input) ? input : {};
+};
+
+const awsSdkGetObjectCommand = function awsSdkGetObjectCommand(
+  this: AwsSdkCommandInstance,
+  input: unknown
+): void {
+  awsSdkBaseCommand.call(this, input);
+};
+
+const awsSdkPutObjectCommand = function awsSdkPutObjectCommand(
+  this: AwsSdkCommandInstance,
+  input: unknown
+): void {
+  awsSdkBaseCommand.call(this, input);
+};
+
+const awsSdkDeleteObjectCommand = function awsSdkDeleteObjectCommand(
+  this: AwsSdkCommandInstance,
+  input: unknown
+): void {
+  awsSdkBaseCommand.call(this, input);
+};
+
+const awsSdkListObjectsV2Command = function awsSdkListObjectsV2Command(
+  this: AwsSdkCommandInstance,
+  input: unknown
+): void {
+  awsSdkBaseCommand.call(this, input);
+};
+
+const awsSdkS3Client = function awsSdkS3Client(
+  this: { send: ReturnType<typeof vi.fn> },
+  config: unknown
+): void {
+  if (config) {
+    // ignored
+  }
+  this.send = vi.fn(createAwsSdkEmptyResponse);
+};
+
 class AnimationStub extends EventTarget implements Animation {
   public currentTime: number | null = 0;
   public effect: AnimationEffect | null = null;
@@ -64,3 +120,14 @@ const createAnimationStub = (): Animation => new AnimationStub();
 
 // eslint-disable-next-line sonarjs/class-prototype
 Element.prototype.animate = createAnimationStub;
+
+// @aws-sdk/client-s3 pulls in @aws-sdk/core's ESM entrypoint which uses
+// extensionless internal exports that Node can't import directly. Mock the SDK
+// in unit tests; Playwright e2e covers the real browser bundle behavior.
+vi.mock("@aws-sdk/client-s3", () => ({
+  S3Client: awsSdkS3Client,
+  GetObjectCommand: awsSdkGetObjectCommand,
+  PutObjectCommand: awsSdkPutObjectCommand,
+  DeleteObjectCommand: awsSdkDeleteObjectCommand,
+  ListObjectsV2Command: awsSdkListObjectsV2Command,
+}));

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { get } from "svelte/store";
 import { FileSystemAdapter } from "$lib/core/storage/filesystem.adapter";
 import { IndexedDBAdapter } from "$lib/core/storage/indexeddb.adapter";
+import { S3Adapter } from "$lib/core/storage/s3.adapter";
 import { adapter, initAdapter, storageMode } from "$lib/state/adapter.store";
 
 describe("adapter.store", () => {
@@ -26,6 +27,27 @@ describe("adapter.store", () => {
     });
     expect(activeAdapter).toBeInstanceOf(FileSystemAdapter);
     expect(get(storageMode)).toBe("filesystem");
+    expect(get(adapter)).toBe(activeAdapter);
+  });
+
+  it("requires config for s3 mode", () => {
+    expect(() => initAdapter("s3")).toThrow(
+      "S3 storage requires configuration."
+    );
+  });
+
+  it("initializes the S3 adapter with configuration", () => {
+    const activeAdapter = initAdapter("s3", {
+      s3Config: {
+        bucket: "bucket",
+        region: "us-east-1",
+        prefix: "embervault/",
+        accessKeyId: "AKIA_TEST",
+        secretAccessKey: "SECRET_TEST",
+      },
+    });
+    expect(activeAdapter).toBeInstanceOf(S3Adapter);
+    expect(get(storageMode)).toBe("s3");
     expect(get(adapter)).toBe(activeAdapter);
   });
 });

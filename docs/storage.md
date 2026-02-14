@@ -4,6 +4,7 @@
 
 - Best experience: user-selected folder on disk (Chrome/Edge).
 - Universal fallback: IndexedDB.
+- Optional: AWS S3 storage mode (user-provided bucket + credentials; no backend).
 - Optional hybrid: even in disk mode, keep a small IDB cache for search index + UI state.
 
 ## 2) Storage adapter interface
@@ -35,11 +36,13 @@ Adapters:
 
 - FileSystemAdapter (File System Access API)
 - IndexedDBAdapter (fallback)
+- S3Adapter (AWS S3 bucket + client-side credentials; IndexedDB cache)
 
 Selection logic:
 
 - If FS API supported AND user chooses folder: FileSystemAdapter primary, plus IDB cache for index/state.
 - Else: IndexedDBAdapter only.
+- If user chooses AWS S3: S3Adapter primary, plus IndexedDB cache for offline-first and performance.
 - Persist the user’s storage choice and (if applicable) the directory handle in IndexedDB so we can restore without re-prompting.
 - On app start:
   - If stored choice = FileSystemAdapter and the handle is still valid/permissioned, open it directly (no onboarding prompt).
@@ -92,7 +95,7 @@ DB name: `local-notes` Object stores:
 - assets (key: assetId) -> Blob
 - uiState (key: "ui")
 - searchIndex (key: "search") -> serialized MiniSearch index
-- appSettings (key: "app") -> { storageMode: "filesystem" | "idb", fsHandle?: FileSystemDirectoryHandle, lastVaultName?: string, settings?: { startupView: "last-opened" | "all-notes", defaultSort: "updated" | "created" | "title", openNoteBehavior: "new-tab" | "reuse-tab", newNoteLocation: "current-folder" | "all-notes", confirmTrash: boolean, spellcheck: boolean, showNoteDates: boolean, showNotePreview: boolean, showTagPillsInList: boolean, markdownViewByDefault: boolean, smartListContinuation: boolean, interfaceDensity: "comfortable" | "compact", accentColor: "orange" | "sky" | "mint" | "rose" } }
+- appSettings (key: "app") -> { storageMode: "filesystem" | "idb" | "s3", fsHandle?: FileSystemDirectoryHandle, lastVaultName?: string, s3?: { bucket: string, region: string, prefix?: string, accessKeyId: string, secretAccessKey: string, sessionToken?: string }, settings?: { ... } }
 
 Notes:
 - appSettings lives in IndexedDB regardless of primary storage, and is used to remember the user’s storage choice across launches.
@@ -118,6 +121,23 @@ Notes:
     - Switch to browser storage (IndexedDB)
 - Switching adapters:
   - Provide “Export vault to folder” and “Import from folder” utilities
+
+## 8) S3 layout (S3Adapter)
+
+S3 keys are stored under a user-configurable `prefix` (default: `embervault/`).
+
+- `{prefix}vault.json`
+- `{prefix}notes/{noteId}.json`
+- `{prefix}notes/{noteId}.md` (derived from `note.derived.plainText` for interoperability)
+- `{prefix}templates/{templateId}.json`
+- `{prefix}templates/{templateId}.md` (derived)
+- `{prefix}assets/{assetId}` (blob; content-type set when available)
+- `{prefix}ui-state.json` (optional; per-user convenience)
+- `{prefix}search-index.json` (serialized MiniSearch index)
+
+Notes:
+- Soft-deleted notes remain under `notes/` and are hidden by `deletedAt` in the vault index.
+- Sync policy: last-write-wins. Local cache is updated immediately; remote is updated via a coalesced outbox.
 
 ## 7) Autosave & consistency
 

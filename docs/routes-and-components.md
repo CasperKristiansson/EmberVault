@@ -30,6 +30,7 @@ Directory: `src/routes/`
   - Show storage mode selection cards:
     - Folder vault (File System Access) if supported
     - Browser storage (IndexedDB) always
+    - AWS S3 (bucket + credentials) optional
   - On completion:
     - Initialize adapter
     - Create default vault
@@ -188,7 +189,7 @@ Directory: `src/lib/state/`
 ### 3.1 Stores (Svelte stores)
 
 - `adapter.store.ts`
-  - `storageMode` (filesystem | idb)
+  - `storageMode` (filesystem | idb | s3)
   - `adapter` instance
   - `initAdapter()` + `switchAdapter()`
 

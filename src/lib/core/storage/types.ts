@@ -105,10 +105,20 @@ export type AppPreferences = {
   accentColor: AccentColor;
 };
 
+export type S3Config = {
+  bucket: string;
+  region: string;
+  prefix?: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
+};
+
 export type AppSettings = {
-  storageMode: "filesystem" | "idb";
+  storageMode: "filesystem" | "idb" | "s3";
   fsHandle?: FileSystemDirectoryHandle;
   lastVaultName?: string;
+  s3?: S3Config;
   settings?: AppPreferences;
 };
 

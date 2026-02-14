@@ -2,6 +2,7 @@
   import { motion } from "@motionone/svelte";
   import {
     ArrowDownUp,
+    Cloud,
     Database,
     HardDrive,
     Info,
@@ -15,7 +16,7 @@
   } from "lucide-svelte";
   import { prefersReducedMotion } from "$lib/state/motion.store";
   import type { StorageMode } from "$lib/state/adapter.store";
-  import type { AppPreferences } from "$lib/core/storage/types";
+  import type { AppPreferences, S3Config } from "$lib/core/storage/types";
 
   const defaultPreferences: AppPreferences = {
     startupView: "last-opened",
@@ -35,12 +36,18 @@
 
   export let storageMode: StorageMode = "idb";
   export let settingsVaultName: string | null = null;
+  export let settingsS3Bucket: string | null = null;
+  export let settingsS3Region: string | null = null;
+  export let settingsS3Prefix: string | null = null;
   export let supportsFileSystem = true;
   export let settingsBusy = false;
   export let preferences: AppPreferences = defaultPreferences;
   export let onClose: (() => void | Promise<void>) | null = null;
   export let onChooseFolder: (() => void | Promise<void>) | null = null;
   export let onChooseBrowserStorage: (() => void | Promise<void>) | null = null;
+  export let onConnectS3:
+    | ((config: S3Config) => void | Promise<void>)
+    | null = null;
   export let onUpdatePreferences:
     | ((patch: Partial<AppPreferences>) => void | Promise<void>)
     | null = null;
@@ -62,6 +69,29 @@
     | "about";
   let activeSection: SettingsSection = "storage";
   $: preferencesDisabled = !onUpdatePreferences || settingsBusy;
+
+  let s3Bucket = "";
+  let s3Region = "";
+  let s3Prefix = "embervault/";
+  let s3AccessKeyId = "";
+  let s3SecretAccessKey = "";
+  let s3SessionToken = "";
+  let s3Dirty = false;
+
+  $: if (!s3Dirty) {
+    s3Bucket = settingsS3Bucket ?? s3Bucket;
+    s3Region = settingsS3Region ?? s3Region;
+    s3Prefix = settingsS3Prefix ?? s3Prefix;
+  }
+
+  const buildS3Config = (): S3Config => ({
+    bucket: s3Bucket.trim(),
+    region: s3Region.trim(),
+    prefix: s3Prefix.trim() ? s3Prefix.trim() : undefined,
+    accessKeyId: s3AccessKeyId.trim(),
+    secretAccessKey: s3SecretAccessKey.trim(),
+    sessionToken: s3SessionToken.trim() ? s3SessionToken.trim() : undefined,
+  });
 </script>
 
 <div
@@ -201,7 +231,7 @@
                 <h2>Use a folder on this device</h2>
                 <p>Keep files in a folder you choose (best in Chrome/Edge).</p>
               </div>
-              {#if settingsVaultName}
+              {#if storageMode === "filesystem" && settingsVaultName}
                 <div class="card-meta">
                   Current folder: <span>{settingsVaultName}</span>
                 </div>
@@ -233,6 +263,97 @@
                 {storageMode === "idb"
                   ? "Using browser storage"
                   : "Use browser storage"}
+              </button>
+            </div>
+
+            <div class="card" data-active={storageMode === "s3"}>
+              <div class="card-icon" aria-hidden="true">
+                <Cloud aria-hidden="true" size={16} />
+              </div>
+              <div class="card-copy">
+                <h2>Sync with AWS S3</h2>
+                <p>Write directly to your bucket. Works across devices.</p>
+              </div>
+              {#if settingsS3Bucket}
+                <div class="card-meta">
+                  Current bucket: <span>{settingsS3Bucket}</span>
+                </div>
+              {/if}
+              <div class="form">
+                <label>
+                  <span>Bucket</span>
+                  <input
+                    class="input"
+                    type="text"
+                    bind:value={s3Bucket}
+                    disabled={settingsBusy}
+                    autocomplete="off"
+                    on:input={() => (s3Dirty = true)}
+                  />
+                </label>
+                <label>
+                  <span>Region</span>
+                  <input
+                    class="input"
+                    type="text"
+                    bind:value={s3Region}
+                    disabled={settingsBusy}
+                    autocomplete="off"
+                    on:input={() => (s3Dirty = true)}
+                  />
+                </label>
+                <label>
+                  <span>Prefix (optional)</span>
+                  <input
+                    class="input"
+                    type="text"
+                    bind:value={s3Prefix}
+                    disabled={settingsBusy}
+                    autocomplete="off"
+                    on:input={() => (s3Dirty = true)}
+                  />
+                </label>
+                <label>
+                  <span>Access key ID</span>
+                  <input
+                    class="input"
+                    type="text"
+                    bind:value={s3AccessKeyId}
+                    disabled={settingsBusy}
+                    autocomplete="off"
+                    on:input={() => (s3Dirty = true)}
+                  />
+                </label>
+                <label>
+                  <span>Secret access key</span>
+                  <input
+                    class="input"
+                    type="password"
+                    bind:value={s3SecretAccessKey}
+                    disabled={settingsBusy}
+                    autocomplete="off"
+                    on:input={() => (s3Dirty = true)}
+                  />
+                </label>
+                <label>
+                  <span>Session token (optional)</span>
+                  <input
+                    class="input"
+                    type="password"
+                    bind:value={s3SessionToken}
+                    disabled={settingsBusy}
+                    autocomplete="off"
+                    on:input={() => (s3Dirty = true)}
+                  />
+                </label>
+              </div>
+              <button
+                class="button primary"
+                type="button"
+                on:click={() => void onConnectS3?.(buildS3Config())}
+                disabled={settingsBusy}
+              >
+                {storageMode === "s3" ? "Update credentials" : "Connect S3"}
               </button>
             </div>
           </div>
@@ -1058,6 +1179,34 @@
 
   .card-meta span {
     color: var(--text-1);
+  }
+
+  .form {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
+  .input {
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-2);
+    color: var(--text-1);
+  }
+
+  .input:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .button {

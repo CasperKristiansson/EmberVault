@@ -4,7 +4,8 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
 
 ## 0) Non-negotiables
 
-- Web app only. No backend. No accounts. All data stored locally on the user device.
+- Web app only. No backend. No accounts.
+- Default storage is local-only (device folder or browser storage). Optional AWS S3 mode writes directly to a user-provided bucket using user-provided credentials (no server-side component).
 - Offline-first: app must function fully without network once loaded once.
 - Dark theme only, macOS-like minimal UI, orange accent.
 - Fast: instant navigation, no jank, virtualized lists, incremental indexing.
@@ -83,8 +84,13 @@ Hybrid, capability-driven:
 
 - Primary (best): File System Access API (Chrome/Edge) — user selects a directory (“Vault”)
 - Universal fallback: IndexedDB (all browsers)
+- Optional: AWS S3 storage mode (user-provided bucket + credentials; no backend)
 - Optional performance add-on (Chrome): OPFS via Storage Foundation if available (not required)
 - Persist the user’s storage choice (and FS directory handle when applicable) in IndexedDB to avoid re-prompting on every launch
+
+AWS S3 implementation:
+- Uses AWS SDK v3 (`@aws-sdk/client-s3`) in the client bundle.
+- Credentials are stored in IndexedDB app settings when the user enables S3 mode.
 
 See `storage.md` for canonical on-disk structure and fallback rules.
 
