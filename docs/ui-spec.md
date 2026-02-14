@@ -84,7 +84,7 @@ Tags list:
 
 Header (44px):
 
-- Breadcrumb: All notes / Folder
+- Title: All notes (no folder selected) OR Folder name (folder selected)
 - Sort dropdown (Updated, Created, Title)
 - Filter chips (Tag / Favorites)
 

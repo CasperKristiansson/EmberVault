@@ -33,6 +33,7 @@
     setFolderNoteOrder,
   } from "$lib/core/utils/note-order";
   import { filterNotesByFavorites } from "$lib/core/utils/notes-filter";
+  import { resolveNoteListTitle } from "$lib/core/utils/note-list-title";
   import { createUlid } from "$lib/core/utils/ulid";
   import { createDebouncedTask } from "$lib/core/utils/debounce";
   import { hashBlobSha256 } from "$lib/core/utils/hash";
@@ -946,9 +947,7 @@
     notes.filter((note) => note.deletedAt !== null)
   );
   $: filteredNotes = filterNotesByFavorites(displayNotes, favoritesOnly);
-  $: noteListTitle = activeFolderName
-    ? `All notes / ${activeFolderName}`
-    : "All notes";
+  $: noteListTitle = resolveNoteListTitle(activeFolderName);
   $: noteListCount = filteredNotes.length;
   $: noteListEmptyMessage = favoritesOnly ? "No favorites yet." : "No notes yet.";
 
@@ -2588,7 +2587,9 @@
   <div slot="note-list" class="note-list-content">
     <header class="note-list-header">
       <div>
-        <div class="note-list-title">{noteListTitle}</div>
+        <div class="note-list-title" data-testid="note-list-title">
+          {noteListTitle}
+        </div>
         <div class="note-list-subtitle">{noteListCount} total</div>
       </div>
       <div class="note-list-actions">
