@@ -18,6 +18,19 @@ Top bar:
 - Contains tabs row (left) and action icons (right)
 - Right action icons include Help + Settings icons (lucide, 18px) aligned to top-right; uses Ghost icon button style
 
+Interface density:
+
+- Comfortable (default):
+  - Note list row height: 34px desktop, 40px mobile
+  - Note list padding: 20px 16px, gap 16px
+  - Editor padding: 24px desktop, 16px mobile, gap 16px
+  - Right panel padding: 20px 16px, gap 12px
+- Compact:
+  - Note list row height: 32px desktop, 36px mobile
+  - Note list padding: 16px 12px, gap 12px
+  - Editor padding: 16px desktop, 12px mobile, gap 12px
+  - Right panel padding: 16px 12px, gap 12px
+
 ### Mobile layout (< 768px width)
 
 - Single primary pane with bottom nav (height 56px):
@@ -99,7 +112,7 @@ Search-in-list field:
 List rows (34px desktop):
 
 - Left: optional favorite star (hidden until hover)
-- Center: title + 1-line preview (muted)
+- Center: title (+ optional tag pills) + 1-line preview (muted)
 - Right: updated time (muted) + overflow menu (hidden until hover)
 
 Empty states:
@@ -160,7 +173,9 @@ Markdown support (must be explicit):
   - If clipboard content is Markdown-like, parse into blocks (preserve headings/lists/code)
 - Export:
   - Each note has “Copy as Markdown” and “Export Markdown”
-- Optional: “Toggle Markdown View” (read-only markdown preview) from note menu
+- “Toggle Markdown View” action in the editor header (top-right icon button):
+  - When enabled: show read-only Markdown (source) view
+  - When disabled: show the normal rich-text editor
 
 Code blocks:
 
@@ -309,21 +324,21 @@ Notes section content:
 
 - New notes go to: Current folder / All notes
 - Show updated date in list toggle
-- Show note preview (coming soon)
-- Show tag pills in list (coming soon)
+- Show note preview toggle
+- Show tag pills in list toggle
 
 Editor section content:
 
 - Spellcheck toggle
-- Markdown view default (coming soon)
-- Smart list continuation (coming soon)
+- Markdown view by default toggle
+- Smart list continuation toggle
 
 Appearance section content:
 
 - Theme: Dark (locked)
 - Reduce motion: follows system preference (read-only)
-- Interface density (coming soon)
-- Accent color (coming soon)
+- Interface density: Comfortable / Compact (affects spacing + row heights, see App shell section)
+- Accent color: Orange / Sky / Mint / Rose (default: Orange)
 
 Shortcuts section content:
 

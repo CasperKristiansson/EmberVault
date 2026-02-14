@@ -53,6 +53,12 @@
     confirmTrash: true,
     spellcheck: true,
     showNoteDates: true,
+    showNotePreview: true,
+    showTagPillsInList: true,
+    markdownViewByDefault: false,
+    smartListContinuation: true,
+    interfaceDensity: "comfortable",
+    accentColor: "orange",
   };
 
   let CommandPaletteModalComponent: typeof CommandPaletteModalType | null = null;

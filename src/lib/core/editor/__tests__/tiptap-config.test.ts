@@ -12,6 +12,9 @@ const requiredExtensions = [
   "taskList",
   "taskItem",
   "image",
+  "callout",
+  "embed",
+  "smartListContinuation",
   "mathInline",
   "mathBlock",
 ];

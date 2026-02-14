@@ -196,7 +196,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 34px;
+    height: var(--density-list-row-height-desktop, 34px);
     padding: 0 8px 0 calc(8px + var(--depth) * 12px);
     border-radius: var(--r-sm);
     color: var(--text-0);
@@ -312,7 +312,7 @@
 
   @media (max-width: 767px) {
     .folder-row {
-      height: 40px;
+      height: var(--density-list-row-height-mobile, 40px);
     }
   }
 </style>

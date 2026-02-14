@@ -29,3 +29,24 @@
   --shadow-panel: 0 10px 30px rgba(0, 0, 0, 0.35);
   --shadow-popover: 0 18px 50px rgba(0, 0, 0, 0.45);
 }
+
+:root[data-accent="sky"] {
+  --accent-0: #3ea6ff;
+  --accent-1: #7dc5ff;
+  --accent-2: rgba(62, 166, 255, 0.18);
+  --focus-ring: rgba(62, 166, 255, 0.55);
+}
+
+:root[data-accent="mint"] {
+  --accent-0: #31d6b4;
+  --accent-1: #74f0d6;
+  --accent-2: rgba(49, 214, 180, 0.18);
+  --focus-ring: rgba(49, 214, 180, 0.55);
+}
+
+:root[data-accent="rose"] {
+  --accent-0: #ff5fa1;
+  --accent-1: #ff9bc5;
+  --accent-2: rgba(255, 95, 161, 0.18);
+  --focus-ring: rgba(255, 95, 161, 0.55);
+}

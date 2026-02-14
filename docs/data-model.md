@@ -16,7 +16,7 @@ Tag { id: string name: string color?: string (optional; default none) }
 
 ## 3) Note index entry (for list/search)
 
-NoteIndexEntry { id: string title: string folderId: string | null tagIds: string[] favorite: boolean createdAt: number updatedAt: number deletedAt: number | null isTemplate: boolean (false for notes) customFields?: Record<string, CustomFieldValue> linkOutgoing?: string[] (noteIds or unresolved strings) linkIncomingCount?: number }
+NoteIndexEntry { id: string title: string preview?: string (one-line snippet) folderId: string | null tagIds: string[] favorite: boolean createdAt: number updatedAt: number deletedAt: number | null isTemplate: boolean (false for notes) customFields?: Record<string, CustomFieldValue> linkOutgoing?: string[] (noteIds or unresolved strings) linkIncomingCount?: number }
 
 CustomFieldValue = string | number | boolean | { type:"date", value:number }
 

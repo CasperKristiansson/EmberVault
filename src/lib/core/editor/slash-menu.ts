@@ -55,6 +55,9 @@ const enabledItems = new Set<SlashMenuItemId>([
   "quote",
   "code",
   "table",
+  "image",
+  "callout",
+  "embed",
   "divider",
   "math",
 ]);

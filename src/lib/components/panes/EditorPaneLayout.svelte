@@ -11,6 +11,7 @@
     titleValue: string;
     editorContent: Record<string, unknown>;
     editorPlainText: string;
+    tabViewModes: Record<string, "editor" | "markdown">;
   };
 
   export let node: PaneLayoutNode;
@@ -19,6 +20,7 @@
   export let isLoading = false;
   export let linkCandidates: WikiLinkCandidate[] = [];
   export let spellcheck = true;
+  export let smartListContinuation = true;
   export let getChips: (
     note: NoteDocumentFile | null
   ) => Array<{ key: string; label: string }> = () => [];
@@ -28,6 +30,7 @@
     () => {};
   export let onToggleFavorite: (paneId: string) => void = () => {};
   export let onDeleteNote: (paneId: string) => void = () => {};
+  export let onToggleMarkdownView: (paneId: string) => void = () => {};
   export let onEditorUpdate: (
     paneId: string,
     payload: { json: Record<string, unknown>; text: string }
@@ -48,6 +51,7 @@
     titleValue: "",
     editorContent: {},
     editorPlainText: "",
+    tabViewModes: {},
   };
 </script>
 
@@ -62,10 +66,12 @@
     chips={getChips(pane.note)}
     {linkCandidates}
     {spellcheck}
+    {smartListContinuation}
     {onSetActive}
     {onKeydown}
     {onToggleFavorite}
     {onDeleteNote}
+    {onToggleMarkdownView}
     {onEditorUpdate}
     {onImagePaste}
   />
@@ -80,11 +86,14 @@
           {activePaneId}
           {isLoading}
           {linkCandidates}
+          {spellcheck}
+          {smartListContinuation}
           {getChips}
           {onSetActive}
           {onKeydown}
           {onToggleFavorite}
           {onDeleteNote}
+          {onToggleMarkdownView}
           {onEditorUpdate}
           {onImagePaste}
         />

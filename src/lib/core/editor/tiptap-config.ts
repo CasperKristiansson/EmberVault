@@ -11,6 +11,9 @@ import StarterKit from "@tiptap/starter-kit";
 import { common, createLowlight } from "lowlight";
 import { AssetImage } from "./image-extension";
 import { MathBlock, MathInline } from "./math/katex";
+import { Callout } from "./callout-extension";
+import { Embed } from "./embed-extension";
+import { SmartListContinuation } from "./smart-list-continuation-extension";
 import type { Extensions } from "@tiptap/core";
 
 const lowlight = createLowlight(common);
@@ -33,7 +36,9 @@ const emptyDocument: Record<string, unknown> = {
 export const createEmptyDocument = (): Record<string, unknown> =>
   structuredClone(emptyDocument);
 
-export const createTiptapExtensions = (): Extensions => [
+export const createTiptapExtensions = (
+  options: { smartListContinuation?: boolean } = {}
+): Extensions => [
   StarterKit.configure({
     codeBlock: false,
     link: false,
@@ -41,6 +46,11 @@ export const createTiptapExtensions = (): Extensions => [
   }),
   CodeBlockLowlight.configure({ lowlight }),
   AssetImage,
+  Callout,
+  Embed,
+  SmartListContinuation.configure({
+    enabled: options.smartListContinuation !== false,
+  }),
   TaskList,
   TaskItem,
   Table.configure({

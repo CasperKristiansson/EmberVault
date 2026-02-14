@@ -26,6 +26,7 @@ export type Tag = {
 export type NoteIndexEntry = {
   id: string;
   title: string;
+  preview?: string;
   folderId: string | null;
   tagIds: string[];
   favorite: boolean;
@@ -85,6 +86,9 @@ export type AssetMeta = {
 
 export type UIState = Record<string, unknown>;
 
+export const accentColors = ["orange", "sky", "mint", "rose"] as const;
+export type AccentColor = (typeof accentColors)[number];
+
 export type AppPreferences = {
   startupView: "last-opened" | "all-notes";
   defaultSort: "updated" | "created" | "title";
@@ -93,6 +97,12 @@ export type AppPreferences = {
   confirmTrash: boolean;
   spellcheck: boolean;
   showNoteDates: boolean;
+  showNotePreview: boolean;
+  showTagPillsInList: boolean;
+  markdownViewByDefault: boolean;
+  smartListContinuation: boolean;
+  interfaceDensity: "comfortable" | "compact";
+  accentColor: AccentColor;
 };
 
 export type AppSettings = {

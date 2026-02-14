@@ -20,7 +20,7 @@ Version: 0.1 Owner: (you) Audience: Coding agent (primary)
 - Folders + Tags (both)
 - Favorites (pinned notes)
 - Metadata panel (system fields + custom fields)
-- Tabs + Pane docking
+- Tabs (single editor pane)
 - Drag & drop (folders, notes, tabs)
 - Search: full-text + filters + fuzzy
 - Command palette (Cmd/Ctrl+K)
@@ -121,7 +121,7 @@ See `storage.md` for canonical on-disk structure and fallback rules.
 - Main workspace:
   - Sidebar (folder tree)
   - Note list pane
-  - Editor pane (tabs + pane docking)
+  - Editor pane (tabs)
   - Right panel (toggleable): Outline / Metadata
 - Command palette
 - Global search modal

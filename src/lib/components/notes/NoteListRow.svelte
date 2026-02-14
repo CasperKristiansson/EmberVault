@@ -2,13 +2,16 @@
   import { motion } from "@motionone/svelte";
   import { prefersReducedMotion } from "$lib/state/motion.store";
   import { Star } from "lucide-svelte";
-  import type { NoteIndexEntry } from "$lib/core/storage/types";
+  import type { NoteIndexEntry, Tag } from "$lib/core/storage/types";
 
   export let note: NoteIndexEntry;
   export let titleOverride: string | null = null;
   export let active = false;
   export let motionEnabled = true;
   export let showMeta = true;
+  export let showPreview = true;
+  export let showTags = true;
+  export let tagsById: Record<string, Tag> = {};
   export let onSelect: (noteId: string) => void = () => {};
   export let draggable = false;
   export let dragging = false;
@@ -57,6 +60,14 @@
   $: resolvedTitle = (titleOverride ?? note.title)?.trim()
     ? (titleOverride ?? note.title)
     : "Untitled";
+  $: resolvedPreview = (note.preview ?? "").trim();
+  $: resolvedTagPills =
+    showTags && note.tagIds.length > 0
+      ? note.tagIds
+          .slice(0, 3)
+          .map((tagId) => tagsById[tagId]?.name)
+          .filter((tagName): tagName is string => Boolean(tagName?.trim()))
+      : [];
   $: formattedDate = new Date(note.updatedAt).toLocaleDateString();
 </script>
 
@@ -92,7 +103,21 @@
   >
     <Star aria-hidden="true" size={14} />
   </button>
-  <span class="note-row-title">{resolvedTitle}</span>
+  <div class="note-row-main">
+    <div class="note-row-title-line">
+      <span class="note-row-title">{resolvedTitle}</span>
+      {#if resolvedTagPills.length > 0}
+        <div class="note-row-tags" aria-label="Tags">
+          {#each resolvedTagPills as tagName (tagName)}
+            <span class="note-tag-pill">{tagName}</span>
+          {/each}
+        </div>
+      {/if}
+    </div>
+    {#if showPreview && resolvedPreview}
+      <span class="note-row-preview">{resolvedPreview}</span>
+    {/if}
+  </div>
   {#if showMeta}
     <span class="note-row-meta">{formattedDate}</span>
   {/if}
@@ -156,7 +181,57 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
     flex: 1;
+  }
+
+  .note-row-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  .note-row-title-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .note-row-tags {
+    display: inline-flex;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    flex: 0 1 auto;
+  }
+
+  .note-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-2);
+    color: var(--text-1);
+    font-size: 11px;
+    line-height: 1.1;
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .note-row-preview {
+    font-size: 12px;
+    line-height: 1.2;
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .note-row-meta {

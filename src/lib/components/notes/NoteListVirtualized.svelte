@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import type { NoteIndexEntry } from "$lib/core/storage/types";
+  import type { NoteIndexEntry, Tag } from "$lib/core/storage/types";
   import NoteListRow from "$lib/components/notes/NoteListRow.svelte";
 
   export let notes: Array<{ id: string }> = [];
@@ -21,6 +21,9 @@
   export let overscan = 6;
   export let virtualizeThreshold = 100;
   export let showMeta = true;
+  export let showPreview = true;
+  export let showTags = true;
+  export let tagsById: Record<string, Tag> = {};
 
   let container: HTMLDivElement | null = null;
   let scrollTop = 0;
@@ -133,6 +136,9 @@
               onDragEnd={onDragEnd}
               onToggleFavorite={onToggleFavorite}
               {showMeta}
+              {showPreview}
+              {showTags}
+              {tagsById}
               {motionEnabled}
             />
           </slot>
@@ -164,6 +170,9 @@
             onDragEnd={onDragEnd}
             onToggleFavorite={onToggleFavorite}
             {showMeta}
+            {showPreview}
+            {showTags}
+            {tagsById}
             {motionEnabled}
           />
         </slot>
@@ -174,8 +183,8 @@
 
 <style>
   .note-list-virtualized {
-    --note-row-height: 34px;
-    --note-row-gap: 4px;
+    --note-row-height: var(--density-list-row-height-desktop, 34px);
+    --note-row-gap: var(--density-note-row-gap, 4px);
 
     flex: 1;
     min-height: 0;
@@ -204,7 +213,7 @@
 
   @media (max-width: 767px) {
     .note-list-virtualized {
-      --note-row-height: 40px;
+      --note-row-height: var(--density-list-row-height-mobile, 40px);
     }
   }
 </style>

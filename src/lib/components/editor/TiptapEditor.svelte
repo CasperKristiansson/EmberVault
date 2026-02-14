@@ -39,6 +39,7 @@
   export let focusEmptyTitleOnClick = false;
   export let linkCandidates: WikiLinkCandidate[] = [];
   export let spellcheck = true;
+  export let smartListContinuation = true;
   export let onImagePaste: (file: File | Blob) => Promise<{
     assetId: string;
     src: string;
@@ -71,6 +72,15 @@
   let tablePromptCols = 3;
   let tablePromptElement: HTMLDivElement | null = null;
 
+  let embedPromptOpen = false;
+  let embedPromptPosition: { x: number; y: number } | null = null;
+  let embedPromptUrl = "";
+  let embedPromptError = "";
+  let embedPromptElement: HTMLDivElement | null = null;
+  let embedPromptInput: HTMLInputElement | null = null;
+
+  let imagePickerInput: HTMLInputElement | null = null;
+
   let wikiLinkOpen = false;
   let wikiLinkPosition: { x: number; y: number } | null = null;
   let wikiLinkSelectedIndex = 0;
@@ -93,6 +103,13 @@
 
   $: if (editor) {
     editor.view.dom.setAttribute("spellcheck", spellcheck ? "true" : "false");
+  }
+
+  $: if (editor) {
+    const smartStorage = (editor.storage as unknown as { smartListContinuation?: { enabled?: boolean } }).smartListContinuation;
+    if (smartStorage) {
+      smartStorage.enabled = smartListContinuation;
+    }
   }
 
   const clamp = (value: number, min: number, max: number): number =>
@@ -183,6 +200,7 @@
     }
     const chain = editor.chain().focus() as SlashMenuChain;
     deleteSlashIfPresent(chain);
+    chain.run();
     const coords = editor.view.coordsAtPos(editor.state.selection.from);
     tablePromptPosition = resolveMenuPosition({
       left: coords.left,
@@ -212,6 +230,72 @@
       .insertTable({ rows, cols, withHeaderRow: true })
       .run();
     closeTablePrompt();
+  };
+
+  const closeEmbedPrompt = (): void => {
+    embedPromptOpen = false;
+    embedPromptPosition = null;
+    embedPromptUrl = "";
+    embedPromptError = "";
+  };
+
+  const openEmbedPrompt = (): void => {
+    if (!editor) {
+      return;
+    }
+    closeWikiLinkMenu();
+    closeTablePrompt();
+    const chain = editor.chain().focus() as SlashMenuChain;
+    deleteSlashIfPresent(chain);
+    chain.run();
+    const coords = editor.view.coordsAtPos(editor.state.selection.from);
+    embedPromptPosition = resolveMenuPosition({
+      left: coords.left,
+      bottom: coords.bottom,
+    });
+    embedPromptUrl = "";
+    embedPromptError = "";
+    embedPromptOpen = true;
+  };
+
+  const resolveEmbedUrl = (value: string): string => {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return "";
+    }
+    if (!/^https?:\/\/\S+$/u.test(trimmed)) {
+      return "";
+    }
+    return trimmed;
+  };
+
+  const insertEmbedFromPrompt = (): void => {
+    if (!editor) {
+      return;
+    }
+    const url = resolveEmbedUrl(embedPromptUrl);
+    if (!url) {
+      embedPromptError = "Enter a valid http(s) URL.";
+      return;
+    }
+    editor.chain().focus().insertContent({ type: "embed", attrs: { url } }).run();
+    closeEmbedPrompt();
+  };
+
+  const openImagePicker = (): void => {
+    imagePickerInput?.click();
+  };
+
+  const handleImagePickerChange = (): void => {
+    const input = imagePickerInput;
+    const file = input?.files?.[0] ?? null;
+    if (!file) {
+      return;
+    }
+    if (input) {
+      input.value = "";
+    }
+    void handleImagePaste(file);
   };
 
   const updateTableToolbar = (): void => {
@@ -324,6 +408,37 @@
     if (itemId === "table") {
       closeSlashMenu();
       openTablePrompt();
+      return;
+    }
+    if (itemId === "embed") {
+      closeSlashMenu();
+      openEmbedPrompt();
+      return;
+    }
+    if (itemId === "image") {
+      const chain = editor.chain().focus() as SlashMenuChain;
+      deleteSlashIfPresent(chain);
+      chain.run();
+      closeSlashMenu();
+      openImagePicker();
+      return;
+    }
+    if (itemId === "callout") {
+      const chain = editor.chain().focus() as SlashMenuChain;
+      deleteSlashIfPresent(chain);
+      chain.run();
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "callout",
+          attrs: { tone: "info" },
+          content: [
+            { type: "paragraph", content: [{ type: "text", text: "Callout" }] },
+          ],
+        })
+        .run();
+      closeSlashMenu();
       return;
     }
     const chain = editor.chain().focus() as SlashMenuChain;
@@ -635,7 +750,9 @@
           return false;
         },
       },
-      extensions: createTiptapExtensions(),
+      extensions: createTiptapExtensions({
+        smartListContinuation,
+      }),
       content: content as JSONContent,
       editable,
       onUpdate: ({ editor }) => {
@@ -704,6 +821,12 @@
         }
         closeTablePrompt();
       }
+      if (embedPromptOpen) {
+        if (embedPromptElement && embedPromptElement.contains(target)) {
+          return;
+        }
+        closeEmbedPrompt();
+      }
       if (slashMenuOpen) {
         if (slashMenuElement && slashMenuElement.contains(target)) {
           return;
@@ -732,6 +855,10 @@
       }
       if (tablePromptOpen) {
         closeTablePrompt();
+        return;
+      }
+      if (embedPromptOpen) {
+        closeEmbedPrompt();
         return;
       }
       if (slashMenuOpen) {
@@ -783,6 +910,12 @@
       lightboxBackdrop?.focus();
     });
   }
+
+  $: if (embedPromptOpen && embedPromptInput) {
+    queueMicrotask(() => {
+      embedPromptInput?.focus();
+    });
+  }
 </script>
 
 <div class="editor-surface" data-testid="tiptap-surface" data-chrome={chrome}>
@@ -813,6 +946,15 @@
     class="editor-mount"
   ></div>
 </div>
+
+<input
+  class="hidden-image-picker"
+  type="file"
+  accept="image/*"
+  data-testid="slash-image-input"
+  bind:this={imagePickerInput}
+  on:change={handleImagePickerChange}
+/>
 
 <SlashMenu
   open={slashMenuOpen}
@@ -881,6 +1023,60 @@
         class="table-prompt-button primary"
         type="button"
         on:click={insertTableFromPrompt}
+      >
+        Insert
+      </button>
+    </div>
+  </div>
+{/if}
+
+{#if embedPromptOpen && embedPromptPosition}
+  <div
+    class="embed-prompt"
+    data-testid="embed-prompt"
+    bind:this={embedPromptElement}
+    style={`left:${embedPromptPosition.x}px; top:${embedPromptPosition.y}px;`}
+  >
+    <div class="embed-prompt-title">Embed URL</div>
+    <input
+      class="embed-prompt-input"
+      data-testid="embed-prompt-input"
+      bind:this={embedPromptInput}
+      value={embedPromptUrl}
+      placeholder="https://example.com"
+      on:input={(event) => {
+        const target = event.currentTarget;
+        if (target instanceof HTMLInputElement) {
+          embedPromptUrl = target.value;
+          embedPromptError = "";
+        }
+      }}
+      on:keydown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          insertEmbedFromPrompt();
+        }
+      }}
+    />
+    {#if embedPromptError}
+      <div class="embed-prompt-error" data-testid="embed-prompt-error">
+        {embedPromptError}
+      </div>
+    {/if}
+    <div class="embed-prompt-actions">
+      <button
+        class="embed-prompt-button ghost"
+        type="button"
+        data-testid="embed-prompt-cancel"
+        on:click={closeEmbedPrompt}
+      >
+        Cancel
+      </button>
+      <button
+        class="embed-prompt-button primary"
+        type="button"
+        data-testid="embed-prompt-insert"
+        on:click={insertEmbedFromPrompt}
       >
         Insert
       </button>
@@ -1158,6 +1354,87 @@
     color: var(--text-0);
   }
 
+  .hidden-image-picker {
+    position: fixed;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .embed-prompt {
+    position: fixed;
+    width: 320px;
+    padding: 12px;
+    border-radius: var(--r-md);
+    background: var(--bg-2);
+    border: 1px solid var(--stroke-0);
+    box-shadow: var(--shadow-popover);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 120;
+  }
+
+  .embed-prompt-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-0);
+  }
+
+  .embed-prompt-input {
+    width: 100%;
+    height: 32px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-1);
+    color: var(--text-0);
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .embed-prompt-input:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .embed-prompt-error {
+    font-size: 12px;
+    color: var(--danger);
+  }
+
+  .embed-prompt-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .embed-prompt-button {
+    height: 28px;
+    padding: 0 10px;
+    border-radius: var(--r-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-1);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .embed-prompt-button.primary {
+    background: var(--accent-0);
+    color: #0b0d10;
+  }
+
+  .embed-prompt-button.primary:hover {
+    background: var(--accent-1);
+  }
+
+  .embed-prompt-button.ghost:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
   .editor-surface :global(.ProseMirror ul[data-type="taskList"]) {
     list-style: none;
     padding-left: 0;
@@ -1215,6 +1492,42 @@
     :global(.embervault-image figcaption[data-empty="true"]::before) {
     content: attr(data-placeholder);
     color: var(--text-2);
+  }
+
+  .editor-surface :global(div[data-type="callout"]) {
+    margin: 12px 0;
+    border-radius: var(--r-md);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-3);
+    padding: 10px 12px;
+    border-left: 3px solid var(--accent-0);
+  }
+
+  .editor-surface :global(div[data-type="callout"][data-tone="info"]) {
+    border-left-color: var(--info);
+  }
+
+  .editor-surface :global(div[data-type="callout"] > div[data-callout-body]) {
+    display: block;
+  }
+
+  .editor-surface :global(div[data-type="embed"]) {
+    margin: 12px 0;
+    border-radius: var(--r-md);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-3);
+    padding: 10px 12px;
+  }
+
+  .editor-surface :global(div[data-type="embed"] a[data-embed-link="true"]) {
+    color: var(--accent-0);
+    text-decoration: none;
+    word-break: break-word;
+  }
+
+  .editor-surface
+    :global(div[data-type="embed"] a[data-embed-link="true"]:hover) {
+    text-decoration: underline;
   }
 
   .editor-surface :global(.embervault-math-inline) {

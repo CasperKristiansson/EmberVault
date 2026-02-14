@@ -76,7 +76,7 @@ describe("slash menu", () => {
     const disabledItems = items
       .filter((item) => !item.enabled)
       .map((item) => item.id);
-    expect(disabledItems).toEqual(["image", "callout", "embed"]);
+    expect(disabledItems).toEqual([]);
   });
 
   const commandCases = [
@@ -105,12 +105,10 @@ describe("slash menu", () => {
     expect(calls).toContainEqual(expectedCall as Call);
   });
 
-  const disabledCases = ["image", "callout", "embed"] as const;
-
-  it.each(disabledCases)("disables %s", (itemId: SlashMenuItemId) => {
-    const { chain } = createChainRecorder();
-
-    expect(isSlashMenuItemEnabled(itemId)).toBe(false);
-    expect(applySlashMenuCommand(chain, itemId)).toBe(false);
+  it("enables image, callout, and embed", () => {
+    const enabled: SlashMenuItemId[] = ["image", "callout", "embed"];
+    for (const itemId of enabled) {
+      expect(isSlashMenuItemEnabled(itemId)).toBe(true);
+    }
   });
 });

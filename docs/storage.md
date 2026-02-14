@@ -92,7 +92,7 @@ DB name: `local-notes` Object stores:
 - assets (key: assetId) -> Blob
 - uiState (key: "ui")
 - searchIndex (key: "search") -> serialized MiniSearch index
-- appSettings (key: "app") -> { storageMode: "filesystem" | "idb", fsHandle?: FileSystemDirectoryHandle, lastVaultName?: string, settings?: { startupView: "last-opened" | "all-notes", defaultSort: "updated" | "created" | "title", openNoteBehavior: "new-tab" | "reuse-tab", newNoteLocation: "current-folder" | "all-notes", confirmTrash: boolean, spellcheck: boolean, showNoteDates: boolean } }
+- appSettings (key: "app") -> { storageMode: "filesystem" | "idb", fsHandle?: FileSystemDirectoryHandle, lastVaultName?: string, settings?: { startupView: "last-opened" | "all-notes", defaultSort: "updated" | "created" | "title", openNoteBehavior: "new-tab" | "reuse-tab", newNoteLocation: "current-folder" | "all-notes", confirmTrash: boolean, spellcheck: boolean, showNoteDates: boolean, showNotePreview: boolean, showTagPillsInList: boolean, markdownViewByDefault: boolean, smartListContinuation: boolean, interfaceDensity: "comfortable" | "compact", accentColor: "orange" | "sky" | "mint" | "rose" } }
 
 Notes:
 - appSettings lives in IndexedDB regardless of primary storage, and is used to remember the user’s storage choice across launches.

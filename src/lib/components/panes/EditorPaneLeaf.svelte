@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { Star, Trash2 } from "lucide-svelte";
+  import { FileText, PenLine, Star, Trash2 } from "lucide-svelte";
   import TiptapEditor from "$lib/components/editor/TiptapEditor.svelte";
+  import MarkdownPreview from "$lib/components/editor/MarkdownPreview.svelte";
   import type { WikiLinkCandidate } from "$lib/core/editor/wiki-links";
   import type { NoteDocumentFile } from "$lib/core/storage/types";
+  import { toDerivedMarkdown } from "$lib/core/utils/derived-markdown";
 
   type PaneState = {
     tabs: string[];
@@ -11,6 +13,7 @@
     titleValue: string;
     editorContent: Record<string, unknown>;
     editorPlainText: string;
+    tabViewModes: Record<string, "editor" | "markdown">;
   };
 
   export let paneId: string;
@@ -24,6 +27,7 @@
   export let onKeydown: (event: KeyboardEvent, paneId: string) => void = () => {};
   export let onToggleFavorite: (paneId: string) => void = () => {};
   export let onDeleteNote: (paneId: string) => void = () => {};
+  export let onToggleMarkdownView: (paneId: string) => void = () => {};
   export let onEditorUpdate: (
     paneId: string,
     payload: { json: Record<string, unknown>; text: string }
@@ -37,6 +41,17 @@
     height?: number;
   } | null> = async () => null;
   export let spellcheck = true;
+  export let smartListContinuation = true;
+
+  $: activeViewMode =
+    pane.activeTabId && pane.tabViewModes[pane.activeTabId]
+      ? pane.tabViewModes[pane.activeTabId]!
+      : "editor";
+  $: isMarkdownView = activeViewMode === "markdown";
+  $: markdown =
+    pane.note && isMarkdownView
+      ? toDerivedMarkdown(pane.note.title ?? "", pane.editorPlainText ?? "")
+      : "";
 </script>
 
 <div
@@ -56,6 +71,21 @@
     <div class="editor-empty">Select a note to start writing.</div>
   {:else}
     <div class="editor-actions" aria-label="Note actions">
+      {#if pane.note}
+        <button
+          class="icon-button"
+          type="button"
+          aria-label={isMarkdownView ? "Switch to editor view" : "Switch to Markdown view"}
+          data-testid="toggle-markdown-view"
+          on:click|stopPropagation={() => onToggleMarkdownView(paneId)}
+        >
+          {#if isMarkdownView}
+            <PenLine aria-hidden="true" size={16} />
+          {:else}
+            <FileText aria-hidden="true" size={16} />
+          {/if}
+        </button>
+      {/if}
       <button
         class="icon-button editor-favorite"
         type="button"
@@ -89,18 +119,23 @@
     {/if}
 
     <div class="editor-body">
-      <TiptapEditor
-        content={pane.note.pmDoc}
-        contentKey={pane.note.id}
-        ariaLabel="Note content"
-        dataTestId="note-body"
-        chrome="flat"
-        focusEmptyTitleOnClick={true}
-        linkCandidates={linkCandidates}
-        {spellcheck}
-        {onImagePaste}
-        onUpdate={payload => onEditorUpdate(paneId, payload)}
-      />
+      {#if isMarkdownView}
+        <MarkdownPreview {markdown} />
+      {:else}
+        <TiptapEditor
+          content={pane.note.pmDoc}
+          contentKey={pane.note.id}
+          ariaLabel="Note content"
+          dataTestId="note-body"
+          chrome="flat"
+          focusEmptyTitleOnClick={true}
+          linkCandidates={linkCandidates}
+          {spellcheck}
+          {smartListContinuation}
+          {onImagePaste}
+          onUpdate={payload => onEditorUpdate(paneId, payload)}
+        />
+      {/if}
     </div>
   {/if}
 </div>

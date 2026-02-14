@@ -34,6 +34,9 @@
   } from "$lib/core/utils/note-order";
   import { filterNotesByFavorites } from "$lib/core/utils/notes-filter";
   import { resolveNoteListTitle } from "$lib/core/utils/note-list-title";
+  import { toDerivedMarkdown } from "$lib/core/utils/derived-markdown";
+  import { resolveInterfaceDensity } from "$lib/core/utils/interface-density";
+  import { resolveAccentColor } from "$lib/core/utils/accent-color";
   import { createUlid } from "$lib/core/utils/ulid";
   import { createDebouncedTask } from "$lib/core/utils/debounce";
   import { hashBlobSha256 } from "$lib/core/utils/hash";
@@ -137,6 +140,7 @@
     titleValue: string;
     editorContent: Record<string, unknown>;
     editorPlainText: string;
+    tabViewModes: Record<string, "editor" | "markdown">;
   };
 
   type RightPanelTab = "outline" | "metadata";
@@ -148,6 +152,7 @@
     titleValue: "",
     editorContent: createEmptyDocument(),
     editorPlainText: "",
+    tabViewModes: {},
   });
 
   let vault: Vault | null = null;
@@ -184,6 +189,8 @@
   const uiStateDelay = 800;
   const permissionErrorNames = new Set(["NotAllowedError", "SecurityError"]);
   let isRecoveringStorage = false;
+  const defaultTabViewMode = (): "editor" | "markdown" =>
+    preferences.markdownViewByDefault ? "markdown" : "editor";
 
   type NoteSaveTask = ReturnType<typeof createDebouncedTask<[NoteDocumentFile]>>;
   const saveTasks: Record<string, NoteSaveTask> = {};
@@ -261,6 +268,12 @@
     confirmTrash: true,
     spellcheck: true,
     showNoteDates: true,
+    showNotePreview: true,
+    showTagPillsInList: true,
+    markdownViewByDefault: false,
+    smartListContinuation: true,
+    interfaceDensity: "comfortable",
+    accentColor: "orange",
   };
 
   const resolvePreferences = (
@@ -280,12 +293,32 @@
       confirmTrash: input.confirmTrash !== false,
       spellcheck: input.spellcheck !== false,
       showNoteDates: input.showNoteDates !== false,
+      showNotePreview: input.showNotePreview !== false,
+      showTagPillsInList: input.showTagPillsInList !== false,
+      markdownViewByDefault: input.markdownViewByDefault === true,
+      smartListContinuation: input.smartListContinuation !== false,
+      interfaceDensity: resolveInterfaceDensity(input.interfaceDensity),
+      accentColor: resolveAccentColor(input.accentColor),
     };
   };
 
   let preferences: AppPreferences = defaultPreferences;
   let lastSortMode: AppPreferences["defaultSort"] =
     defaultPreferences.defaultSort;
+
+  const applyAccentColorToRoot = (accentColor: AppPreferences["accentColor"]) => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const root = document.documentElement;
+    if (accentColor && accentColor !== "orange") {
+      root.setAttribute("data-accent", accentColor);
+      return;
+    }
+    root.removeAttribute("data-accent");
+  };
+
+  $: applyAccentColorToRoot(preferences.accentColor);
 
   const loadAppSettings = async (): Promise<AppSettings | null> => {
     appSettings = await readAppSettings();
@@ -409,17 +442,6 @@
       handleNonBlockingAdapterError(error);
       return false;
     }
-  };
-
-  const toDerivedMarkdown = (title: string, body: string): string => {
-    const trimmedTitle = title.trim();
-    if (trimmedTitle.length === 0) {
-      return body;
-    }
-    if (body.trim().length === 0) {
-      return `# ${trimmedTitle}`;
-    }
-    return `# ${trimmedTitle}\n\n${body}`;
   };
 
   const createNoteDocument = (): NoteDocumentFile => {
@@ -656,6 +678,37 @@
 
   const getPaneState = (paneId: PaneId): PaneState => ensurePaneState(paneId);
 
+  const ensureTabViewMode = (
+    pane: PaneState,
+    noteId: string
+  ): Record<string, "editor" | "markdown"> => {
+    const current = pane.tabViewModes[noteId];
+    if (current) {
+      return pane.tabViewModes;
+    }
+    return { ...pane.tabViewModes, [noteId]: defaultTabViewMode() };
+  };
+
+  const pruneTabViewModes = (
+    tabIds: string[],
+    viewModes: Record<string, "editor" | "markdown">
+  ): Record<string, "editor" | "markdown"> => {
+    if (tabIds.length === 0) {
+      return {};
+    }
+    const set = new Set(tabIds);
+    return Object.fromEntries(
+      Object.entries(viewModes).filter(([noteId]) => set.has(noteId))
+    ) as Record<string, "editor" | "markdown">;
+  };
+
+  const buildDefaultTabViewModes = (
+    tabIds: string[]
+  ): Record<string, "editor" | "markdown"> =>
+    Object.fromEntries(
+      tabIds.map((noteId) => [noteId, defaultTabViewMode()])
+    ) as Record<string, "editor" | "markdown">;
+
   const updatePaneState = (
     paneId: PaneId,
     updates: Partial<PaneState>
@@ -873,9 +926,14 @@
       pane.activeTabId && pane.tabs.length > 0
         ? pane.tabs.map((id) => (id === pane.activeTabId ? noteId : id))
         : [noteId];
+    const nextTabViewModes = pruneTabViewModes(
+      nextTabs,
+      ensureTabViewMode(pane, noteId)
+    );
     updatePaneState(activePane, {
       tabs: nextTabs,
       activeTabId: noteId,
+      tabViewModes: nextTabViewModes,
     });
     scheduleUiStateWrite();
     await loadNote(noteId, activePane);
@@ -1120,6 +1178,9 @@
             ...createPaneState(),
             tabs: activeTabId ? addTab(mergedTabs, activeTabId) : mergedTabs,
             activeTabId: activeTabId ?? mergedTabs[0] ?? null,
+            tabViewModes: buildDefaultTabViewModes(
+              activeTabId ? addTab(mergedTabs, activeTabId) : mergedTabs
+            ),
           },
         };
         activePane = "primary";
@@ -1145,6 +1206,9 @@
             ...createPaneState(),
             tabs: activeTabId ? addTab(mergedTabs, activeTabId) : mergedTabs,
             activeTabId: activeTabId ?? mergedTabs[0] ?? null,
+            tabViewModes: buildDefaultTabViewModes(
+              activeTabId ? addTab(mergedTabs, activeTabId) : mergedTabs
+            ),
           },
         };
         activePane = "primary";
@@ -1156,6 +1220,7 @@
           ...createPaneState(),
           tabs: [fallbackNoteId],
           activeTabId: fallbackNoteId,
+          tabViewModes: buildDefaultTabViewModes([fallbackNoteId]),
         },
       };
       activePane = "primary";
@@ -1260,9 +1325,11 @@
     const pane = getPaneState(paneId);
     await flushPendingSaveForNote(pane.activeTabId);
     const nextTabs = addTab(pane.tabs, noteId);
+    const nextTabViewModes = ensureTabViewMode(pane, noteId);
     updatePaneState(paneId, {
       tabs: nextTabs,
       activeTabId: noteId,
+      tabViewModes: nextTabViewModes,
     });
     scheduleUiStateWrite();
     await loadNote(noteId, paneId);
@@ -1284,6 +1351,7 @@
     updatePaneState(paneId, {
       tabs: nextState.tabs,
       activeTabId: nextState.activeTabId,
+      tabViewModes: pruneTabViewModes(nextState.tabs, pane.tabViewModes),
     });
     if (noteId in tabTitles) {
       const { [noteId]: _closedTitle, ...rest } = tabTitles;
@@ -1308,6 +1376,20 @@
       event.preventDefault();
       void activateTab(noteId);
     }
+  };
+
+  const toggleMarkdownViewForPane = (paneId: PaneId): void => {
+    const pane = getPaneState(paneId);
+    const noteId = pane.activeTabId;
+    if (!noteId) {
+      return;
+    }
+    const current = pane.tabViewModes[noteId] ?? "editor";
+    const next: "editor" | "markdown" =
+      current === "markdown" ? "editor" : "markdown";
+    updatePaneState(paneId, {
+      tabViewModes: { ...pane.tabViewModes, [noteId]: next },
+    });
   };
 
   const handlePaneKeydown = (
@@ -1683,7 +1765,10 @@
         { tabs: pane.tabs, activeTabId: pane.activeTabId },
         noteId
       );
-      updatePaneState(paneId, nextState);
+      updatePaneState(paneId, {
+        ...nextState,
+        tabViewModes: pruneTabViewModes(nextState.tabs, pane.tabViewModes),
+      });
       if (wasActive) {
         await flushPendingSaveForNote(noteId);
         if (nextState.activeTabId) {
@@ -1987,9 +2072,11 @@
     const note = createNoteDocument();
     setPaneNote(activePane, note);
     const pane = getPaneState(activePane);
+    const nextTabViewModes = ensureTabViewMode(pane, note.id);
     updatePaneState(activePane, {
       tabs: addTab(pane.tabs, note.id),
       activeTabId: note.id,
+      tabViewModes: nextTabViewModes,
     });
     tabTitles = { ...tabTitles, [note.id]: note.title ?? "" };
     saveState = "saving";
@@ -2242,7 +2329,12 @@
   }
 </script>
 
-<AppShell {saveState} {mobileView} {workspaceMode}>
+<AppShell
+  {saveState}
+  {mobileView}
+  {workspaceMode}
+  interfaceDensity={preferences.interfaceDensity}
+>
   <div slot="topbar" class="topbar-content" data-mode={workspaceMode}>
     <div
       class="topbar-tabs"
@@ -2398,6 +2490,9 @@
         onDrop={handleNoteDrop}
         onDragEnd={handleNoteDragEnd}
         showMeta={preferences.showNoteDates}
+        showPreview={preferences.showNotePreview}
+        showTags={preferences.showTagPillsInList}
+        tagsById={vault?.tags ?? {}}
       />
     {/if}
   </div>
@@ -2458,12 +2553,14 @@
       activePaneId={activePane}
       {isLoading}
       spellcheck={preferences.spellcheck}
+      smartListContinuation={preferences.smartListContinuation}
       linkCandidates={wikiLinkCandidates}
       getChips={getCustomFieldChips}
       onSetActive={setActivePane}
       onKeydown={handlePaneKeydown}
       onToggleFavorite={toggleFavoriteForPane}
       onDeleteNote={deleteNoteFromPane}
+      onToggleMarkdownView={toggleMarkdownViewForPane}
       onEditorUpdate={handleEditorUpdate}
       onImagePaste={handleImagePaste}
     />

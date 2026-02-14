@@ -25,6 +25,12 @@
     confirmTrash: true,
     spellcheck: true,
     showNoteDates: true,
+    showNotePreview: true,
+    showTagPillsInList: true,
+    markdownViewByDefault: false,
+    smartListContinuation: true,
+    interfaceDensity: "comfortable",
+    accentColor: "orange",
   };
 
   export let storageMode: StorageMode = "idb";
@@ -438,7 +444,7 @@
               </div>
             </div>
 
-            <div class="setting-row is-disabled">
+            <div class="setting-row">
               <div class="setting-copy">
                 <div class="setting-title">Show note preview</div>
                 <div class="setting-description">
@@ -446,11 +452,24 @@
                 </div>
               </div>
               <div class="setting-control">
-                <span class="pill">Coming soon</span>
+                <button
+                  class="toggle"
+                  type="button"
+                  aria-label="Show note preview"
+                  aria-pressed={preferences.showNotePreview}
+                  data-active={preferences.showNotePreview}
+                  disabled={preferencesDisabled}
+                  on:click={() =>
+                    void onUpdatePreferences?.({
+                      showNotePreview: !preferences.showNotePreview,
+                    })}
+                >
+                  <span class="toggle-knob"></span>
+                </button>
               </div>
             </div>
 
-            <div class="setting-row is-disabled">
+            <div class="setting-row">
               <div class="setting-copy">
                 <div class="setting-title">Show tag pills in list</div>
                 <div class="setting-description">
@@ -458,7 +477,20 @@
                 </div>
               </div>
               <div class="setting-control">
-                <span class="pill">Coming soon</span>
+                <button
+                  class="toggle"
+                  type="button"
+                  aria-label="Show tag pills in list"
+                  aria-pressed={preferences.showTagPillsInList}
+                  data-active={preferences.showTagPillsInList}
+                  disabled={preferencesDisabled}
+                  on:click={() =>
+                    void onUpdatePreferences?.({
+                      showTagPillsInList: !preferences.showTagPillsInList,
+                    })}
+                >
+                  <span class="toggle-knob"></span>
+                </button>
               </div>
             </div>
           </div>
@@ -494,7 +526,7 @@
               </div>
             </div>
 
-            <div class="setting-row is-disabled">
+            <div class="setting-row">
               <div class="setting-copy">
                 <div class="setting-title">Markdown view by default</div>
                 <div class="setting-description">
@@ -502,11 +534,24 @@
                 </div>
               </div>
               <div class="setting-control">
-                <span class="pill">Coming soon</span>
+                <button
+                  class="toggle"
+                  type="button"
+                  aria-label="Markdown view by default"
+                  aria-pressed={preferences.markdownViewByDefault}
+                  data-active={preferences.markdownViewByDefault}
+                  disabled={preferencesDisabled}
+                  on:click={() =>
+                    void onUpdatePreferences?.({
+                      markdownViewByDefault: !preferences.markdownViewByDefault,
+                    })}
+                >
+                  <span class="toggle-knob"></span>
+                </button>
               </div>
             </div>
 
-            <div class="setting-row is-disabled">
+            <div class="setting-row">
               <div class="setting-copy">
                 <div class="setting-title">Smart list continuation</div>
                 <div class="setting-description">
@@ -514,7 +559,20 @@
                 </div>
               </div>
               <div class="setting-control">
-                <span class="pill">Coming soon</span>
+                <button
+                  class="toggle"
+                  type="button"
+                  aria-label="Smart list continuation"
+                  aria-pressed={preferences.smartListContinuation}
+                  data-active={preferences.smartListContinuation}
+                  disabled={preferencesDisabled}
+                  on:click={() =>
+                    void onUpdatePreferences?.({
+                      smartListContinuation: !preferences.smartListContinuation,
+                    })}
+                >
+                  <span class="toggle-knob"></span>
+                </button>
               </div>
             </div>
           </div>
@@ -549,7 +607,7 @@
               </div>
             </div>
 
-            <div class="setting-row is-disabled">
+            <div class="setting-row">
               <div class="setting-copy">
                 <div class="setting-title">Interface density</div>
                 <div class="setting-description">
@@ -557,11 +615,36 @@
                 </div>
               </div>
               <div class="setting-control">
-                <span class="pill">Coming soon</span>
+                <div class="segmented" role="group" aria-label="Interface density">
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.interfaceDensity === "comfortable"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({
+                        interfaceDensity: "comfortable",
+                      })}
+                  >
+                    Comfortable
+                  </button>
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.interfaceDensity === "compact"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({
+                        interfaceDensity: "compact",
+                      })}
+                  >
+                    Compact
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div class="setting-row is-disabled">
+            <div class="setting-row">
               <div class="setting-copy">
                 <div class="setting-title">Accent color</div>
                 <div class="setting-description">
@@ -569,7 +652,56 @@
                 </div>
               </div>
               <div class="setting-control">
-                <span class="pill">Coming soon</span>
+                <div class="segmented" role="group" aria-label="Accent color">
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.accentColor === "orange"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({
+                        accentColor: "orange",
+                      })}
+                  >
+                    Orange
+                  </button>
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.accentColor === "sky"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({
+                        accentColor: "sky",
+                      })}
+                  >
+                    Sky
+                  </button>
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.accentColor === "mint"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({
+                        accentColor: "mint",
+                      })}
+                  >
+                    Mint
+                  </button>
+                  <button
+                    class="segmented-button"
+                    type="button"
+                    data-active={preferences.accentColor === "rose"}
+                    disabled={preferencesDisabled}
+                    on:click={() =>
+                      void onUpdatePreferences?.({
+                        accentColor: "rose",
+                      })}
+                  >
+                    Rose
+                  </button>
+                </div>
               </div>
             </div>
           </div>

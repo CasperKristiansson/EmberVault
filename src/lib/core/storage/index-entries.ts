@@ -1,3 +1,4 @@
+import { resolveNotePreview } from "$lib/core/utils/note-preview";
 import type {
   NoteDocumentFile,
   NoteIndexEntry,
@@ -8,9 +9,11 @@ export const toNoteIndexEntry = (
   noteDocument: NoteDocumentFile
 ): NoteIndexEntry => {
   const hasCustomFields = Object.keys(noteDocument.customFields).length > 0;
+  const preview = resolveNotePreview(noteDocument.derived?.plainText);
   return {
     id: noteDocument.id,
     title: noteDocument.title,
+    ...(preview ? { preview } : {}),
     folderId: noteDocument.folderId,
     tagIds: noteDocument.tagIds,
     favorite: noteDocument.favorite,

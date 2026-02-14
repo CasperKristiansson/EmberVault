@@ -221,23 +221,11 @@
                 <div class="help-title">Available blocks</div>
                 <div class="help-description">
                   Heading, List, Checklist, Quote, Code block, Table, Divider,
-                  Math block.
+                  Math block, Image, Callout, Embed URL.
                 </div>
               </div>
               <div class="help-example">
                 <code>/</code>
-              </div>
-            </div>
-
-            <div class="help-row">
-              <div class="help-copy">
-                <div class="help-title">Coming soon</div>
-                <div class="help-description">
-                  Image, Callout, Embed URL (shown in the menu but disabled).
-                </div>
-              </div>
-              <div class="help-example">
-                <span class="pill">Soon</span>
               </div>
             </div>
           </div>
@@ -569,15 +557,6 @@
     border: 1px solid var(--stroke-0);
     background: var(--bg-1);
     color: var(--text-0);
-  }
-
-  .pill {
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: var(--bg-1);
-    border: 1px solid var(--stroke-0);
-    font-size: 11px;
-    color: var(--text-2);
   }
 
   .icon-button {

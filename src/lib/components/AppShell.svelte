@@ -5,6 +5,7 @@
   export let mobileView: MobileView = "notes";
   export let mobileRightPanelOpen = false;
   export let workspaceMode: "notes" = "notes";
+  export let interfaceDensity: "comfortable" | "compact" = "comfortable";
 </script>
 
 <div
@@ -13,6 +14,7 @@
   data-mobile-view={mobileView}
   data-mobile-right-panel={mobileRightPanelOpen ? "open" : "closed"}
   data-workspace-mode={workspaceMode}
+  data-density={interfaceDensity}
 >
   <div class="topbar" data-testid="topbar-pane">
     <slot name="topbar" />
@@ -46,6 +48,16 @@
   .app-shell {
     --note-list-width: 340px;
     --right-panel-width: 320px;
+    --density-list-row-height-desktop: 34px;
+    --density-list-row-height-mobile: 40px;
+    --density-note-row-gap: 4px;
+    --density-note-list-padding: 20px 16px;
+    --density-note-list-gap: 16px;
+    --density-editor-padding: 24px;
+    --density-editor-padding-mobile: 16px;
+    --density-editor-gap: 16px;
+    --density-right-panel-padding: 20px 16px;
+    --density-right-panel-gap: 12px;
 
     display: grid;
     grid-template-columns: minmax(280px, var(--note-list-width)) minmax(0, 1fr)
@@ -74,8 +86,8 @@
     border-right: 1px solid var(--stroke-0);
     display: flex;
     flex-direction: column;
-    padding: 20px 16px;
-    gap: 16px;
+    padding: var(--density-note-list-padding);
+    gap: var(--density-note-list-gap);
     overflow: hidden;
   }
 
@@ -85,8 +97,8 @@
     background: var(--bg-1);
     display: flex;
     flex-direction: column;
-    padding: 24px;
-    gap: 16px;
+    padding: var(--density-editor-padding);
+    gap: var(--density-editor-gap);
     overflow: auto;
   }
 
@@ -95,10 +107,21 @@
     grid-row: 2;
     background: var(--bg-1);
     border-left: 1px solid var(--stroke-0);
-    padding: 20px 16px;
+    padding: var(--density-right-panel-padding);
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--density-right-panel-gap);
+  }
+
+  .app-shell[data-density="compact"] {
+    --density-list-row-height-desktop: 32px;
+    --density-list-row-height-mobile: 36px;
+    --density-note-list-padding: 16px 12px;
+    --density-note-list-gap: 12px;
+    --density-editor-padding: 16px;
+    --density-editor-padding-mobile: 12px;
+    --density-editor-gap: 12px;
+    --density-right-panel-padding: 16px 12px;
   }
 
   .mobile-nav {
@@ -142,7 +165,7 @@
     }
 
     .editor {
-      padding: 16px;
+      padding: var(--density-editor-padding-mobile);
     }
 
     .right-panel {

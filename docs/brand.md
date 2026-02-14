@@ -42,12 +42,32 @@ All colors defined as CSS variables. Dark theme only.
 - --text-1: rgba(255,255,255,0.72) (secondary)
 - --text-2: rgba(255,255,255,0.50) (muted)
 
-### Accent (Orange)
+### Accent (Default: Orange)
+
+Default (Orange):
 
 - --accent-0: #FF8A2A (primary)
 - --accent-1: #FFB36B (hover/soft)
 - --accent-2: rgba(255,138,42,0.18) (tint background)
 - --focus-ring: rgba(255,138,42,0.55)
+
+Alternate accent themes (user-selectable):
+
+- Sky:
+  - --accent-0: #3EA6FF
+  - --accent-1: #7DC5FF
+  - --accent-2: rgba(62,166,255,0.18)
+  - --focus-ring: rgba(62,166,255,0.55)
+- Mint:
+  - --accent-0: #31D6B4
+  - --accent-1: #74F0D6
+  - --accent-2: rgba(49,214,180,0.18)
+  - --focus-ring: rgba(49,214,180,0.55)
+- Rose:
+  - --accent-0: #FF5FA1
+  - --accent-1: #FF9BC5
+  - --accent-2: rgba(255,95,161,0.18)
+  - --focus-ring: rgba(255,95,161,0.55)
 
 ### Semantic
 
