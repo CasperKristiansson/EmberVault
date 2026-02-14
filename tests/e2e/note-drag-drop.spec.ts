@@ -20,6 +20,9 @@ test("drags notes to folders and persists order", async ({ page }) => {
   await page.getByTestId("use-browser-storage").click();
   await expect(page.getByTestId("new-note")).toBeEnabled();
 
+  await page.getByTestId("projects-toggle").click();
+  await expect(page.getByTestId("projects-overlay")).toBeVisible();
+
   const tree = page.getByTestId("folder-tree");
   const createFolder = async (name: string): Promise<void> => {
     await page.getByTestId("folder-add").click();

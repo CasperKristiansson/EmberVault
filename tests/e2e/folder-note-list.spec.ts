@@ -11,6 +11,17 @@ test("creates notes in folders and filters the list", async ({ page }) => {
   await page.waitForURL(/\/app\/?$/);
   await expect(page.getByTestId("new-note")).toBeEnabled();
 
+  const openProjects = async (): Promise<void> => {
+    await page.getByTestId("projects-toggle").click();
+    await expect(page.getByTestId("projects-overlay")).toBeVisible();
+  };
+
+  const closeProjects = async (): Promise<void> => {
+    await page.getByTestId("projects-close").click();
+    await expect(page.getByTestId("projects-overlay")).toHaveCount(emptyCount);
+  };
+
+  await openProjects();
   const tree = page.getByTestId("folder-tree");
   const noteListTitle = page.getByTestId("note-list-title");
 
@@ -25,6 +36,9 @@ test("creates notes in folders and filters the list", async ({ page }) => {
   await createFolder("Work");
   await createFolder("Personal");
 
+  await closeProjects();
+
+  await openProjects();
   await tree.getByText("Work", { exact: true }).click();
   await expect(noteListTitle).toHaveText("Work");
   await page.getByTestId("new-note").click();
@@ -37,6 +51,7 @@ test("creates notes in folders and filters the list", async ({ page }) => {
     page.getByTestId("note-list").getByText(workNoteTitle, { exact: true })
   ).toBeVisible();
 
+  await openProjects();
   await tree.getByText("Personal", { exact: true }).click();
   await expect(noteListTitle).toHaveText("Personal");
   await page.getByTestId("new-note").click();
@@ -48,6 +63,7 @@ test("creates notes in folders and filters the list", async ({ page }) => {
     page.getByTestId("note-list").getByText(personalNoteTitle, { exact: true })
   ).toBeVisible();
 
+  await openProjects();
   await tree.getByText("Work", { exact: true }).click();
   await expect(noteListTitle).toHaveText("Work");
 
@@ -59,7 +75,8 @@ test("creates notes in folders and filters the list", async ({ page }) => {
     noteList.getByText(personalNoteTitle, { exact: true })
   ).toHaveCount(emptyCount);
 
-  await page.getByTestId("sidebar-view-notes").click();
+  await openProjects();
+  await page.getByTestId("projects-all-notes").click();
   await expect(noteListTitle).toHaveText("All notes");
   await expect(
     noteList.getByText(workNoteTitle, { exact: true })

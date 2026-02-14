@@ -7,6 +7,9 @@ test("create, rename, and delete an empty folder", async ({ page }) => {
   await page.getByTestId("use-browser-storage").click();
   await page.waitForURL(/\/app\/?$/);
 
+  await page.getByTestId("projects-toggle").click();
+  await expect(page.getByTestId("projects-overlay")).toBeVisible();
+
   await page.getByTestId("folder-add").click();
 
   const nameInput = page.getByTestId("folder-rename-input");

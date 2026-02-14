@@ -6,10 +6,9 @@ All dimensions are explicit. Do not invent new UI patterns without updating this
 
 ### Desktop layout (>= 1024px width)
 
-Three-pane layout (Obsidian-ish):
+Two-pane layout (Obsidian-ish):
 
-- Left Sidebar: 280px fixed (resizable 240–360)
-- Middle Note List: 340px fixed (resizable 280–480)
+- Navigation pane (Projects + Notes): 340px fixed (resizable 280–480)
 - Main Editor: remaining width
 - Right Panel (optional): 320px (resizable 280–420)
 
@@ -26,7 +25,7 @@ Top bar:
   - Editor (if a note is open)
   - Search
   - Settings
-- Sidebar + folders/tags appear as a slide-over sheet (from left)
+- Projects list appears as an in-pane view toggled from the Notes header
 - Right panel content becomes a segmented control inside a slide-over (from right)
 
 ## 2) Onboarding / Vault selection
@@ -49,16 +48,20 @@ Rules:
 - Storage cards include a short “what you get” bullet list and a recommended badge for folder storage (when supported).
 - Footer note: “We never upload your data. Storage stays on this device.”
 
-## 3) Left Sidebar (Folders + Tags)
+## 3) Navigation Pane (Projects + Notes)
 
 Structure (top to bottom):
 
-1. Quick actions row (icon buttons): New Note, Cmd Palette hint, Search
-2. Views row (text buttons): Notes
-   - Clicking “Notes” clears folder selection and shows “All notes”
-3. Folder tree (scrollable)
-4. Tags list (collapsible section)
-5. Footer (sync/status)
+1. Projects toggle row (button): “Projects” with a left arrow icon
+2. Notes view (default):
+   - Note list header: Title + total count + actions (Search, New note)
+   - Filter chips (Favorites)
+   - Note list (virtualized when > 100)
+3. Projects view (when Projects is pressed):
+   - Top option: “All notes” (clears selection and returns to Notes view)
+   - Buttons: “Trash”, “Add new folder”
+   - Folder tree (scrollable)
+   - Selecting a folder returns to Notes view and filters the note list
 
 Folder tree:
 
@@ -108,7 +111,7 @@ Virtualization:
 
 - Must virtualize when list > 100 items.
 
-## 5) Tabs + pane docking (top bar + editor)
+## 5) Tabs (top bar)
 
 Tabs row in top bar:
 
@@ -119,19 +122,10 @@ Tabs row in top bar:
   - Hover: --bg-3
 - Close button appears on hover; always visible for active tab
 
-Pane docking:
+Rules:
 
-- No split view toggle button.
-- The editor workspace can be split into any number of panes (nested splits).
-- Each pane has its own tab context (active note per pane).
-- The top bar tabs show the tabs for the currently focused pane.
-- Drag and drop:
-  - Drag a tab (or a note from the note list) onto a pane.
-  - Drop center: open/move the note into that pane (no new pane created).
-  - Drop edge (left/right/top/bottom, 25% edge threshold): create a new pane in that direction and move the note into it.
-- When a pane has no tabs left, it collapses (unless it is the only remaining pane).
-- Responsive:
-  - On <= 1023px width, horizontal splits stack vertically.
+- Single editor pane only (no split view / no pane docking).
+- Drag and drop on the tab strip only reorders tabs.
 
 ## 6) Editor pane
 

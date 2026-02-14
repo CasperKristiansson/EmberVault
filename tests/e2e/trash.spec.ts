@@ -38,6 +38,8 @@ test("trash restores and deletes notes permanently", async ({ page }) => {
   await secondMoveConfirm.getByTestId(confirmSubmitTestId).click();
   await expect(noteList.getByText(deleteTitle)).toHaveCount(emptyCount);
 
+  await page.getByTestId("projects-toggle").click();
+  await expect(page.getByTestId("projects-overlay")).toBeVisible();
   await page.getByTestId("open-trash").click();
 
   const trashModal = page.getByTestId("trash-modal");

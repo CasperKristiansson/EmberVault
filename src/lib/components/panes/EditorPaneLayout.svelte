@@ -1,6 +1,6 @@
 <script lang="ts">
   import EditorPaneLeaf from "$lib/components/panes/EditorPaneLeaf.svelte";
-  import type { DockSide, PaneLayoutNode } from "$lib/core/utils/pane-layout";
+  import type { PaneLayoutNode } from "$lib/core/utils/pane-layout";
   import type { WikiLinkCandidate } from "$lib/core/editor/wiki-links";
   import type { NoteDocumentFile } from "$lib/core/storage/types";
 
@@ -17,7 +17,6 @@
   export let paneStates: Record<string, PaneState> = {};
   export let activePaneId = "primary";
   export let isLoading = false;
-  export let dockTarget: { paneId: string; side: DockSide } | null = null;
   export let linkCandidates: WikiLinkCandidate[] = [];
   export let spellcheck = true;
   export let getChips: (
@@ -41,14 +40,6 @@
     width?: number;
     height?: number;
   } | null> = async () => null;
-  export let onDockDragOver: (event: DragEvent, paneId: string) => void =
-    () => {};
-  export let onDockDrop: (
-    event: DragEvent,
-    paneId: string
-  ) => void | Promise<void> = async () => {};
-  export let onDockDragLeave: (event: DragEvent, paneId: string) => void =
-    () => {};
 
   const emptyPane: PaneState = {
     tabs: [],
@@ -71,17 +62,12 @@
     chips={getChips(pane.note)}
     {linkCandidates}
     {spellcheck}
-    dockTargetActive={dockTarget?.paneId === paneId}
-    dockTargetSide={dockTarget && dockTarget.paneId === paneId ? dockTarget.side : null}
     {onSetActive}
     {onKeydown}
     {onToggleFavorite}
     {onDeleteNote}
     {onEditorUpdate}
     {onImagePaste}
-    {onDockDragOver}
-    {onDockDrop}
-    {onDockDragLeave}
   />
 {:else}
   <div class="pane-split" data-direction={node.direction}>
@@ -93,7 +79,6 @@
           {paneStates}
           {activePaneId}
           {isLoading}
-          {dockTarget}
           {linkCandidates}
           {getChips}
           {onSetActive}
@@ -102,9 +87,6 @@
           {onDeleteNote}
           {onEditorUpdate}
           {onImagePaste}
-          {onDockDragOver}
-          {onDockDrop}
-          {onDockDragLeave}
         />
       </div>
     {/each}

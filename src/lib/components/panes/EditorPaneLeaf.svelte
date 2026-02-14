@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Star, Trash2 } from "lucide-svelte";
   import TiptapEditor from "$lib/components/editor/TiptapEditor.svelte";
-  import type { DockSide } from "$lib/core/utils/pane-layout";
   import type { WikiLinkCandidate } from "$lib/core/editor/wiki-links";
   import type { NoteDocumentFile } from "$lib/core/storage/types";
 
@@ -21,9 +20,6 @@
   export let chips: Array<{ key: string; label: string }> = [];
   export let linkCandidates: WikiLinkCandidate[] = [];
 
-  export let dockTargetSide: DockSide | null = null;
-  export let dockTargetActive = false;
-
   export let onSetActive: (paneId: string) => void = () => {};
   export let onKeydown: (event: KeyboardEvent, paneId: string) => void = () => {};
   export let onToggleFavorite: (paneId: string) => void = () => {};
@@ -41,15 +37,6 @@
     height?: number;
   } | null> = async () => null;
   export let spellcheck = true;
-
-  export let onDockDragOver: (event: DragEvent, paneId: string) => void =
-    () => {};
-  export let onDockDrop: (
-    event: DragEvent,
-    paneId: string
-  ) => void | Promise<void> = async () => {};
-  export let onDockDragLeave: (event: DragEvent, paneId: string) => void =
-    () => {};
 </script>
 
 <div
@@ -57,21 +44,12 @@
   data-testid="editor-pane-leaf"
   data-pane-id={paneId}
   data-active={isActive}
-  data-dock-target={dockTargetActive ? "true" : "false"}
-  data-dock-side={dockTargetSide ?? "none"}
   on:focusin={() => onSetActive(paneId)}
   on:click={() => onSetActive(paneId)}
   on:keydown={event => onKeydown(event, paneId)}
-  on:dragover={event => onDockDragOver(event, paneId)}
-  on:drop={event => onDockDrop(event, paneId)}
-  on:dragleave={event => onDockDragLeave(event, paneId)}
   role="button"
   tabindex="0"
 >
-  {#if dockTargetActive && dockTargetSide}
-    <div class="dock-overlay" aria-hidden="true" data-side={dockTargetSide}></div>
-  {/if}
-
   {#if isLoading}
     <div class="editor-empty">Preparing editor...</div>
   {:else if !pane.note}
@@ -225,34 +203,5 @@
 
   .editor-empty {
     color: var(--text-2);
-  }
-
-  .dock-overlay {
-    position: absolute;
-    inset: 0;
-    border-radius: var(--r-md);
-    background: rgba(255, 138, 42, 0.08);
-    outline: 2px solid rgba(255, 138, 42, 0.35);
-    pointer-events: none;
-  }
-
-  .dock-overlay[data-side="center"] {
-    background: rgba(255, 138, 42, 0.06);
-  }
-
-  .dock-overlay[data-side="left"] {
-    clip-path: inset(0 65% 0 0 round var(--r-md));
-  }
-
-  .dock-overlay[data-side="right"] {
-    clip-path: inset(0 0 0 65% round var(--r-md));
-  }
-
-  .dock-overlay[data-side="top"] {
-    clip-path: inset(0 0 65% 0 round var(--r-md));
-  }
-
-  .dock-overlay[data-side="bottom"] {
-    clip-path: inset(65% 0 0 0 round var(--r-md));
   }
 </style>

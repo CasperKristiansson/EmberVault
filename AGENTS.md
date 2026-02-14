@@ -43,7 +43,7 @@ Notes:
 
 - Config files: `eslint.config.mjs`, `prettier.config.mjs`, `stylelint.config.mjs`.
 - A local copy of Ultracite's core ESLint rules lives under `config/eslint/` to stay compatible with ESLint 9.
-- `pnpm test:e2e` must be run with escalated permissions (Playwright binds a local port).
+- E2E note: `pnpm test:e2e` may require running outside the sandbox (Playwright starts a local preview server and binds a port). For now, do **not** run e2e tests if they require escalation; we will revisit and fix the setup/tests later.
 
 If Ultracite or ESLint changes in the future, update this section and keep the configs in sync with `docs/technical-spec.md`.
 
