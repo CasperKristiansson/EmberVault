@@ -16,9 +16,16 @@
   import {
     ensureTitleHeadingInPmDocument,
     extractTitleFromPmDocument,
+    setTitleInPmDocument,
     splitEditorTextIntoTitleAndBody,
   } from "$lib/core/editor/title-line";
   import { resolveOutgoingLinks } from "$lib/core/editor/links/parse";
+  import {
+    buildBacklinkSnippet,
+    resolveLinkedMentions,
+    type BacklinkSnippet,
+  } from "$lib/core/editor/links/backlinks";
+  import { buildUnlinkedMentionSnippet } from "$lib/core/editor/links/unlinked-mentions";
   import type { WikiLinkCandidate } from "$lib/core/editor/wiki-links";
   import {
     addFolder,
@@ -38,7 +45,19 @@
   import { resolveInterfaceDensity } from "$lib/core/utils/interface-density";
   import { resolveAccentColor } from "$lib/core/utils/accent-color";
   import { exportVaultToDirectory } from "$lib/core/utils/vault-export";
+  import {
+    createVaultBackup,
+    parseVaultBackup,
+    restoreVaultBackup,
+    serializeVaultBackup,
+    triggerBrowserDownload,
+  } from "$lib/core/utils/vault-backup";
   import { importMarkdownToNote } from "$lib/core/utils/markdown-import";
+  import {
+    applyVaultIntegrityRepairs,
+    runVaultIntegrityCheck,
+    type VaultIntegrityReport,
+  } from "$lib/core/utils/vault-integrity";
   import { createUlid } from "$lib/core/utils/ulid";
   import { createDebouncedTask } from "$lib/core/utils/debounce";
   import { hashBlobSha256 } from "$lib/core/utils/hash";
@@ -73,6 +92,7 @@
     dismissToast,
     pushToast,
   } from "$lib/state/ui.store";
+  import { dispatchEditorCommand } from "$lib/state/editor-commands.store";
   import {
     resolveMobileView,
     type MobileView,
@@ -84,7 +104,12 @@
     storageMode as storageModeStore,
     type StorageMode,
   } from "$lib/state/adapter.store";
-  import { createDefaultVault } from "$lib/core/storage/indexeddb.adapter";
+  import {
+    IndexedDBAdapter,
+    createDefaultVault,
+  } from "$lib/core/storage/indexeddb.adapter";
+  import { FileSystemAdapter } from "$lib/core/storage/filesystem.adapter";
+  import { S3Adapter } from "$lib/core/storage/s3.adapter";
   import {
     readAppSettings,
     writeAppSettings,
@@ -193,6 +218,14 @@
   let searchState: SearchIndexState | null = null;
   let wikiLinkCandidates: WikiLinkCandidate[] = [];
   let rightPanelTab: RightPanelTab = "outline";
+  type BacklinkEntry = { id: string; title: string; snippet: BacklinkSnippet | null };
+  let linkedMentions: BacklinkEntry[] = [];
+  let unlinkedMentions: BacklinkEntry[] = [];
+  let backlinksLoading = false;
+  let unlinkedMentionsLoading = false;
+  let backlinksRequestSeq = 0;
+  let backlinksTargetId: string | null = null;
+  let backlinksTargetTitle: string | null = null;
 
   const saveDelay = 400;
   const uiStateDelay = 800;
@@ -200,6 +233,8 @@
   let isRecoveringStorage = false;
   let isExportingVault = false;
   let isImportingFromFolder = false;
+  let isBackingUpVault = false;
+  let isRestoringBackup = false;
   const defaultTabViewMode = (): "editor" | "markdown" =>
     preferences.markdownViewByDefault ? "markdown" : "editor";
 
@@ -232,6 +267,185 @@
   $: wikiLinkCandidates = notes
     .filter((note) => note.deletedAt === null)
     .map((note) => ({ id: note.id, title: note.title }));
+
+  const loadBacklinksForTarget = async (input: {
+    targetId: string;
+    targetTitle: string;
+  }): Promise<void> => {
+    const requestId = (backlinksRequestSeq += 1);
+    backlinksLoading = true;
+    unlinkedMentionsLoading = true;
+    linkedMentions = [];
+    unlinkedMentions = [];
+
+    const targets = [input.targetId, input.targetTitle].filter(
+      (value): value is string => Boolean(value && value.trim())
+    );
+
+    const linked = resolveLinkedMentions(
+      notes,
+      input.targetId,
+      input.targetTitle
+    );
+    const linkedEntries: BacklinkEntry[] = [];
+    for (const entry of linked) {
+      let noteDoc: NoteDocumentFile | null = null;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        noteDoc = await adapter.readNote(entry.id);
+      } catch {
+        noteDoc = null;
+      }
+      const text = noteDoc?.derived?.plainText ?? "";
+      const snippet = buildBacklinkSnippet(text, targets);
+      linkedEntries.push({ id: entry.id, title: entry.title, snippet });
+      if (requestId !== backlinksRequestSeq) {
+        return;
+      }
+    }
+    linkedMentions = linkedEntries;
+    backlinksLoading = false;
+
+    const targetTitle = input.targetTitle.trim();
+    if (!targetTitle) {
+      unlinkedMentionsLoading = false;
+      return;
+    }
+
+    const linkedIdSet = new Set(linkedEntries.map((item) => item.id));
+    const unlinkedEntries: BacklinkEntry[] = [];
+    for (const candidate of notes) {
+      if (candidate.deletedAt !== null) {
+        continue;
+      }
+      if (candidate.id === input.targetId) {
+        continue;
+      }
+      if (linkedIdSet.has(candidate.id)) {
+        continue;
+      }
+      let noteDoc: NoteDocumentFile | null = null;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        noteDoc = await adapter.readNote(candidate.id);
+      } catch {
+        noteDoc = null;
+      }
+      const text = noteDoc?.derived?.plainText ?? "";
+      if (!text) {
+        continue;
+      }
+      if (text.includes(`[[${input.targetId}]]`)) {
+        continue;
+      }
+      const snippet = buildUnlinkedMentionSnippet(text, targetTitle);
+      if (snippet) {
+        unlinkedEntries.push({
+          id: candidate.id,
+          title: candidate.title,
+          snippet,
+        });
+      }
+      if (requestId !== backlinksRequestSeq) {
+        return;
+      }
+    }
+    unlinkedMentions = unlinkedEntries;
+    unlinkedMentionsLoading = false;
+  };
+
+  const resolveWikiLinkInActiveNote = async (
+    raw: string,
+    targetId: string
+  ): Promise<void> => {
+    if (!activeNote) {
+      return;
+    }
+    dispatchEditorCommand({
+      id: createUlid(),
+      noteId: activeNote.id,
+      type: "replace-wiki-link",
+      raw,
+      targetId,
+    });
+    pushToast("Link resolved.", { tone: "success" });
+  };
+
+  const normalizeWikiLinksInActiveNote = async (
+    replacements: Array<{ raw: string; targetId: string }>
+  ): Promise<void> => {
+    if (!activeNote) {
+      return;
+    }
+    if (replacements.length === 0) {
+      return;
+    }
+    dispatchEditorCommand({
+      id: createUlid(),
+      noteId: activeNote.id,
+      type: "replace-wiki-links",
+      replacements,
+    });
+    pushToast("Links converted to stable IDs.", { tone: "success" });
+  };
+
+  const createNoteForWikiLink = async (title: string): Promise<string> => {
+    if (!vault) {
+      pushToast("No vault loaded.", { tone: "error" });
+      return "";
+    }
+    const trimmed = title.trim();
+    if (!trimmed) {
+      return "";
+    }
+    const timestamp = Date.now();
+    const noteId = createUlid();
+    const pmDoc = setTitleInPmDocument({
+      pmDocument: createEmptyDocument(),
+      title: trimmed,
+    });
+    const note: NoteDocumentFile = {
+      id: noteId,
+      title: trimmed,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      folderId: null,
+      tagIds: [],
+      favorite: false,
+      deletedAt: null,
+      customFields: {},
+      pmDoc,
+      derived: {
+        plainText: "",
+        outgoingLinks: [],
+      },
+    };
+    await persistNote(note);
+    await loadNotes();
+    return noteId;
+  };
+
+  $: {
+    const nextId = rightPanelTab === "metadata" ? activeNote?.id ?? null : null;
+    const nextTitle =
+      rightPanelTab === "metadata" ? activeNote?.title ?? null : null;
+    if (!nextId) {
+      backlinksTargetId = null;
+      backlinksTargetTitle = null;
+      backlinksRequestSeq += 1;
+      backlinksLoading = false;
+      unlinkedMentionsLoading = false;
+      linkedMentions = [];
+      unlinkedMentions = [];
+    } else if (nextId !== backlinksTargetId || nextTitle !== backlinksTargetTitle) {
+      backlinksTargetId = nextId;
+      backlinksTargetTitle = nextTitle;
+      void loadBacklinksForTarget({
+        targetId: nextId,
+        targetTitle: nextTitle ?? "",
+      });
+    }
+  }
 
   const isPermissionError = (error: unknown): boolean =>
     error instanceof Error && permissionErrorNames.has(error.name);
@@ -423,6 +637,73 @@
     } finally {
       isExportingVault = false;
     }
+  };
+
+  const handleDownloadBackup = async (): Promise<void> => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!vault) {
+      pushToast("Nothing to back up yet.", { tone: "error" });
+      return;
+    }
+    if (isBackingUpVault) {
+      return;
+    }
+
+    isBackingUpVault = true;
+    const toastId = pushToast("Preparing backup...", { durationMs: 0 });
+    try {
+      await flushPendingSave();
+      const backup = await createVaultBackup({ adapter, vault });
+      const { blob, fileName } = await serializeVaultBackup({ backup });
+      triggerBrowserDownload({ blob, fileName });
+      dismissToast(toastId);
+      pushToast("Backup downloaded.", { tone: "success" });
+    } catch (error) {
+      dismissToast(toastId);
+      pushToast("Backup failed. Please retry.", { tone: "error" });
+    } finally {
+      isBackingUpVault = false;
+    }
+  };
+
+  const handleRestoreBackup = (file: File): void => {
+    if (isRestoringBackup) {
+      return;
+    }
+    openModal("confirm", {
+      title: "Restore backup",
+      message:
+        "Restoring will replace the current vault contents. This can't be undone.",
+      confirmLabel: "Restore",
+      cancelLabel: "Cancel",
+      destructive: true,
+      onConfirm: async () => {
+        closeSettings();
+        isRestoringBackup = true;
+        isLoading = true;
+        const toastId = pushToast("Restoring backup...", { durationMs: 0 });
+        try {
+          await flushPendingSave();
+          const backup = await parseVaultBackup({ file });
+          await enqueueAdapterWrite(async () => {
+            await restoreVaultBackup({ adapter, backup });
+          });
+          await initializeWorkspace();
+          await rebuildSearchIndex();
+          await clearWorkspaceState();
+          dismissToast(toastId);
+          pushToast("Backup restored.", { tone: "success" });
+        } catch (error) {
+          dismissToast(toastId);
+          pushToast("Restore failed. Please retry.", { tone: "error" });
+        } finally {
+          isRestoringBackup = false;
+          isLoading = false;
+        }
+      },
+    });
   };
 
   const ensureImportedFolderPath = (
@@ -825,6 +1106,92 @@
     }
   };
 
+  const migrateCurrentVaultToStorage = async (target: {
+    mode: StorageMode;
+    directoryHandle?: FileSystemDirectoryHandle;
+    s3Config?: S3Config;
+  }): Promise<void> => {
+    if (isRecoveringStorage) {
+      return;
+    }
+    if (!vault) {
+      pushToast("Nothing to migrate yet.", { tone: "error" });
+      return;
+    }
+
+    isRecoveringStorage = true;
+    isLoading = true;
+    const toastId = pushToast("Migrating vault...", { durationMs: 0 });
+    try {
+      await flushPendingSave();
+      const backup = await createVaultBackup({ adapter, vault });
+
+      const mode = target.mode;
+      let stagedAdapter: StorageAdapter;
+      if (mode === "filesystem") {
+        if (!target.directoryHandle) {
+          throw new Error("Missing directory handle for folder storage.");
+        }
+        stagedAdapter = new FileSystemAdapter(target.directoryHandle);
+      } else if (mode === "s3") {
+        if (!target.s3Config) {
+          throw new Error("Missing S3 config for migration.");
+        }
+        stagedAdapter = new S3Adapter(target.s3Config);
+      } else {
+        stagedAdapter = new IndexedDBAdapter();
+      }
+
+      await stagedAdapter.init();
+      await restoreVaultBackup({ adapter: stagedAdapter, backup });
+
+      const nextAdapter = initAdapter(mode, {
+        directoryHandle: target.directoryHandle,
+        s3Config: target.s3Config,
+      });
+      const ready = await runAdapterVoid(() => nextAdapter.init());
+      if (!ready) {
+        throw new Error("Failed to initialize migrated storage.");
+      }
+      await persistStorageChoice(mode, {
+        handle: target.directoryHandle,
+        s3: target.s3Config,
+      });
+      await initializeWorkspace();
+
+      dismissToast(toastId);
+      pushToast("Migration complete.", { tone: "success" });
+    } catch (error) {
+      dismissToast(toastId);
+      pushToast("Migration failed. Please retry.", { tone: "error" });
+    } finally {
+      isRecoveringStorage = false;
+      isLoading = false;
+    }
+  };
+
+  const migrateToFolderStorage = async (): Promise<void> => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (typeof window.showDirectoryPicker !== "function") {
+      pushToast("Folder storage requires a Chromium browser (Chrome/Edge).", {
+        tone: "error",
+      });
+      return;
+    }
+    const handle = await window.showDirectoryPicker();
+    await migrateCurrentVaultToStorage({ mode: "filesystem", directoryHandle: handle });
+  };
+
+  const migrateToBrowserStorage = async (): Promise<void> => {
+    await migrateCurrentVaultToStorage({ mode: "idb" });
+  };
+
+  const migrateToS3Storage = async (config: S3Config): Promise<void> => {
+    await migrateCurrentVaultToStorage({ mode: "s3", s3Config: config });
+  };
+
   const switchToS3Storage = async (config: S3Config): Promise<void> => {
     if (isRecoveringStorage) {
       return;
@@ -863,8 +1230,8 @@
       activeStorageMode === "filesystem" ? "Change vault folder" : "Switch storage";
     const message =
       activeStorageMode === "filesystem"
-        ? "Choosing a different folder will disconnect from the current vault. Continue?"
-        : "Switching to folder storage will disconnect from the current vault. Continue?";
+        ? "Your vault will be copied into the selected folder. Existing data in that folder may be replaced. Continue?"
+        : "Your current vault will be copied into the selected folder. Existing data in that folder may be replaced. Continue?";
     openModal("confirm", {
       title,
       message,
@@ -872,7 +1239,7 @@
       cancelLabel: "Cancel",
       onConfirm: async () => {
         closeSettings();
-        await retryFolderAccess();
+        await migrateToFolderStorage();
       },
     });
   };
@@ -884,12 +1251,12 @@
     openModal("confirm", {
       title: "Switch to browser storage",
       message:
-        "Switching to browser storage will disconnect from the current vault. Continue?",
+        "Your current vault will be copied into browser storage and replace any existing browser vault. Continue?",
       confirmLabel: "Use browser storage",
       cancelLabel: "Cancel",
       onConfirm: async () => {
         closeSettings();
-        await switchToBrowserStorage();
+        await migrateToBrowserStorage();
       },
     });
   };
@@ -924,7 +1291,7 @@
     const message =
       activeStorageMode === "s3"
         ? "Updating S3 settings will reconnect the app. Continue?"
-        : "Switching to S3 will disconnect from the current vault. Continue?";
+        : "Your current vault will be copied into S3 and replace any existing vault at that prefix. Continue?";
     openModal("confirm", {
       title,
       message,
@@ -932,9 +1299,54 @@
       cancelLabel: "Cancel",
       onConfirm: async () => {
         closeSettings();
-        await switchToS3Storage(trimmed);
+        if (activeStorageMode === "s3") {
+          await switchToS3Storage(trimmed);
+          return;
+        }
+        await migrateToS3Storage(trimmed);
       },
     });
+  };
+
+  const handleRunIntegrityCheck = async (): Promise<VaultIntegrityReport> => {
+    if (!vault) {
+      const report: VaultIntegrityReport = {
+        checkedAt: Date.now(),
+        issues: [{ severity: "error", message: "No vault loaded." }],
+      };
+      pushToast("No vault loaded.", { tone: "error" });
+      return report;
+    }
+    await flushPendingSave();
+    const report = await runVaultIntegrityCheck({ adapter, vault });
+    pushToast(
+      report.issues.length === 0
+        ? "Integrity check: no issues found."
+        : `Integrity check: ${report.issues.length} issue${report.issues.length === 1 ? "" : "s"} found.`,
+      { tone: report.issues.length === 0 ? "success" : "info" }
+    );
+    return report;
+  };
+
+  const handleRepairVault = async (report: VaultIntegrityReport): Promise<void> => {
+    if (!vault) {
+      pushToast("No vault loaded.", { tone: "error" });
+      return;
+    }
+    await flushPendingSave();
+    const toastId = pushToast("Repairing vault...", { durationMs: 0 });
+    try {
+      await enqueueAdapterWrite(async () => {
+        await applyVaultIntegrityRepairs({ adapter, vault, report });
+      });
+      await initializeWorkspace();
+      await rebuildSearchIndex();
+      dismissToast(toastId);
+      pushToast("Repairs applied.", { tone: "success" });
+    } catch (error) {
+      dismissToast(toastId);
+      pushToast("Repair failed. Please retry.", { tone: "error" });
+    }
   };
 
   const rebuildSearchIndex = async (): Promise<void> => {
@@ -2938,6 +3350,14 @@
     activeTab={rightPanelTab}
     activeNote={activeNote}
     {vault}
+    {linkedMentions}
+    {unlinkedMentions}
+    {backlinksLoading}
+    {unlinkedMentionsLoading}
+    onOpenNote={activateTab}
+    onResolveWikiLink={resolveWikiLinkInActiveNote}
+    onNormalizeWikiLinks={normalizeWikiLinksInActiveNote}
+    onCreateNoteForWikiLink={createNoteForWikiLink}
     onUpdateCustomFields={updateCustomFieldsForNote}
   />
 
@@ -2965,6 +3385,8 @@
     onRebuildSearchIndex={rebuildSearchIndex}
     onClearWorkspaceState={clearWorkspaceState}
     onResetPreferences={resetPreferences}
+    onRunIntegrityCheck={handleRunIntegrityCheck}
+    onRepairVault={handleRepairVault}
     storageMode={activeStorageMode}
     settingsVaultName={
       appSettings?.lastVaultName ?? appSettings?.fsHandle?.name ?? null
@@ -2973,10 +3395,18 @@
     settingsS3Region={appSettings?.s3?.region ?? null}
     settingsS3Prefix={appSettings?.s3?.prefix ?? null}
     supportsFileSystem={supportsFileSystem}
-    settingsBusy={isRecoveringStorage || isExportingVault || isImportingFromFolder}
+    settingsBusy={
+      isRecoveringStorage ||
+      isExportingVault ||
+      isImportingFromFolder ||
+      isBackingUpVault ||
+      isRestoringBackup
+    }
     {preferences}
     onExportVault={handleExportVault}
     onImportFromFolder={handleImportFromFolder}
+    onDownloadBackup={handleDownloadBackup}
+    onRestoreBackup={handleRestoreBackup}
   />
 
   <ToastHost slot="toast" />

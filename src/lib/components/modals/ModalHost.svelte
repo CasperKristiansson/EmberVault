@@ -43,6 +43,15 @@
     | null = null;
   export let onExportVault: (() => void | Promise<void>) | null = null;
   export let onImportFromFolder: (() => void | Promise<void>) | null = null;
+  export let onDownloadBackup: (() => void | Promise<void>) | null = null;
+  export let onRestoreBackup: ((file: File) => void | Promise<void>) | null =
+    null;
+  export let onRunIntegrityCheck:
+    | (() => Promise<{ checkedAt: number; issues: { severity: string; message: string }[] }>)
+    | null = null;
+  export let onRepairVault:
+    | ((report: { checkedAt: number; issues: { severity: string; message: string }[] }) => void | Promise<void>)
+    | null = null;
   export let onRebuildSearchIndex: (() => void | Promise<void>) | null = null;
   export let onClearWorkspaceState: (() => void | Promise<void>) | null = null;
   export let onResetPreferences: (() => void | Promise<void>) | null = null;
@@ -294,6 +303,10 @@
       onUpdatePreferences={onUpdatePreferences}
       onExportVault={onExportVault}
       onImportFromFolder={onImportFromFolder}
+      onDownloadBackup={onDownloadBackup}
+      onRestoreBackup={onRestoreBackup}
+      onRunIntegrityCheck={onRunIntegrityCheck}
+      onRepairVault={onRepairVault}
       onRebuildSearchIndex={onRebuildSearchIndex}
       onClearWorkspaceState={onClearWorkspaceState}
       onResetPreferences={onResetPreferences}

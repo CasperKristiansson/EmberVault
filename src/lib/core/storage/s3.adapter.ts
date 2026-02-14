@@ -447,6 +447,16 @@ export class S3Adapter implements StorageAdapter {
     }
   }
 
+  public async deleteAsset(assetId: string): Promise<void> {
+    await this.cacheAdapter.deleteAsset(assetId);
+    await putOutboxItem({
+      key: `asset:${assetId}`,
+      kind: "asset",
+      id: assetId,
+    });
+    this.scheduleFlush();
+  }
+
   public async writeUIState(state: UIState): Promise<void> {
     await this.cacheAdapter.writeUIState(state);
     await putOutboxItem({ key: "uiState", kind: "uiState" });

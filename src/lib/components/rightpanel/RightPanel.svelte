@@ -1,6 +1,7 @@
 <script lang="ts">
   import OutlinePanel from "$lib/components/rightpanel/OutlinePanel.svelte";
   import MetadataPanel from "$lib/components/rightpanel/MetadataPanel.svelte";
+  import type { BacklinkSnippet } from "$lib/core/editor/links/backlinks";
   import type {
     CustomFieldValue,
     NoteDocumentFile,
@@ -12,6 +13,28 @@
   export let activeTab: RightPanelTab = "outline";
   export let activeNote: NoteDocumentFile | null = null;
   export let vault: Vault | null = null;
+  export let linkedMentions: Array<{
+    id: string;
+    title: string;
+    snippet: BacklinkSnippet | null;
+  }> = [];
+  export let unlinkedMentions: Array<{
+    id: string;
+    title: string;
+    snippet: BacklinkSnippet | null;
+  }> = [];
+  export let backlinksLoading = false;
+  export let unlinkedMentionsLoading = false;
+  export let onOpenNote: (noteId: string) => void = () => {};
+  export let onResolveWikiLink: (
+    raw: string,
+    targetId: string
+  ) => void | Promise<void> = async () => {};
+  export let onNormalizeWikiLinks: (
+    replacements: Array<{ raw: string; targetId: string }>
+  ) => void | Promise<void> = async () => {};
+  export let onCreateNoteForWikiLink: (title: string) => Promise<string> =
+    async () => "";
   export let onUpdateCustomFields: (
     noteId: string,
     fields: Record<string, CustomFieldValue>
@@ -25,6 +48,14 @@
     <MetadataPanel
       note={activeNote}
       {vault}
+      {linkedMentions}
+      {unlinkedMentions}
+      {backlinksLoading}
+      {unlinkedMentionsLoading}
+      {onOpenNote}
+      {onResolveWikiLink}
+      {onNormalizeWikiLinks}
+      {onCreateNoteForWikiLink}
       onUpdateCustomFields={onUpdateCustomFields}
     />
   {/if}

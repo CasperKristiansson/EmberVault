@@ -93,3 +93,34 @@ export const ensureTitleHeadingInPmDocument = (input: {
     content: nextContent,
   };
 };
+
+export const setTitleInPmDocument = (input: {
+  pmDocument: Record<string, unknown>;
+  title: string;
+}): Record<string, unknown> => {
+  const ensured = ensureTitleHeadingInPmDocument(input);
+  const rawContent: unknown = ensured.content;
+  const content = Array.isArray(rawContent) ? rawContent.filter(isPmNode) : [];
+  if (content.length === 0) {
+    return ensured;
+  }
+  const [first, ...rest] = content;
+  const nextHeading: PMNode = {
+    ...first,
+    type: "heading",
+    attrs: { level: 1 },
+    content: input.title.trim()
+      ? [
+          {
+            type: "text",
+            text: input.title.trim(),
+          },
+        ]
+      : [],
+  };
+  return {
+    ...ensured,
+    type: "doc",
+    content: [nextHeading, ...rest],
+  };
+};

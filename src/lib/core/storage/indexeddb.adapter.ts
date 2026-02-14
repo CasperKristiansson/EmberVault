@@ -353,6 +353,14 @@ export class IndexedDBAdapter implements StorageAdapter {
     return records.map((record) => record.assetId);
   }
 
+  public async deleteAsset(assetId: string): Promise<void> {
+    await this.withStore<IndexedDatabaseKey>(
+      storeNames.assets,
+      "readwrite",
+      (store) => store.delete(assetId)
+    );
+  }
+
   public async writeUIState(state: UIState): Promise<void> {
     await this.withStore<IndexedDatabaseKey>(
       storeNames.uiState,

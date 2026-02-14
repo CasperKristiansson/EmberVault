@@ -264,10 +264,15 @@ export class FileSystemAdapter implements StorageAdapter {
       throw new Error("FileSystemAdapter.restoreNote missing vault.");
     }
     const directories = await this.ensureVaultDirectories();
-    const existing = await readJsonFile<NoteDocumentFile>(
-      directories.trash,
-      noteFileName(noteId)
-    );
+    const existing =
+      (await readJsonFile<NoteDocumentFile>(
+        directories.trash,
+        noteFileName(noteId)
+      )) ??
+      (await readJsonFile<NoteDocumentFile>(
+        directories.notes,
+        noteFileName(noteId)
+      ));
     if (!existing) {
       throw new Error(`FileSystemAdapter.restoreNote missing note ${noteId}.`);
     }
@@ -284,7 +289,9 @@ export class FileSystemAdapter implements StorageAdapter {
       updatedAt: timestamp,
     };
     const markdown =
-      (await readTextFile(directories.trash, noteMarkdownName(noteId))) ?? "";
+      (await readTextFile(directories.trash, noteMarkdownName(noteId))) ??
+      (await readTextFile(directories.notes, noteMarkdownName(noteId))) ??
+      "";
 
     await writeJsonFile(directories.notes, noteFileName(noteId), updatedNote);
     await writeTextFile(directories.notes, noteMarkdownName(noteId), markdown);
@@ -409,6 +416,21 @@ export class FileSystemAdapter implements StorageAdapter {
       }
       throw error;
     }
+  }
+
+  public async deleteAsset(assetId: string): Promise<void> {
+    const directories = await this.ensureVaultDirectories(false);
+    const entries = await listDirectoryEntries(directories.assets);
+    const removals: Promise<void>[] = [];
+    for (const entry of entries) {
+      if (isFileHandle(entry)) {
+        const { name } = entry;
+        if (name === assetId || name.startsWith(`${assetId}.`)) {
+          removals.push(removeEntryIfExists(directories.assets, name));
+        }
+      }
+    }
+    await Promise.all(removals);
   }
 
   public async writeUIState(state: UIState): Promise<void> {

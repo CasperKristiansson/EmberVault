@@ -11,10 +11,12 @@
   export let activeNoteId: string | null = null;
   export let linkedMentions: BacklinkEntry[] = [];
   export let loading = false;
+  export let unlinkedMentions: BacklinkEntry[] = [];
+  export let unlinkedLoading = false;
   export let onOpenNote: (noteId: string) => void = () => {};
 </script>
 
-<div class="panel" data-testid="backlinks-panel">
+<div class="backlinks" data-testid="backlinks-panel">
   {#if !activeNoteId}
     <div class="panel-empty" data-testid="backlinks-empty">
       Select a note to view backlinks.
@@ -42,13 +44,28 @@
 
     <section class="panel-section" aria-label="Unlinked mentions">
       <div class="panel-section-title">Unlinked mentions</div>
-      <div class="panel-empty">Unlinked mentions are not available yet.</div>
+      {#if unlinkedLoading}
+        <div class="panel-empty">Loading unlinked mentions...</div>
+      {:else if unlinkedMentions.length === 0}
+        <div class="panel-empty">No unlinked mentions yet.</div>
+      {:else}
+        <div class="panel-list" data-testid="unlinked-mentions-list">
+          {#each unlinkedMentions as entry (entry.id)}
+            <BacklinkItem
+              noteId={entry.id}
+              title={entry.title}
+              snippet={entry.snippet}
+              onSelect={onOpenNote}
+            />
+          {/each}
+        </div>
+      {/if}
     </section>
   {/if}
 </div>
 
 <style>
-  .panel {
+  .backlinks {
     display: flex;
     flex-direction: column;
     gap: 16px;

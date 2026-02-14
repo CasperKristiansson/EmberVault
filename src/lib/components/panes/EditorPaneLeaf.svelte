@@ -125,6 +125,7 @@
         <TiptapEditor
           content={pane.note.pmDoc}
           contentKey={pane.note.id}
+          noteId={pane.note.id}
           ariaLabel="Note content"
           dataTestId="note-body"
           chrome="flat"

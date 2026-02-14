@@ -151,6 +151,7 @@ export type StorageAdapter = {
   }) => Promise<void>;
   readAsset: (assetId: string) => Promise<Blob | null>;
   listAssets: () => Promise<string[]>;
+  deleteAsset: (assetId: string) => Promise<void>;
   writeUIState: (state: UIState) => Promise<void>;
   readUIState: () => Promise<UIState | null>;
   writeSearchIndex: (snapshot: string) => Promise<void>;

@@ -24,7 +24,12 @@
     createEmptyDocument,
     createTiptapExtensions,
   } from "$lib/core/editor/tiptap-config";
+  import { replaceWikiLinksInPmDoc } from "$lib/core/editor/links/replace-wiki-links";
   import { prefersReducedMotion } from "$lib/state/motion.store";
+  import {
+    editorCommandStore,
+    type EditorCommand,
+  } from "$lib/state/editor-commands.store";
   import SlashMenu from "./SlashMenu.svelte";
   import WikiLinkMenu from "./WikiLinkMenu.svelte";
 
@@ -37,6 +42,7 @@
   export let dataTestId = "note-body";
   export let chrome: "boxed" | "flat" = "boxed";
   export let focusEmptyTitleOnClick = false;
+  export let noteId: string | null = null;
   export let linkCandidates: WikiLinkCandidate[] = [];
   export let spellcheck = true;
   export let smartListContinuation = true;
@@ -100,6 +106,29 @@
   const menuHeight = 320;
   const menuMargin = 8;
   const wikiMenuItemLimit = 12;
+
+  const applyEditorCommand = (command: EditorCommand): void => {
+    if (!editor) {
+      return;
+    }
+    if (!noteId || command.noteId !== noteId) {
+      return;
+    }
+    if (command.type === "replace-wiki-link") {
+      const next = replaceWikiLinksInPmDoc({
+        pmDoc: editor.getJSON() as Record<string, unknown>,
+        replacements: [{ raw: command.raw, targetId: command.targetId }],
+      });
+      editor.commands.setContent(next as JSONContent, { emitUpdate: true });
+    }
+    if (command.type === "replace-wiki-links") {
+      const next = replaceWikiLinksInPmDoc({
+        pmDoc: editor.getJSON() as Record<string, unknown>,
+        replacements: command.replacements,
+      });
+      editor.commands.setContent(next as JSONContent, { emitUpdate: true });
+    }
+  };
 
   $: if (editor) {
     editor.view.dom.setAttribute("spellcheck", spellcheck ? "true" : "false");
@@ -903,6 +932,13 @@
   $: if (editor && contentKey !== lastContentKey) {
     editor.commands.setContent(content as JSONContent, { emitUpdate: false });
     lastContentKey = contentKey;
+  }
+
+  $: if ($editorCommandStore && editor && noteId) {
+    if ($editorCommandStore.noteId === noteId) {
+      applyEditorCommand($editorCommandStore);
+      editorCommandStore.set(null);
+    }
   }
 
   $: if (lightboxOpen && lightboxBackdrop) {

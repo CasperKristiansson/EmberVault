@@ -53,6 +53,15 @@
     | null = null;
   export let onExportVault: (() => void | Promise<void>) | null = null;
   export let onImportFromFolder: (() => void | Promise<void>) | null = null;
+  export let onDownloadBackup: (() => void | Promise<void>) | null = null;
+  export let onRestoreBackup: ((file: File) => void | Promise<void>) | null =
+    null;
+  export let onRunIntegrityCheck:
+    | (() => Promise<{ checkedAt: number; issues: { severity: string; message: string }[] }>)
+    | null = null;
+  export let onRepairVault:
+    | ((report: { checkedAt: number; issues: { severity: string; message: string }[] }) => void | Promise<void>)
+    | null = null;
   export let onRebuildSearchIndex: (() => void | Promise<void>) | null = null;
   export let onClearWorkspaceState: (() => void | Promise<void>) | null = null;
   export let onResetPreferences: (() => void | Promise<void>) | null = null;
@@ -92,6 +101,55 @@
     secretAccessKey: s3SecretAccessKey.trim(),
     sessionToken: s3SessionToken.trim() ? s3SessionToken.trim() : undefined,
   });
+
+  let restoreBackupInput: HTMLInputElement | null = null;
+
+  const openRestoreBackupPicker = (): void => {
+    restoreBackupInput?.click();
+  };
+
+  const handleRestoreBackupChange = (): void => {
+    const file = restoreBackupInput?.files?.[0] ?? null;
+    if (!file) {
+      return;
+    }
+    if (restoreBackupInput) {
+      restoreBackupInput.value = "";
+    }
+    void onRestoreBackup?.(file);
+  };
+
+  type IntegrityIssue = { severity: string; message: string };
+  type IntegrityReport = { checkedAt: number; issues: IntegrityIssue[] };
+  let integrityReport: IntegrityReport | null = null;
+  let integrityBusy = false;
+
+  const runIntegrityCheck = async (): Promise<void> => {
+    if (!onRunIntegrityCheck || integrityBusy) {
+      return;
+    }
+    integrityBusy = true;
+    try {
+      integrityReport = await onRunIntegrityCheck();
+    } finally {
+      integrityBusy = false;
+    }
+  };
+
+  const repairVault = async (): Promise<void> => {
+    if (!onRepairVault || !integrityReport || integrityBusy) {
+      return;
+    }
+    integrityBusy = true;
+    try {
+      await onRepairVault(integrityReport);
+      if (onRunIntegrityCheck) {
+        integrityReport = await onRunIntegrityCheck();
+      }
+    } finally {
+      integrityBusy = false;
+    }
+  };
 </script>
 
 <div
@@ -864,6 +922,33 @@
           <div class="settings-group">
             <div class="setting-row">
               <div class="setting-copy">
+                <div class="setting-title">Backup (single file)</div>
+                <div class="setting-description">
+                  Download a backup you can restore later.
+                </div>
+              </div>
+              <div class="setting-control">
+                <button
+                  class="button secondary"
+                  type="button"
+                  on:click={() => void onDownloadBackup?.()}
+                  disabled={!onDownloadBackup || settingsBusy}
+                >
+                  Download
+                </button>
+                <button
+                  class="button secondary"
+                  type="button"
+                  on:click={openRestoreBackupPicker}
+                  disabled={!onRestoreBackup || settingsBusy}
+                >
+                  Restore
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
                 <div class="setting-title">Export vault</div>
                 <div class="setting-description">
                   Export Markdown + assets to a folder.
@@ -911,6 +996,46 @@
           </div>
 
           <div class="settings-group">
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-title">Vault integrity check</div>
+                <div class="setting-description">
+                  Scan for missing notes/assets and safe cleanup opportunities.
+                </div>
+              </div>
+              <div class="setting-control">
+                <button
+                  class="button secondary"
+                  type="button"
+                  on:click={() => void runIntegrityCheck()}
+                  disabled={!onRunIntegrityCheck || settingsBusy || integrityBusy}
+                >
+                  Run
+                </button>
+                <button
+                  class="button secondary"
+                  type="button"
+                  on:click={() => void repairVault()}
+                  disabled={
+                    !onRepairVault ||
+                    !integrityReport ||
+                    settingsBusy ||
+                    integrityBusy
+                  }
+                >
+                  Repair
+                </button>
+              </div>
+            </div>
+
+            {#if integrityReport}
+              <div class="info-note" data-testid="integrity-report">
+                {integrityReport.issues.length === 0
+                  ? "No issues found."
+                  : `${integrityReport.issues.length} issue${integrityReport.issues.length === 1 ? "" : "s"} found.`}
+              </div>
+            {/if}
+
             <div class="setting-row">
               <div class="setting-copy">
                 <div class="setting-title">Rebuild search index</div>
@@ -995,6 +1120,14 @@
     </div>
   </div>
 </div>
+
+<input
+  bind:this={restoreBackupInput}
+  type="file"
+  accept=".json,.gz,application/json,application/gzip"
+  style="display: none"
+  on:change={handleRestoreBackupChange}
+/>
 
 <style>
   .modal-overlay {
