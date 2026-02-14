@@ -346,8 +346,8 @@ Shortcuts section content:
 
 Import/Export section content:
 
-- Export vault (disabled placeholder)
-- Import from folder (disabled placeholder)
+- Export vault: export derived Markdown + assets to a folder (Chrome/Edge only)
+- Import from folder: import `.md` notes from a folder (Chrome/Edge only)
 
 Privacy section content:
 

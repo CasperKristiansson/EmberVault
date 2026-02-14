@@ -117,7 +117,7 @@ Notes:
     - Retry access
     - Switch to browser storage (IndexedDB)
 - Switching adapters:
-  - Provide “Export vault to folder” and “Import from folder” utilities (post-MVP ok)
+  - Provide “Export vault to folder” and “Import from folder” utilities
 
 ## 7) Autosave & consistency
 

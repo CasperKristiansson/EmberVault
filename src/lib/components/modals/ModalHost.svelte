@@ -38,6 +38,8 @@
   export let onUpdatePreferences:
     | ((patch: Partial<AppPreferences>) => void | Promise<void>)
     | null = null;
+  export let onExportVault: (() => void | Promise<void>) | null = null;
+  export let onImportFromFolder: (() => void | Promise<void>) | null = null;
   export let onRebuildSearchIndex: (() => void | Promise<void>) | null = null;
   export let onClearWorkspaceState: (() => void | Promise<void>) | null = null;
   export let onResetPreferences: (() => void | Promise<void>) | null = null;
@@ -280,6 +282,8 @@
       onChooseFolder={onChooseFolder}
       onChooseBrowserStorage={onChooseBrowserStorage}
       onUpdatePreferences={onUpdatePreferences}
+      onExportVault={onExportVault}
+      onImportFromFolder={onImportFromFolder}
       onRebuildSearchIndex={onRebuildSearchIndex}
       onClearWorkspaceState={onClearWorkspaceState}
       onResetPreferences={onResetPreferences}

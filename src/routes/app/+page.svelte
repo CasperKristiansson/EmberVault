@@ -37,10 +37,17 @@
   import { toDerivedMarkdown } from "$lib/core/utils/derived-markdown";
   import { resolveInterfaceDensity } from "$lib/core/utils/interface-density";
   import { resolveAccentColor } from "$lib/core/utils/accent-color";
+  import { exportVaultToDirectory } from "$lib/core/utils/vault-export";
+  import { importMarkdownToNote } from "$lib/core/utils/markdown-import";
   import { createUlid } from "$lib/core/utils/ulid";
   import { createDebouncedTask } from "$lib/core/utils/debounce";
   import { hashBlobSha256 } from "$lib/core/utils/hash";
   import { formatCustomFieldValue } from "$lib/core/utils/custom-fields";
+  import {
+    isDirectoryHandle,
+    isFileHandle,
+    isNotFoundError,
+  } from "$lib/core/storage/filesystem/handles";
   import {
     addTab,
     closeTabState,
@@ -63,6 +70,7 @@
     closeModal,
     modalStackStore,
     openModal,
+    dismissToast,
     pushToast,
   } from "$lib/state/ui.store";
   import {
@@ -189,6 +197,8 @@
   const uiStateDelay = 800;
   const permissionErrorNames = new Set(["NotAllowedError", "SecurityError"]);
   let isRecoveringStorage = false;
+  let isExportingVault = false;
+  let isImportingFromFolder = false;
   const defaultTabViewMode = (): "editor" | "markdown" =>
     preferences.markdownViewByDefault ? "markdown" : "editor";
 
@@ -369,6 +379,266 @@
     }
     lastAdapterToastAt = now;
     pushToast(message, { tone: "error" });
+  };
+
+  const handleExportVault = async (): Promise<void> => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!vault) {
+      pushToast("Nothing to export yet.", { tone: "error" });
+      return;
+    }
+    if (isExportingVault) {
+      return;
+    }
+    if (typeof window.showDirectoryPicker !== "function") {
+      pushToast("Export requires a Chromium browser (Chrome/Edge).", {
+        tone: "error",
+      });
+      return;
+    }
+
+    isExportingVault = true;
+    const toastId = pushToast("Exporting vault...", { durationMs: 0 });
+    try {
+      const directory = await window.showDirectoryPicker();
+      await flushPendingSave();
+      await exportVaultToDirectory({ vault, adapter, directory });
+      dismissToast(toastId);
+      pushToast("Export complete.", { tone: "success" });
+    } catch (error) {
+      dismissToast(toastId);
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+      pushToast("Export failed. Please retry.", { tone: "error" });
+    } finally {
+      isExportingVault = false;
+    }
+  };
+
+  const ensureImportedFolderPath = (
+    folders: Vault["folders"],
+    segments: string[]
+  ): { folders: Vault["folders"]; folderId: string | null } => {
+    const normalized = segments
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0);
+    if (normalized.length === 0) {
+      return { folders, folderId: null };
+    }
+
+    let nextFolders = folders;
+    const findChildByName = (
+      parentId: string | null,
+      name: string
+    ): string | null => {
+      const match = Object.values(nextFolders).find(
+        (folder) => folder.parentId === parentId && folder.name === name
+      );
+      return match?.id ?? null;
+    };
+    let parentId: string | null = null;
+    for (const segment of normalized) {
+      const existingId = findChildByName(parentId, segment);
+      if (existingId) {
+        parentId = existingId;
+        continue;
+      }
+      const id = createUlid();
+      nextFolders = addFolder(nextFolders, { id, name: segment, parentId });
+      parentId = id;
+    }
+    return { folders: nextFolders, folderId: parentId };
+  };
+
+  type ImportMarkdownEntry = {
+    handle: FileSystemFileHandle;
+    folderSegments: string[];
+    fileName: string;
+  };
+
+  const walkDirectoryForMarkdown = async (
+    directory: FileSystemDirectoryHandle,
+    prefixSegments: string[] = []
+  ): Promise<ImportMarkdownEntry[]> => {
+    const entries: ImportMarkdownEntry[] = [];
+    const iterator = directory.values();
+    for await (const entry of iterator) {
+      if (isDirectoryHandle(entry)) {
+        entries.push(
+          ...(await walkDirectoryForMarkdown(entry, [
+            ...prefixSegments,
+            entry.name,
+          ]))
+        );
+        continue;
+      }
+      if (!isFileHandle(entry)) {
+        continue;
+      }
+      const name = entry.name ?? "";
+      if (!name.toLowerCase().endsWith(".md")) {
+        continue;
+      }
+      entries.push({
+        handle: entry,
+        folderSegments: prefixSegments,
+        fileName: name,
+      });
+    }
+    return entries;
+  };
+
+  const tryGetSubdirectory = async (
+    directory: FileSystemDirectoryHandle,
+    name: string
+  ): Promise<FileSystemDirectoryHandle | null> => {
+    const getter = directory.getDirectoryHandle;
+    if (typeof getter !== "function") {
+      return null;
+    }
+    try {
+      return await getter.call(directory, name);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  };
+
+  const handleImportFromFolder = async (): Promise<void> => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!vault) {
+      pushToast("Nothing to import into yet.", { tone: "error" });
+      return;
+    }
+    if (isImportingFromFolder) {
+      return;
+    }
+    if (typeof window.showDirectoryPicker !== "function") {
+      pushToast("Import requires a Chromium browser (Chrome/Edge).", {
+        tone: "error",
+      });
+      return;
+    }
+
+    isImportingFromFolder = true;
+    const toastId = pushToast("Importing notes...", { durationMs: 0 });
+    try {
+      const directory = await window.showDirectoryPicker();
+      await flushPendingSave();
+
+      const notesRoot =
+        (await tryGetSubdirectory(directory, "notes")) ?? directory;
+      const assetsRoot = await tryGetSubdirectory(directory, "assets");
+
+      const markdownFiles = await walkDirectoryForMarkdown(notesRoot);
+
+      // Build any missing folders first and persist the folder tree.
+      const folderKey = (segments: string[]): string => segments.join("/");
+      const folderIdByKey: Record<string, string | null> = {};
+      let nextFolders = vault.folders;
+      for (const entry of markdownFiles) {
+        const key = folderKey(entry.folderSegments);
+        if (Object.prototype.hasOwnProperty.call(folderIdByKey, key)) {
+          continue;
+        }
+        const ensured = ensureImportedFolderPath(nextFolders, entry.folderSegments);
+        nextFolders = ensured.folders;
+        folderIdByKey[key] = ensured.folderId;
+      }
+
+      if (nextFolders !== vault.folders) {
+        await persistVault({
+          ...vault,
+          folders: nextFolders,
+          updatedAt: Date.now(),
+        });
+      }
+
+      // Import notes sequentially; the IndexedDB adapter relies on serialized writes.
+      let importedNotes = 0;
+      await enqueueAdapterWrite(async () => {
+        for (const entry of markdownFiles) {
+          const file = await entry.handle.getFile();
+          const markdown = await file.text();
+          const parsed = importMarkdownToNote({
+            fileName: entry.fileName,
+            markdown,
+          });
+          const folderId =
+            folderIdByKey[folderKey(entry.folderSegments)] ?? null;
+          const noteId = createUlid();
+          const timestamp = file.lastModified || Date.now();
+          const note: NoteDocumentFile = {
+            id: noteId,
+            title: parsed.title,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            folderId,
+            tagIds: [],
+            favorite: false,
+            deletedAt: null,
+            customFields: {},
+            pmDoc: parsed.pmDocument,
+            derived: {
+              plainText: parsed.plainText,
+              outgoingLinks: [],
+            },
+          };
+
+          await runAdapterVoid(() =>
+            adapter.writeNote({
+              noteId,
+              noteDocument: note,
+              derivedMarkdown: markdown,
+            })
+          );
+          importedNotes += 1;
+          await updateSearchIndexForDocument(note);
+        }
+
+        if (assetsRoot) {
+          const iterator = assetsRoot.values();
+          for await (const entry of iterator) {
+            if (!isFileHandle(entry)) {
+              continue;
+            }
+            const file = await entry.getFile();
+            const assetId = await hashBlobSha256(file);
+            await runAdapterVoid(() =>
+              adapter.writeAsset({
+                assetId,
+                blob: file,
+                meta: { mime: file.type, size: file.size },
+              })
+            );
+          }
+        }
+      });
+
+      await loadNotes();
+      dismissToast(toastId);
+      pushToast(
+        importedNotes > 0
+          ? `Imported ${importedNotes} note${importedNotes === 1 ? "" : "s"}.`
+          : "No Markdown files found.",
+        { tone: importedNotes > 0 ? "success" : "info" }
+      );
+    } catch (error) {
+      dismissToast(toastId);
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+      pushToast("Import failed. Please retry.", { tone: "error" });
+    } finally {
+      isImportingFromFolder = false;
+    }
   };
 
   const handleNonBlockingAdapterError = (error: unknown): void => {
@@ -2602,8 +2872,10 @@
       appSettings?.lastVaultName ?? appSettings?.fsHandle?.name ?? null
     }
     supportsFileSystem={supportsFileSystem}
-    settingsBusy={isRecoveringStorage}
+    settingsBusy={isRecoveringStorage || isExportingVault || isImportingFromFolder}
     {preferences}
+    onExportVault={handleExportVault}
+    onImportFromFolder={handleImportFromFolder}
   />
 
   <ToastHost slot="toast" />

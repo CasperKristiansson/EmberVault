@@ -44,6 +44,8 @@
   export let onUpdatePreferences:
     | ((patch: Partial<AppPreferences>) => void | Promise<void>)
     | null = null;
+  export let onExportVault: (() => void | Promise<void>) | null = null;
+  export let onImportFromFolder: (() => void | Promise<void>) | null = null;
   export let onRebuildSearchIndex: (() => void | Promise<void>) | null = null;
   export let onClearWorkspaceState: (() => void | Promise<void>) | null = null;
   export let onResetPreferences: (() => void | Promise<void>) | null = null;
@@ -739,7 +741,7 @@
           </div>
 
           <div class="settings-group">
-            <div class="setting-row is-disabled">
+            <div class="setting-row">
               <div class="setting-copy">
                 <div class="setting-title">Export vault</div>
                 <div class="setting-description">
@@ -747,13 +749,18 @@
                 </div>
               </div>
               <div class="setting-control">
-                <button class="button secondary" type="button" disabled>
+                <button
+                  class="button secondary"
+                  type="button"
+                  on:click={() => void onExportVault?.()}
+                  disabled={!supportsFileSystem || !onExportVault || settingsBusy}
+                >
                   Export
                 </button>
               </div>
             </div>
 
-            <div class="setting-row is-disabled">
+            <div class="setting-row">
               <div class="setting-copy">
                 <div class="setting-title">Import from folder</div>
                 <div class="setting-description">
@@ -761,7 +768,16 @@
                 </div>
               </div>
               <div class="setting-control">
-                <button class="button secondary" type="button" disabled>
+                <button
+                  class="button secondary"
+                  type="button"
+                  on:click={() => void onImportFromFolder?.()}
+                  disabled={
+                    !supportsFileSystem ||
+                    !onImportFromFolder ||
+                    settingsBusy
+                  }
+                >
                   Import
                 </button>
               </div>
@@ -1114,10 +1130,6 @@
   .setting-row:first-child {
     border-top: none;
     padding-top: 0;
-  }
-
-  .setting-row.is-disabled {
-    opacity: 0.6;
   }
 
   .setting-copy {
