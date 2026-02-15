@@ -851,7 +851,12 @@
         closeTablePrompt();
       }
       if (embedPromptOpen) {
-        if (embedPromptElement && embedPromptElement.contains(target)) {
+        // If the prompt just opened, the element may not be bound yet; avoid
+        // immediately closing it on the same click event.
+        if (!embedPromptElement) {
+          return;
+        }
+        if (embedPromptElement.contains(target)) {
           return;
         }
         closeEmbedPrompt();

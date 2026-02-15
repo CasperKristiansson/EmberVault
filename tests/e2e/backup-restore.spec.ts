@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-test("download and restore backup replaces vault contents", async ({ page }) => {
+test("download and restore backup replaces vault contents", async ({
+  page,
+}) => {
+  const emptyCount = 0;
+
   await page.goto("/onboarding");
   await page.getByTestId("use-browser-storage").click();
   await page.waitForURL(/\/app\/?$/);
@@ -14,6 +18,18 @@ test("download and restore backup replaces vault contents", async ({ page }) => 
 
   await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
 
+  await page.getByTestId("open-settings").click();
+  await page.getByText("Import/Export").click();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("download-backup").click();
+  const download = await downloadPromise;
+  const backupPath = test.info().outputPath("embervault-backup.json");
+  await download.saveAs(backupPath);
+
+  await page.getByRole("button", { name: "Close settings" }).click();
+
+  // Create a second note after the backup.
   await page.getByTestId("new-note").click();
   await bodyEditor.click();
   await page.keyboard.type("Second note");
@@ -24,12 +40,6 @@ test("download and restore backup replaces vault contents", async ({ page }) => 
   await page.getByTestId("open-settings").click();
   await page.getByText("Import/Export").click();
 
-  const downloadPromise = page.waitForEvent("download");
-  await page.getByTestId("download-backup").click();
-  const download = await downloadPromise;
-  const backupPath = test.info().outputPath("embervault-backup.json");
-  await download.saveAs(backupPath);
-
   // Restore should remove notes created after the backup.
   await page.getByTestId("restore-backup-input").setInputFiles(backupPath);
   await page.getByRole("button", { name: "Restore" }).click();
@@ -39,5 +49,7 @@ test("download and restore backup replaces vault contents", async ({ page }) => 
   // Note list should include the first note and not the second.
   const noteRows = page.locator('[data-testid^="note-row-"]');
   await expect(noteRows.filter({ hasText: "First note" })).toBeVisible();
-  await expect(noteRows.filter({ hasText: "Second note" })).toHaveCount(0);
+  await expect(noteRows.filter({ hasText: "Second note" })).toHaveCount(
+    emptyCount
+  );
 });

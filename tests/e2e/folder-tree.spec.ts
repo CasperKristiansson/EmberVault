@@ -26,7 +26,7 @@ test("create, rename, and delete an empty folder", async ({ page }) => {
     emptyCount
   );
 
-  await page.getByText("Projects", { exact: true }).click({ button: "right" });
+  await projectsRow.first().click({ button: "right" });
   await page.getByTestId("folder-menu-rename").click();
 
   const renameInput = page.getByTestId("folder-rename-input");
@@ -35,7 +35,10 @@ test("create, rename, and delete an empty folder", async ({ page }) => {
 
   await expect(page.getByText("Archive", { exact: true })).toBeVisible();
 
-  await page.getByText("Archive", { exact: true }).click({ button: "right" });
+  const archiveRow = page.locator('[data-testid^="folder-row-"]', {
+    hasText: "Archive",
+  });
+  await archiveRow.first().click({ button: "right" });
   await page.getByTestId("folder-menu-delete").click();
 
   await expect(page.getByText("Archive", { exact: true })).toHaveCount(

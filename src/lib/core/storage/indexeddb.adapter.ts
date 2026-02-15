@@ -354,10 +354,8 @@ export class IndexedDBAdapter implements StorageAdapter {
   }
 
   public async deleteAsset(assetId: string): Promise<void> {
-    await this.withStore<undefined>(
-      storeNames.assets,
-      "readwrite",
-      (store) => store.delete(assetId)
+    await this.withStore<undefined>(storeNames.assets, "readwrite", (store) =>
+      store.delete(assetId)
     );
   }
 

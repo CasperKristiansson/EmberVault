@@ -31,7 +31,7 @@ export const replaceWikiLinksInPmDocument = (input: {
 
   const visit = (node: unknown): unknown => {
     if (Array.isArray(node)) {
-      return node.map((child) => visit(child));
+      return node.map(visit);
     }
     if (!isRecord(node)) {
       return node;
@@ -41,7 +41,7 @@ export const replaceWikiLinksInPmDocument = (input: {
       next.text = replaceText(next.text, input.replacements);
     }
     if (Array.isArray(next.content)) {
-      next.content = next.content.map((child) => visit(child));
+      next.content = next.content.map(visit);
     }
     return next;
   };

@@ -119,6 +119,8 @@ test("drags notes to folders and persists order", async ({ page }) => {
   // Reordering persists via async project writes; give it a moment before reload.
   await page.waitForTimeout(persistDelayMs);
   await page.reload();
+  await page.getByTestId("projects-toggle").click();
+  await expect(page.getByTestId("projects-overlay")).toBeVisible();
   await folderRow.click();
   const persistedOrder = await readNoteOrder();
   expect(persistedOrder[firstIndex]).toBe(draggedId);

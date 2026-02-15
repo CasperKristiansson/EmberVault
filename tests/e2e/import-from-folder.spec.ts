@@ -41,7 +41,7 @@ test("import from folder creates a note from markdown", async ({ page }) => {
 
   await page.getByTestId("open-settings").click();
   await page.getByRole("button", { name: "Import/Export" }).click();
-  await page.getByRole("button", { name: "Import" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
   await page.getByRole("button", { name: "Close settings" }).click();
 
   await expect(page.getByTestId("note-list")).toContainText("Imported note");

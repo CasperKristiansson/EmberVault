@@ -46,7 +46,14 @@ const findWikiLinkRanges = (text: string): { start: number; end: number }[] => {
 const isInsideRanges = (
   index: number,
   ranges: { start: number; end: number }[]
-): boolean => ranges.some(range => index >= range.start && index < range.end);
+): boolean => {
+  for (const range of ranges) {
+    if (index >= range.start && index < range.end) {
+      return true;
+    }
+  }
+  return false;
+};
 
 const findFirstUnlinkedMention = (
   text: string,

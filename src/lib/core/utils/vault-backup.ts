@@ -5,6 +5,11 @@ import type {
   Vault,
 } from "$lib/core/storage/types";
 
+const backupFormat = "embervault-backup" as const;
+const jsonMimeType = "application/json";
+const gzipMimeType = "application/gzip";
+const fallbackAssetMimeType = "application/octet-stream";
+
 type BackupNoteEntry = {
   noteId: string;
   noteDocument: NoteDocumentFile;
@@ -27,9 +32,7 @@ export type VaultBackupV1 = {
 };
 
 const hasCompressionStreams = (): boolean =>
-  // eslint-disable-next-line compat/compat
   typeof CompressionStream !== "undefined" &&
-  // eslint-disable-next-line compat/compat
   typeof DecompressionStream !== "undefined";
 
 const readBlobAsArrayBuffer = async (blob: Blob): Promise<ArrayBuffer> => {
@@ -37,15 +40,33 @@ const readBlobAsArrayBuffer = async (blob: Blob): Promise<ArrayBuffer> => {
   if (typeof candidate.arrayBuffer === "function") {
     return candidate.arrayBuffer();
   }
-  if (typeof FileReader !== "undefined") {
-    return await new Promise<ArrayBuffer>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(reader.error ?? new Error("Read failed."));
-      reader.onload = () => resolve(reader.result as ArrayBuffer);
-      reader.readAsArrayBuffer(blob);
-    });
+
+  if (typeof FileReader === "undefined") {
+    const streamCandidate = blob as Blob & {
+      stream?: () => ReadableStream<Uint8Array>;
+    };
+    if (typeof streamCandidate.stream === "function") {
+      return new Response(streamCandidate.stream()).arrayBuffer();
+    }
+    throw new Error("Blob reading is not supported in this environment.");
   }
-  return new Response(blob).arrayBuffer();
+
+  // eslint-disable-next-line compat/compat, promise/avoid-new -- Promise-based FileReader fallback for non-standard Blob implementations.
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("error", () =>
+      reject(reader.error ?? new Error("Read failed."))
+    );
+    reader.addEventListener("load", () => {
+      if (reader.result instanceof ArrayBuffer) {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("Read failed."));
+    });
+    // eslint-disable-next-line unicorn/prefer-blob-reading-methods -- Fallback for environments without Blob#arrayBuffer.
+    reader.readAsArrayBuffer(blob);
+  });
 };
 
 const readBlobAsText = async (blob: Blob): Promise<string> => {
@@ -53,24 +74,17 @@ const readBlobAsText = async (blob: Blob): Promise<string> => {
   if (typeof candidate.text === "function") {
     return candidate.text();
   }
-  if (typeof FileReader !== "undefined") {
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(reader.error ?? new Error("Read failed."));
-      reader.onload = () => resolve(String(reader.result ?? ""));
-      reader.readAsText(blob);
-    });
-  }
-  return new Response(blob).text();
+  const buffer = await readBlobAsArrayBuffer(blob);
+  return new TextDecoder().decode(buffer);
 };
 
 const bytesToBase64 = (bytes: Uint8Array): string => {
   // Chunk to avoid call stack and argument limits.
-  const chunkSize = 0x8000;
+  const chunkSize = 0x80_00;
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += chunkSize) {
     const chunk = bytes.subarray(offset, offset + chunkSize);
-    binary += String.fromCharCode(...chunk);
+    binary += String.fromCodePoint(...chunk);
   }
   return btoa(binary);
 };
@@ -78,8 +92,8 @@ const bytesToBase64 = (bytes: Uint8Array): string => {
 const base64ToBytes = (value: string): Uint8Array => {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.codePointAt(index) ?? 0;
   }
   return bytes;
 };
@@ -93,20 +107,25 @@ const gzipBlobIfSupported = async (blob: Blob): Promise<Blob> => {
   if (!hasCompressionStreams()) {
     return blob;
   }
-  // eslint-disable-next-line compat/compat
+
   const stream = blob.stream().pipeThrough(new CompressionStream("gzip"));
-  return new Blob([await new Response(stream).arrayBuffer()], {
-    type: "application/gzip",
-  });
+  const buffer = await new Response(stream).arrayBuffer();
+  return new Blob([buffer], { type: gzipMimeType });
 };
 
 const looksLikeGzip = async (blob: Blob): Promise<boolean> => {
-  if (blob.type === "application/gzip") {
+  if (blob.type === gzipMimeType) {
     return true;
   }
   const header = await readBlobAsArrayBuffer(blob.slice(0, 2));
   const bytes = new Uint8Array(header);
-  return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+  const gzipMagicByte0 = 31;
+  const gzipMagicByte1 = 139;
+  return (
+    bytes.length >= 2 &&
+    bytes[0] === gzipMagicByte0 &&
+    bytes[1] === gzipMagicByte1
+  );
 };
 
 const gunzipBlobIfNeeded = async (blob: Blob): Promise<Blob> => {
@@ -116,11 +135,10 @@ const gunzipBlobIfNeeded = async (blob: Blob): Promise<Blob> => {
   if (!(await looksLikeGzip(blob))) {
     return blob;
   }
-  // eslint-disable-next-line compat/compat
+
   const stream = blob.stream().pipeThrough(new DecompressionStream("gzip"));
-  return new Blob([await new Response(stream).arrayBuffer()], {
-    type: "application/json",
-  });
+  const buffer = await new Response(stream).arrayBuffer();
+  return new Blob([buffer], { type: jsonMimeType });
 };
 
 export const createVaultBackup = async (input: {
@@ -134,14 +152,17 @@ export const createVaultBackup = async (input: {
   for (const noteId of noteIds) {
     // eslint-disable-next-line no-await-in-loop
     const note = await input.adapter.readNote(noteId);
-    if (!note) {
-      continue;
+    if (note) {
+      const derivedMarkdown = toDerivedMarkdown(
+        note.title,
+        note.derived?.plainText ?? ""
+      );
+      notes.push({
+        noteDocument: note,
+        derivedMarkdown,
+        noteId,
+      });
     }
-    const derivedMarkdown = toDerivedMarkdown(
-      note.title,
-      note.derived?.plainText ?? ""
-    );
-    notes.push({ noteId, noteDocument: note, derivedMarkdown });
   }
 
   const assetIds = await input.adapter.listAssets();
@@ -149,18 +170,17 @@ export const createVaultBackup = async (input: {
   for (const assetId of assetIds) {
     // eslint-disable-next-line no-await-in-loop
     const blob = await input.adapter.readAsset(assetId);
-    if (!blob) {
-      continue;
+    if (blob) {
+      // mime may be empty in some adapters for unknown assets.
+      const mime = blob.type || fallbackAssetMimeType;
+      // eslint-disable-next-line no-await-in-loop
+      const dataBase64 = await blobToBase64(blob);
+      assets.push({ assetId, mime, dataBase64 });
     }
-    // mime may be empty in some adapters for unknown assets.
-    const mime = blob.type || "application/octet-stream";
-    // eslint-disable-next-line no-await-in-loop
-    const dataBase64 = await blobToBase64(blob);
-    assets.push({ assetId, mime, dataBase64 });
   }
 
   return {
-    format: "embervault-backup",
+    format: backupFormat,
     version: 1,
     createdAt: now.getTime(),
     vault: input.vault,
@@ -174,14 +194,65 @@ export const serializeVaultBackup = async (input: {
   compress?: boolean;
 }): Promise<{ blob: Blob; fileName: string }> => {
   const payload = JSON.stringify(input.backup);
-  const jsonBlob = new Blob([payload], { type: "application/json" });
+  const jsonBlob = new Blob([payload], { type: jsonMimeType });
   const compress = input.compress !== false;
   const blob = compress ? await gzipBlobIfSupported(jsonBlob) : jsonBlob;
-  const ext = blob.type === "application/gzip" ? "json.gz" : "json";
+  const extension = blob.type === gzipMimeType ? "json.gz" : "json";
   return {
     blob,
-    fileName: `embervault-backup-${input.backup.createdAt}.${ext}`,
+    fileName: `embervault-backup-${input.backup.createdAt}.${extension}`,
   };
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isBackupNoteEntry = (value: unknown): value is BackupNoteEntry => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (typeof value.noteId !== "string") {
+    return false;
+  }
+  if (!isRecord(value.noteDocument)) {
+    return false;
+  }
+  return typeof value.derivedMarkdown === "string";
+};
+
+const isBackupAssetEntry = (value: unknown): value is BackupAssetEntry => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (typeof value.assetId !== "string") {
+    return false;
+  }
+  if (typeof value.mime !== "string") {
+    return false;
+  }
+  return typeof value.dataBase64 === "string";
+};
+
+const isVaultBackupV1 = (value: unknown): value is VaultBackupV1 => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (value.format !== backupFormat) {
+    return false;
+  }
+  if (value.version !== 1) {
+    return false;
+  }
+  if (typeof value.createdAt !== "number") {
+    return false;
+  }
+  if (!isRecord(value.vault)) {
+    return false;
+  }
+  if (!Array.isArray(value.notes) || !value.notes.every(isBackupNoteEntry)) {
+    return false;
+  }
+  return Array.isArray(value.assets) && value.assets.every(isBackupAssetEntry);
 };
 
 export const parseVaultBackup = async (input: {
@@ -190,47 +261,44 @@ export const parseVaultBackup = async (input: {
   const maybeJson = await gunzipBlobIfNeeded(input.file);
   const text = await readBlobAsText(maybeJson);
   const parsed: unknown = JSON.parse(text);
-  if (
-    !parsed ||
-    typeof parsed !== "object" ||
-    (parsed as { format?: unknown }).format !== "embervault-backup"
-  ) {
+  if (!isVaultBackupV1(parsed)) {
     throw new Error("Unsupported backup file.");
   }
-  const version = (parsed as { version?: unknown }).version;
-  if (version !== 1) {
-    throw new Error(`Unsupported backup version ${String(version)}.`);
-  }
-  return parsed as VaultBackupV1;
+  return parsed;
 };
 
 export const restoreVaultBackup = async (input: {
   adapter: StorageAdapter;
   backup: VaultBackupV1;
-  onProgress?: (value: { phase: string; current: number; total: number }) => void;
+  onProgress?: (value: {
+    phase: string;
+    current: number;
+    total: number;
+  }) => void;
 }): Promise<void> => {
-  const progress = input.onProgress ?? (() => {});
-  const vault = input.backup.vault;
+  const progress = input.onProgress ?? (() => "");
+  const { adapter, backup } = input;
+  const { assets, notes, vault } = backup;
 
   // Best-effort wipe of existing content to avoid mixing vaults.
-  const existingVault = await input.adapter.readVault();
+  const existingVault = await adapter.readVault();
   if (existingVault) {
     const noteIds = Object.keys(existingVault.notesIndex);
     progress({ phase: "delete-notes", current: 0, total: noteIds.length });
     for (const [index, noteId] of noteIds.entries()) {
       // eslint-disable-next-line no-await-in-loop
-      await input.adapter.deleteNotePermanent(noteId);
+      await adapter.deleteNotePermanent(noteId);
       progress({
         phase: "delete-notes",
         current: index + 1,
         total: noteIds.length,
       });
     }
-    const assetIds = await input.adapter.listAssets();
+    const assetIds = await adapter.listAssets();
     progress({ phase: "delete-assets", current: 0, total: assetIds.length });
     for (const [index, assetId] of assetIds.entries()) {
       // eslint-disable-next-line no-await-in-loop
-      await input.adapter.deleteAsset(assetId);
+      await adapter.deleteAsset(assetId);
       progress({
         phase: "delete-assets",
         current: index + 1,
@@ -239,7 +307,7 @@ export const restoreVaultBackup = async (input: {
     }
   }
 
-  await input.adapter.writeVault({
+  await adapter.writeVault({
     ...vault,
     // Rebuilt by adapter.writeNote calls.
     notesIndex: {},
@@ -247,10 +315,14 @@ export const restoreVaultBackup = async (input: {
     updatedAt: Math.max(vault.updatedAt, Date.now()),
   });
 
-  progress({ phase: "write-notes", current: 0, total: input.backup.notes.length });
-  for (const [index, entry] of input.backup.notes.entries()) {
+  progress({
+    phase: "write-notes",
+    current: 0,
+    total: notes.length,
+  });
+  for (const [index, entry] of notes.entries()) {
     // eslint-disable-next-line no-await-in-loop
-    await input.adapter.writeNote({
+    await adapter.writeNote({
       noteId: entry.noteId,
       noteDocument: entry.noteDocument,
       derivedMarkdown: entry.derivedMarkdown,
@@ -258,22 +330,21 @@ export const restoreVaultBackup = async (input: {
     progress({
       phase: "write-notes",
       current: index + 1,
-      total: input.backup.notes.length,
+      total: notes.length,
     });
   }
 
   progress({
     phase: "write-assets",
     current: 0,
-    total: input.backup.assets.length,
+    total: assets.length,
   });
-  for (const [index, entry] of input.backup.assets.entries()) {
-    // eslint-disable-next-line no-await-in-loop
+  for (const [index, entry] of assets.entries()) {
     const bytes = base64ToBytes(entry.dataBase64);
     const copy = new Uint8Array(bytes.length);
     copy.set(bytes);
     // eslint-disable-next-line no-await-in-loop
-    await input.adapter.writeAsset({
+    await adapter.writeAsset({
       assetId: entry.assetId,
       blob: new Blob([copy], { type: entry.mime }),
       meta: { mime: entry.mime, size: copy.byteLength },
@@ -281,7 +352,7 @@ export const restoreVaultBackup = async (input: {
     progress({
       phase: "write-assets",
       current: index + 1,
-      total: input.backup.assets.length,
+      total: assets.length,
     });
   }
 };
@@ -290,12 +361,17 @@ export const triggerBrowserDownload = (input: {
   blob: Blob;
   fileName: string;
 }): void => {
-  const url = URL.createObjectURL(input.blob);
+  const { blob, fileName } = input;
+  // eslint-disable-next-line compat/compat
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = input.fileName;
+  link.download = fileName;
   link.rel = "noopener";
   link.click();
   // Revoke later to avoid disrupting the download in some browsers.
-  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  globalThis.setTimeout(() => {
+    // eslint-disable-next-line compat/compat
+    URL.revokeObjectURL(url);
+  }, 30_000);
 };

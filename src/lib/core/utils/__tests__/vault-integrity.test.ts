@@ -10,6 +10,10 @@ import type {
   Vault,
 } from "$lib/core/storage/types";
 
+const yieldOnce = async (): Promise<void> => {
+  await new Response().text();
+};
+
 const createVault = (notesIndex: Record<string, NoteIndexEntry>): Vault => ({
   id: "vault",
   name: "Test vault",
@@ -17,9 +21,9 @@ const createVault = (notesIndex: Record<string, NoteIndexEntry>): Vault => ({
   updatedAt: 1,
   folders: {},
   tags: {},
-  notesIndex,
   templatesIndex: {},
   settings: {},
+  notesIndex,
 });
 
 const createMemoryAdapter = (): {
@@ -34,46 +38,94 @@ const createMemoryAdapter = (): {
   const assets = new Map<string, Blob>();
 
   const adapter: StorageAdapter = {
-    init: () => Promise.resolve(),
-    readVault: () => Promise.resolve(vault),
-    writeVault: (nextVault) => {
+    async init() {
+      await yieldOnce();
+    },
+    async readVault() {
+      await yieldOnce();
+      return vault;
+    },
+    async writeVault(nextVault) {
+      await yieldOnce();
       vault = nextVault;
-      return Promise.resolve();
     },
-    listNotes: () => Promise.resolve(Object.values(vault?.notesIndex ?? {})),
-    listTemplates: () => Promise.resolve([]),
-    readNote: (noteId) => Promise.resolve(notes.get(noteId) ?? null),
-    readTemplate: () => Promise.resolve(null),
-    writeNote: () => Promise.resolve(),
-    writeTemplate: () => Promise.resolve(),
-    deleteNoteSoft: () => Promise.resolve(),
-    restoreNote: () => Promise.resolve(),
-    deleteNotePermanent: () => Promise.resolve(),
-    deleteTemplate: () => Promise.resolve(),
-    writeAsset: (input) => {
+    async listNotes() {
+      await yieldOnce();
+      return Object.values(vault?.notesIndex ?? {});
+    },
+    async listTemplates() {
+      await yieldOnce();
+      return [];
+    },
+    async readNote(noteId) {
+      await yieldOnce();
+      return notes.get(noteId) ?? null;
+    },
+    async readTemplate() {
+      await yieldOnce();
+      return null;
+    },
+    async writeNote() {
+      await yieldOnce();
+    },
+    async writeTemplate() {
+      await yieldOnce();
+    },
+    async deleteNoteSoft() {
+      await yieldOnce();
+    },
+    async restoreNote() {
+      await yieldOnce();
+    },
+    async deleteNotePermanent() {
+      await yieldOnce();
+    },
+    async deleteTemplate() {
+      await yieldOnce();
+    },
+    async writeAsset(input) {
+      await yieldOnce();
       assets.set(input.assetId, input.blob);
-      return Promise.resolve();
     },
-    readAsset: (assetId) => Promise.resolve(assets.get(assetId) ?? null),
-    listAssets: () => Promise.resolve([...assets.keys()]),
-    deleteAsset: (assetId) => {
+    async readAsset(assetId) {
+      await yieldOnce();
+      return assets.get(assetId) ?? null;
+    },
+    async listAssets() {
+      await yieldOnce();
+      return [...assets.keys()];
+    },
+    async deleteAsset(assetId) {
+      await yieldOnce();
       assets.delete(assetId);
-      return Promise.resolve();
     },
-    writeUIState: () => Promise.resolve(),
-    readUIState: () => Promise.resolve(null),
-    writeSearchIndex: () => Promise.resolve(),
-    readSearchIndex: () => Promise.resolve(null),
+    async writeUIState() {
+      await yieldOnce();
+    },
+    async readUIState() {
+      await yieldOnce();
+      return null;
+    },
+    async writeSearchIndex() {
+      await yieldOnce();
+    },
+    async readSearchIndex() {
+      await yieldOnce();
+      return null;
+    },
+  };
+
+  const getVault = (): Vault | null => vault;
+  const setVault = function setVault(nextVault: Vault): void {
+    vault = nextVault;
   };
 
   return {
     adapter,
-    getVault: () => vault,
-    setVault: (nextVault) => {
-      vault = nextVault;
-    },
     notes,
     assets,
+    getVault,
+    setVault,
   };
 };
 
@@ -106,9 +158,22 @@ describe("vault integrity", () => {
       throw new Error("Missing test vault");
     }
 
-    const report = await runVaultIntegrityCheck({ adapter: memory.adapter, vault });
-    expect(report.issues.some(issue => issue.noteId === "missing")).toBe(true);
-    expect(report.issues.some(issue => issue.assetId === "orphan")).toBe(true);
+    const report = await runVaultIntegrityCheck({
+      adapter: memory.adapter,
+      vault,
+    });
+    let sawMissingNote = false;
+    let sawOrphanAsset = false;
+    for (const issue of report.issues) {
+      if (issue.noteId === "missing") {
+        sawMissingNote = true;
+      }
+      if (issue.assetId === "orphan") {
+        sawOrphanAsset = true;
+      }
+    }
+    expect(sawMissingNote).toBe(true);
+    expect(sawOrphanAsset).toBe(true);
 
     const repaired = await applyVaultIntegrityRepairs({
       adapter: memory.adapter,
@@ -121,4 +186,3 @@ describe("vault integrity", () => {
     expect(repaired.checkedAt).toBeGreaterThan(0);
   });
 });
-

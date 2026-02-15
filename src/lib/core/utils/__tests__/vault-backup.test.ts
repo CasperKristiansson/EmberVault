@@ -12,7 +12,13 @@ import type {
   Vault,
 } from "$lib/core/storage/types";
 
-const createVault = (input: { notesIndex?: Record<string, NoteIndexEntry> } = {}): Vault => ({
+const yieldOnce = async (): Promise<void> => {
+  await new Response().text();
+};
+
+const createVault = (
+  input: { notesIndex?: Record<string, NoteIndexEntry> } = {}
+): Vault => ({
   id: "vault",
   name: "Test vault",
   createdAt: 1,
@@ -38,20 +44,38 @@ const createMemoryAdapter = (): {
   let searchIndex: string | null = null;
 
   const adapter: StorageAdapter = {
-    init: () => Promise.resolve(),
-    readVault: () => Promise.resolve(vault),
-    writeVault: (nextVault) => {
-      vault = nextVault;
-      return Promise.resolve();
+    async init() {
+      await yieldOnce();
     },
-    listNotes: () => Promise.resolve(Object.values(vault?.notesIndex ?? {})),
-    listTemplates: () => Promise.resolve([]),
-    readNote: (noteId) => Promise.resolve(notes.get(noteId) ?? null),
-    readTemplate: () => Promise.resolve(null),
-    writeNote: (input) => {
+    async readVault() {
+      await yieldOnce();
+      return vault;
+    },
+    async writeVault(nextVault) {
+      await yieldOnce();
+      vault = nextVault;
+    },
+    async listNotes() {
+      await yieldOnce();
+      return Object.values(vault?.notesIndex ?? {});
+    },
+    async listTemplates() {
+      await yieldOnce();
+      return [];
+    },
+    async readNote(noteId) {
+      await yieldOnce();
+      return notes.get(noteId) ?? null;
+    },
+    async readTemplate() {
+      await yieldOnce();
+      return null;
+    },
+    async writeNote(input) {
+      await yieldOnce();
       notes.set(input.noteId, input.noteDocument);
       if (!vault) {
-        return Promise.reject(new Error("Missing vault"));
+        throw new Error("Missing vault");
       }
       vault = {
         ...vault,
@@ -70,12 +94,18 @@ const createMemoryAdapter = (): {
           },
         },
       };
-      return Promise.resolve();
     },
-    writeTemplate: () => Promise.resolve(),
-    deleteNoteSoft: () => Promise.resolve(),
-    restoreNote: () => Promise.resolve(),
-    deleteNotePermanent: (noteId) => {
+    async writeTemplate() {
+      await yieldOnce();
+    },
+    async deleteNoteSoft() {
+      await yieldOnce();
+    },
+    async restoreNote() {
+      await yieldOnce();
+    },
+    async deleteNotePermanent(noteId) {
+      await yieldOnce();
       notes.delete(noteId);
       if (vault) {
         vault = {
@@ -85,39 +115,55 @@ const createMemoryAdapter = (): {
           ),
         };
       }
-      return Promise.resolve();
     },
-    deleteTemplate: () => Promise.resolve(),
-    writeAsset: (input) => {
+    async deleteTemplate() {
+      await yieldOnce();
+    },
+    async writeAsset(input) {
+      await yieldOnce();
       assets.set(input.assetId, input.blob);
-      return Promise.resolve();
     },
-    readAsset: (assetId) => Promise.resolve(assets.get(assetId) ?? null),
-    listAssets: () => Promise.resolve([...assets.keys()]),
-    deleteAsset: (assetId) => {
+    async readAsset(assetId) {
+      await yieldOnce();
+      return assets.get(assetId) ?? null;
+    },
+    async listAssets() {
+      await yieldOnce();
+      return [...assets.keys()];
+    },
+    async deleteAsset(assetId) {
+      await yieldOnce();
       assets.delete(assetId);
-      return Promise.resolve();
     },
-    writeUIState: (state) => {
+    async writeUIState(state) {
+      await yieldOnce();
       uiState = state;
-      return Promise.resolve();
     },
-    readUIState: () => Promise.resolve(uiState),
-    writeSearchIndex: (snapshot) => {
+    async readUIState() {
+      await yieldOnce();
+      return uiState;
+    },
+    async writeSearchIndex(snapshot) {
+      await yieldOnce();
       searchIndex = snapshot;
-      return Promise.resolve();
     },
-    readSearchIndex: () => Promise.resolve(searchIndex),
+    async readSearchIndex() {
+      await yieldOnce();
+      return searchIndex;
+    },
+  };
+
+  const getVault = (): Vault | null => vault;
+  const setVault = function setVault(nextVault: Vault): void {
+    vault = nextVault;
   };
 
   return {
     adapter,
-    getVault: () => vault,
-    setVault: (nextVault) => {
-      vault = nextVault;
-    },
     notes,
     assets,
+    getVault,
+    setVault,
   };
 };
 
@@ -237,9 +283,6 @@ describe("vault backup", () => {
       throw new Error("Missing test vault");
     }
     const noteAEntry = existingVault.notesIndex["note-a"];
-    if (!noteAEntry) {
-      throw new Error("Missing note-a index entry");
-    }
     const noteADocument = memory.notes.get("note-a");
     if (!noteADocument) {
       throw new Error("Missing note-a document");

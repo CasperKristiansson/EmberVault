@@ -291,7 +291,7 @@
     for (const entry of linked) {
       let noteDoc: NoteDocumentFile | null = null;
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         noteDoc = await adapter.readNote(entry.id);
       } catch {
         noteDoc = null;
@@ -326,7 +326,7 @@
       }
       let noteDoc: NoteDocumentFile | null = null;
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         noteDoc = await adapter.readNote(candidate.id);
       } catch {
         noteDoc = null;
@@ -352,6 +352,36 @@
     }
     unlinkedMentions = unlinkedEntries;
     unlinkedMentionsLoading = false;
+  };
+
+  const clearBacklinksState = (): void => {
+    backlinksTargetId = null;
+    backlinksTargetTitle = null;
+    backlinksRequestSeq += 1;
+    backlinksLoading = false;
+    unlinkedMentionsLoading = false;
+    linkedMentions = [];
+    unlinkedMentions = [];
+  };
+
+  const refreshBacklinksForNote = (note: NoteDocumentFile | null): void => {
+    if (rightPanelTab !== "metadata" || !note) {
+      clearBacklinksState();
+      return;
+    }
+
+    const nextId = note.id;
+    const nextTitle = note.title ?? "";
+    if (nextId === backlinksTargetId && nextTitle === backlinksTargetTitle) {
+      return;
+    }
+
+    backlinksTargetId = nextId;
+    backlinksTargetTitle = nextTitle;
+    void loadBacklinksForTarget({
+      targetId: nextId,
+      targetTitle: nextTitle,
+    });
   };
 
   const resolveWikiLinkInActiveNote = async (
@@ -424,28 +454,6 @@
     await loadNotes();
     return noteId;
   };
-
-  $: {
-    const nextId = rightPanelTab === "metadata" ? activeNote?.id ?? null : null;
-    const nextTitle =
-      rightPanelTab === "metadata" ? activeNote?.title ?? null : null;
-    if (!nextId) {
-      backlinksTargetId = null;
-      backlinksTargetTitle = null;
-      backlinksRequestSeq += 1;
-      backlinksLoading = false;
-      unlinkedMentionsLoading = false;
-      linkedMentions = [];
-      unlinkedMentions = [];
-    } else if (nextId !== backlinksTargetId || nextTitle !== backlinksTargetTitle) {
-      backlinksTargetId = nextId;
-      backlinksTargetTitle = nextTitle;
-      void loadBacklinksForTarget({
-        targetId: nextId,
-        targetTitle: nextTitle ?? "",
-      });
-    }
-  }
 
   const isPermissionError = (error: unknown): boolean =>
     error instanceof Error && permissionErrorNames.has(error.name);
@@ -1374,6 +1382,7 @@
     activePane = "primary";
     tabTitles = {};
     setPaneNote("primary", null);
+    refreshBacklinksForNote(null);
     syncSaveState();
     pushToast("Workspace layout reset.", { tone: "success" });
   };
@@ -1753,6 +1762,7 @@
 
   const handleRightPanelTabSelect = (tab: RightPanelTab): void => {
     rightPanelTab = tab;
+    refreshBacklinksForNote(tab === "metadata" ? activeNote : null);
   };
 
   const sortNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] => {
@@ -2082,6 +2092,9 @@
     if (note) {
       setPaneNote(paneId, note);
       tabTitles = { ...tabTitles, [note.id]: note.title ?? "" };
+      if (paneId === activePane) {
+        refreshBacklinksForNote(note);
+      }
     }
   };
 
@@ -2137,6 +2150,9 @@
       return;
     }
     setPaneNote(paneId, null);
+    if (paneId === activePane) {
+      refreshBacklinksForNote(null);
+    }
   };
 
   const handleTabKeydown = (
@@ -2402,21 +2418,21 @@
   // Split view and pane docking have been removed; the editor always renders a
   // single pane.
 
-  const persistNote = async (note: NoteDocumentFile): Promise<void> => {
-    if (!vault) {
-      return;
-    }
-    const activeNotes = notes.filter((entry) => entry.deletedAt === null);
-    const resolvedPlainText = note.derived?.plainText ?? "";
-    const outgoingLinks = resolveOutgoingLinks(resolvedPlainText, activeNotes);
-    const resolvedNote: NoteDocumentFile = {
-      ...note,
-      derived: {
-        ...(note.derived ?? {}),
-        plainText: resolvedPlainText,
-        outgoingLinks,
-      },
-    };
+	  const persistNote = async (note: NoteDocumentFile): Promise<void> => {
+	    if (!vault) {
+	      return;
+	    }
+	    const activeNotes = notes.filter((entry) => entry.deletedAt === null);
+	    const resolvedPlainText = note.derived?.plainText ?? "";
+	    const outgoingLinks = resolveOutgoingLinks(resolvedPlainText, activeNotes);
+	    const resolvedNote: NoteDocumentFile = {
+	      ...note,
+	      derived: {
+	        ...(note.derived ?? {}),
+	        plainText: resolvedPlainText,
+	        outgoingLinks,
+	      },
+	    };
 
     await enqueueAdapterWrite(async () => {
       await runAdapterVoid(() =>
@@ -2426,10 +2442,21 @@
           derivedMarkdown: toDerivedMarkdown(note.title, resolvedPlainText),
         })
       );
-    });
+	    });
 
-    await updateSearchIndexForDocument(resolvedNote);
-  };
+	    await updateSearchIndexForDocument(resolvedNote);
+
+	    // Keep the in-memory pane note in sync so the metadata panel sees the
+	    // latest derived fields (e.g. outgoing links) without requiring a reload.
+	    for (const [paneId, pane] of Object.entries(paneStates)) {
+	      if (pane.note?.id !== resolvedNote.id) {
+	        continue;
+	      }
+	      updatePaneState(paneId, {
+	        note: resolvedNote,
+	      });
+	    }
+	  };
 
   const getSaveTask = (noteId: string): NoteSaveTask => {
     const existing = saveTasks[noteId];

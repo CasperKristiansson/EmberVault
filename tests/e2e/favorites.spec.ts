@@ -34,8 +34,9 @@ test("favorites filter shows starred notes", async ({ page }) => {
 
   const noteList = page.getByTestId("note-list");
   const secondRow = noteList
-    .getByText(secondTitle, { exact: true })
-    .locator("..");
+    .locator('[data-testid^="note-row-"]')
+    .filter({ hasText: secondTitle })
+    .first();
   await secondRow.hover();
   await secondRow.getByTestId(rowFavoriteTestId).click();
   await expect(secondRow.getByTestId(rowFavoriteTestId)).toHaveAttribute(

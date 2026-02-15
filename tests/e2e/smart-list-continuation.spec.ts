@@ -22,7 +22,6 @@ test("smart list continuation continues markdown markers in code blocks", async 
   await expect(page.getByTestId("settings-modal")).toHaveCount(hiddenCount);
 
   await page.getByTestId("new-note").click();
-  await page.getByTestId("toggle-markdown-view").click();
 
   const editor = page.getByTestId("note-body");
   await editor.click();

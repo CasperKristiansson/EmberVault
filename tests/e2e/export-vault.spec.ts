@@ -145,7 +145,7 @@ test("export vault writes markdown files into chosen folder", async ({
 
   await page.getByTestId("open-settings").click();
   await page.getByRole("button", { name: "Import/Export" }).click();
-  await page.getByRole("button", { name: "Export" }).click();
+  await page.getByRole("button", { name: "Export", exact: true }).click();
 
   const files = await page.evaluate(() => {
     const capture = (
