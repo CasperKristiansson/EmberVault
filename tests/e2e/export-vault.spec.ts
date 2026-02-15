@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 type Page = import("@playwright/test").Page;
 
 const installDirectoryPickerCapture = async (page: Page): Promise<void> => {
-  await page.evaluate(() => {
+  await page.addInitScript(() => {
     /* eslint-disable no-unused-vars */
     type ExportCapture = {
       files: Record<string, string>;
@@ -117,11 +117,10 @@ const installDirectoryPickerCapture = async (page: Page): Promise<void> => {
     };
 
     const root = createDirectoryHandle("");
-    (
-      globalThis as unknown as {
-        showDirectoryPicker?: () => DirectoryHandle;
-      }
-    ).showDirectoryPicker = () => root;
+    Object.defineProperty(globalThis, "showDirectoryPicker", {
+      value: () => root,
+      configurable: true,
+    });
     /* eslint-enable no-unused-vars */
   });
 };
@@ -129,12 +128,11 @@ const installDirectoryPickerCapture = async (page: Page): Promise<void> => {
 test("export vault writes markdown files into chosen folder", async ({
   page,
 }) => {
+  await installDirectoryPickerCapture(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/onboarding");
   await page.getByTestId("use-browser-storage").click();
   await page.waitForURL(/\/app\/?$/);
-
-  await installDirectoryPickerCapture(page);
 
   await page.getByTestId("new-note").click();
   const bodyEditor = page.getByTestId("note-body");
@@ -146,6 +144,7 @@ test("export vault writes markdown files into chosen folder", async ({
   await page.getByTestId("open-settings").click();
   await page.getByRole("button", { name: "Import/Export" }).click();
   await page.getByRole("button", { name: "Export", exact: true }).click();
+  await expect(page.getByText("Export complete.")).toBeVisible();
 
   const files = await page.evaluate(() => {
     const capture = (

@@ -20,7 +20,7 @@
   export let isLoading = false;
   export let linkCandidates: WikiLinkCandidate[] = [];
   export let spellcheck = true;
-  export let smartListContinuation = true;
+  export let smartListContinuation = false;
   export let getChips: (
     note: NoteDocumentFile | null
   ) => Array<{ key: string; label: string }> = () => [];

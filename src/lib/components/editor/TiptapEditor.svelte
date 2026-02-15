@@ -9,6 +9,7 @@
     getSlashMenuItems,
     isSlashMenuItemEnabled,
     type SlashMenuChain,
+    type SlashMenuItem,
     type SlashMenuItemId,
   } from "$lib/core/editor/slash-menu";
   import {
@@ -45,7 +46,7 @@
   export let noteId: string | null = null;
   export let linkCandidates: WikiLinkCandidate[] = [];
   export let spellcheck = true;
-  export let smartListContinuation = true;
+  export let smartListContinuation = false;
   export let onImagePaste: (file: File | Blob) => Promise<{
     assetId: string;
     src: string;
@@ -70,7 +71,9 @@
   let slashMenuSelectedIndex = 0;
   let slashMenuElement: HTMLDivElement | null = null;
   let slashMenuSlashPosition: number | null = null;
+  let slashMenuQuery = "";
   const slashMenuItems = getSlashMenuItems();
+  let slashMenuVisibleItems: SlashMenuItem[] = slashMenuItems;
 
   let tablePromptOpen = false;
   let tablePromptPosition: { x: number; y: number } | null = null;
@@ -144,28 +147,74 @@
   const clamp = (value: number, min: number, max: number): number =>
     Math.min(Math.max(value, min), max);
 
-  const getFirstEnabledIndex = (): number => {
-    const index = slashMenuItems.findIndex(item => item.enabled);
+  const getFirstEnabledIndex = (items: SlashMenuItem[]): number => {
+    const index = items.findIndex(item => item.enabled);
     return index === -1 ? 0 : index;
   };
 
   const getNextEnabledIndex = (
+    items: SlashMenuItem[],
     startIndex: number,
     direction: 1 | -1
   ): number => {
-    if (slashMenuItems.length === 0) {
+    if (items.length === 0) {
       return 0;
     }
     let nextIndex = startIndex;
-    for (let step = 0; step < slashMenuItems.length; step += 1) {
+    for (let step = 0; step < items.length; step += 1) {
       nextIndex =
-        (nextIndex + direction + slashMenuItems.length) %
-        slashMenuItems.length;
-      if (slashMenuItems[nextIndex]?.enabled) {
+        (nextIndex + direction + items.length) %
+        items.length;
+      if (items[nextIndex]?.enabled) {
         return nextIndex;
       }
     }
     return startIndex;
+  };
+
+  const normalizeSlashMenuQuery = (value: string): string =>
+    value.trim().toLowerCase();
+
+  const filterSlashMenuItems = (
+    items: SlashMenuItem[],
+    query: string
+  ): SlashMenuItem[] => {
+    const normalized = normalizeSlashMenuQuery(query);
+    if (!normalized) {
+      return items;
+    }
+    return items.filter(item => {
+      const label = item.label.toLowerCase();
+      return label.includes(normalized) || item.id.includes(normalized);
+    });
+  };
+
+  const updateSlashMenuQuery = (): void => {
+    if (!editor || !slashMenuOpen || slashMenuSlashPosition === null) {
+      slashMenuQuery = "";
+      return;
+    }
+    const selectionPos = editor.state.selection.from;
+    if (selectionPos <= slashMenuSlashPosition) {
+      closeSlashMenu();
+      return;
+    }
+    const trigger = editor.state.doc.textBetween(
+      slashMenuSlashPosition,
+      slashMenuSlashPosition + 1,
+      "\0",
+      "\0"
+    );
+    if (trigger !== "/") {
+      closeSlashMenu();
+      return;
+    }
+    slashMenuQuery = editor.state.doc.textBetween(
+      slashMenuSlashPosition + 1,
+      selectionPos,
+      "\0",
+      "\0"
+    );
   };
 
   const getNextWikiLinkIndex = (
@@ -209,13 +258,17 @@
     });
     slashMenuOpen = true;
     slashMenuSlashPosition = slashPos;
-    slashMenuSelectedIndex = getFirstEnabledIndex();
+    slashMenuQuery = "";
+    slashMenuVisibleItems = filterSlashMenuItems(slashMenuItems, slashMenuQuery);
+    slashMenuSelectedIndex = getFirstEnabledIndex(slashMenuVisibleItems);
   };
 
   const closeSlashMenu = (): void => {
     slashMenuOpen = false;
     slashMenuPosition = null;
     slashMenuSlashPosition = null;
+    slashMenuQuery = "";
+    slashMenuVisibleItems = slashMenuItems;
   };
 
   const closeTablePrompt = (): void => {
@@ -228,7 +281,7 @@
       return;
     }
     const chain = editor.chain().focus() as SlashMenuChain;
-    deleteSlashIfPresent(chain);
+    deleteSlashCommandTextIfPresent(chain);
     chain.run();
     const coords = editor.view.coordsAtPos(editor.state.selection.from);
     tablePromptPosition = resolveMenuPosition({
@@ -238,6 +291,7 @@
     tablePromptRows = 3;
     tablePromptCols = 3;
     tablePromptOpen = true;
+    closeSlashMenu();
   };
 
   const clampTableValue = (value: number): number => {
@@ -275,7 +329,7 @@
     closeWikiLinkMenu();
     closeTablePrompt();
     const chain = editor.chain().focus() as SlashMenuChain;
-    deleteSlashIfPresent(chain);
+    deleteSlashCommandTextIfPresent(chain);
     chain.run();
     const coords = editor.view.coordsAtPos(editor.state.selection.from);
     embedPromptPosition = resolveMenuPosition({
@@ -285,6 +339,7 @@
     embedPromptUrl = "";
     embedPromptError = "";
     embedPromptOpen = true;
+    closeSlashMenu();
   };
 
   const resolveEmbedUrl = (value: string): string => {
@@ -410,12 +465,18 @@
   };
 
 
-  const deleteSlashIfPresent = (chain: SlashMenuChain): void => {
+  const deleteSlashCommandTextIfPresent = (chain: SlashMenuChain): void => {
     if (!editor) {
       return;
     }
-    const fallbackPos = editor.state.selection.from - 1;
-    const slashPos = slashMenuSlashPosition ?? fallbackPos;
+    if (slashMenuSlashPosition === null) {
+      return;
+    }
+    const slashPos = slashMenuSlashPosition;
+    const selectionPos = editor.state.selection.from;
+    if (selectionPos <= slashPos) {
+      return;
+    }
     if (slashPos < 0 || slashPos + 1 > editor.state.doc.content.size) {
       return;
     }
@@ -426,7 +487,7 @@
       "\0"
     );
     if (text === "/") {
-      chain.deleteRange({ from: slashPos, to: slashPos + 1 });
+      chain.deleteRange({ from: slashPos, to: selectionPos });
     }
   };
 
@@ -435,18 +496,16 @@
       return;
     }
     if (itemId === "table") {
-      closeSlashMenu();
       openTablePrompt();
       return;
     }
     if (itemId === "embed") {
-      closeSlashMenu();
       openEmbedPrompt();
       return;
     }
     if (itemId === "image") {
       const chain = editor.chain().focus() as SlashMenuChain;
-      deleteSlashIfPresent(chain);
+      deleteSlashCommandTextIfPresent(chain);
       chain.run();
       closeSlashMenu();
       openImagePicker();
@@ -454,7 +513,7 @@
     }
     if (itemId === "callout") {
       const chain = editor.chain().focus() as SlashMenuChain;
-      deleteSlashIfPresent(chain);
+      deleteSlashCommandTextIfPresent(chain);
       chain.run();
       editor
         .chain()
@@ -471,7 +530,7 @@
       return;
     }
     const chain = editor.chain().focus() as SlashMenuChain;
-    deleteSlashIfPresent(chain);
+    deleteSlashCommandTextIfPresent(chain);
     if (applySlashMenuCommand(chain, itemId)) {
       chain.run();
     }
@@ -505,6 +564,18 @@
     linkCandidates,
     wikiLinkQuery
   ).slice(0, wikiMenuItemLimit);
+
+  $: slashMenuVisibleItems = filterSlashMenuItems(slashMenuItems, slashMenuQuery);
+
+  $: if (slashMenuOpen) {
+    if (slashMenuVisibleItems.length === 0) {
+      slashMenuSelectedIndex = 0;
+    } else if (slashMenuSelectedIndex >= slashMenuVisibleItems.length) {
+      slashMenuSelectedIndex = getFirstEnabledIndex(slashMenuVisibleItems);
+    } else if (!slashMenuVisibleItems[slashMenuSelectedIndex]?.enabled) {
+      slashMenuSelectedIndex = getFirstEnabledIndex(slashMenuVisibleItems);
+    }
+  }
 
   $: if (wikiLinkOpen) {
     if (wikiLinkItems.length === 0) {
@@ -695,6 +766,7 @@
             if (event.key === "ArrowDown") {
               event.preventDefault();
               slashMenuSelectedIndex = getNextEnabledIndex(
+                slashMenuVisibleItems,
                 slashMenuSelectedIndex,
                 1
               );
@@ -703,6 +775,7 @@
             if (event.key === "ArrowUp") {
               event.preventDefault();
               slashMenuSelectedIndex = getNextEnabledIndex(
+                slashMenuVisibleItems,
                 slashMenuSelectedIndex,
                 -1
               );
@@ -710,7 +783,7 @@
             }
             if (event.key === "Enter") {
               event.preventDefault();
-              const selected = slashMenuItems[slashMenuSelectedIndex];
+              const selected = slashMenuVisibleItems[slashMenuSelectedIndex];
               if (selected) {
                 selectSlashMenuItem(selected.id);
               }
@@ -787,6 +860,9 @@
       onUpdate: ({ editor }) => {
         if (wikiLinkOpen) {
           updateWikiLinkQuery();
+        }
+        if (slashMenuOpen) {
+          updateSlashMenuQuery();
         }
         onUpdate({
           json: editor.getJSON() as Record<string, unknown>,
@@ -1000,7 +1076,7 @@
 <SlashMenu
   open={slashMenuOpen}
   position={slashMenuPosition}
-  items={slashMenuItems}
+  items={slashMenuVisibleItems}
   selectedIndex={slashMenuSelectedIndex}
   bind:element={slashMenuElement}
   onSelect={selectSlashMenuItem}

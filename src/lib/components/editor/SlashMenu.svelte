@@ -28,7 +28,7 @@
         aria-disabled={!item.enabled}
         data-testid={`slash-menu-item-${item.id}`}
         disabled={!item.enabled}
-        on:click={() => item.enabled && onSelect(item.id)}
+        on:click|stopPropagation={() => item.enabled && onSelect(item.id)}
         on:mouseenter={() => item.enabled && onHighlight(index)}
       >
         <span class="label">{item.label}</span>

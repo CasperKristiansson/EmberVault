@@ -28,6 +28,8 @@ test("onboarding can connect to s3 storage (network mocked)", async ({
 
   // Route matching behaves differently across engines; use a catch-all route
   // and filter by URL to ensure WebKit is also intercepted.
+  // Prettier enforces parens; Sonar suggests removing them.
+  // eslint-disable-next-line sonarjs/arrow-function-convention
   await page.route("**/*", async (route) => {
     const request = route.request();
     if (!request.url().includes("amazonaws.com")) {

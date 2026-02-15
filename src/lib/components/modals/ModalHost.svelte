@@ -74,7 +74,7 @@
     showNotePreview: true,
     showTagPillsInList: true,
     markdownViewByDefault: false,
-    smartListContinuation: true,
+    smartListContinuation: false,
     interfaceDensity: "comfortable",
     accentColor: "orange",
   };

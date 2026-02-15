@@ -504,7 +504,7 @@
     showNotePreview: true,
     showTagPillsInList: true,
     markdownViewByDefault: false,
-    smartListContinuation: true,
+    smartListContinuation: false,
     interfaceDensity: "comfortable",
     accentColor: "orange",
   };
@@ -529,7 +529,7 @@
       showNotePreview: input.showNotePreview !== false,
       showTagPillsInList: input.showTagPillsInList !== false,
       markdownViewByDefault: input.markdownViewByDefault === true,
-      smartListContinuation: input.smartListContinuation !== false,
+      smartListContinuation: input.smartListContinuation === true,
       interfaceDensity: resolveInterfaceDensity(input.interfaceDensity),
       accentColor: resolveAccentColor(input.accentColor),
     };

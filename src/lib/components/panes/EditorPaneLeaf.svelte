@@ -41,7 +41,7 @@
     height?: number;
   } | null> = async () => null;
   export let spellcheck = true;
-  export let smartListContinuation = true;
+  export let smartListContinuation = false;
 
   $: activeViewMode =
     pane.activeTabId && pane.tabViewModes[pane.activeTabId]
