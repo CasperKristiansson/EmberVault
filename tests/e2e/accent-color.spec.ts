@@ -5,7 +5,7 @@ test("accent color changes CSS accent tokens", async ({ page }) => {
   await page.goto("/onboarding");
 
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   const readAccent0 = (): Promise<string> =>
     page.evaluate(() =>

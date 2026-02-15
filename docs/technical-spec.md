@@ -173,6 +173,10 @@ Implementation requirements:
 - Soft delete:
   - Deleted notes moved to Trash with deletedAt timestamp
   - Restore returns to original folder (if exists), else root
+- Maintenance tools (Settings):
+  - Backup (single file): download/restore a compressed JSON backup (restoring replaces current vault contents)
+  - Vault integrity check: scans for missing notes/assets and safe cleanup opportunities
+  - Repair: applies safe fixes (prune missing note index entries, delete orphan assets, fix folder references)
 
 ## 8) Testing + CI (must be fully automated)
 

@@ -168,6 +168,11 @@ Block interactions:
 - Slash menu:
   - Trigger “/”
   - Menu opens under caret, max height 320px, scrollable
+  - Typing after “/” filters items by label/id (case-insensitive)
+  - Arrow up/down changes the highlighted item
+  - Enter selects the highlighted item
+  - Esc closes the menu
+  - When a command is executed, the “/” and any typed query are removed from the document
   - Items: Heading, List, Checklist, Quote, Code, Table, Image, Math, Divider, Callout, Embed URL
 
 Markdown support (must be explicit):
@@ -232,6 +237,20 @@ Metadata:
 
 - System fields:
   - Created, Updated, Folder, Tags, Favorite
+- Links:
+  - Unresolved links:
+    - Show outgoing wiki links that do not resolve to an existing note id
+    - Each row shows `[[raw]]` plus a match count summary
+    - If matches exist:
+      - Show a select to choose a target note
+      - “Resolve” button converts that wiki link to the selected stable note id
+    - If no matches exist:
+      - “Create note” button creates a note with that title and resolves the link
+    - “Convert” button converts all unresolved links that have exactly one match
+  - Backlinks:
+    - Linked mentions: notes that link to the active note (wiki links)
+    - Unlinked mentions: notes that mention the active note title in plain text
+    - Clicking an item opens the source note
 - Custom fields:
   - Key-value pairs (string, number, date, boolean)
   - Add field button Rules:
@@ -318,6 +337,8 @@ Storage section content:
      - Inline form fields: bucket, region, optional prefix, access key id, secret access key, optional session token
      - Primary button: “Connect S3” (or “Update credentials” if already set)
 - Switching storage type requires a confirmation dialog if it would disconnect from the current vault (no silent migration).
+  - Switching storage type requires a confirmation dialog and migrates the current vault into the newly selected storage.
+  - Migration copies notes + assets + vault index; if migration fails, keep the current vault active and show an error.
 
 General section content:
 
@@ -337,7 +358,7 @@ Editor section content:
 
 - Spellcheck toggle
 - Markdown view by default toggle
-- Smart list continuation toggle
+- Smart list continuation toggle (default: off)
 
 Appearance section content:
 
@@ -352,11 +373,15 @@ Shortcuts section content:
 
 Import/Export section content:
 
+- Backup (single file): download a compressed JSON backup and restore it later (restoring replaces the current vault contents)
 - Export vault: export derived Markdown + assets to a folder (Chrome/Edge only)
 - Import from folder: import `.md` notes from a folder (Chrome/Edge only)
 
 Privacy section content:
 
+- Vault integrity check:
+  - “Run” scans for missing notes/assets and safe cleanup opportunities
+  - “Repair” applies safe fixes (prune missing note index entries, delete orphan assets, fix folder parent/child references)
 - Rebuild search index
 - Reset workspace layout
 - Reset preferences

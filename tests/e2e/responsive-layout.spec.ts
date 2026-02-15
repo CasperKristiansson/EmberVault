@@ -5,7 +5,7 @@ test("mobile layout shows bottom nav and switches panes", async ({ page }) => {
   await page.goto("/onboarding");
 
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   const nav = page.getByTestId("mobile-nav");
   const notesPane = page.getByTestId("note-list-pane");

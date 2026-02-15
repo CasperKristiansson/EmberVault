@@ -23,7 +23,7 @@ const isContentEditable = function isContentEditable(
 test("paste image inserts an image block", async ({ page }) => {
   await page.goto(onboardingPath);
   await page.getByTestId(useBrowserStorageTestId).click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId(newNoteTestId).click();
 
@@ -75,7 +75,7 @@ test("paste image inserts an image block", async ({ page }) => {
 test("paste image persists after reload", async ({ page }) => {
   await page.goto(onboardingPath);
   await page.getByTestId(useBrowserStorageTestId).click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId(newNoteTestId).click();
 
@@ -141,7 +141,7 @@ test("paste image persists after reload", async ({ page }) => {
 test("drag-drop image inserts an image block", async ({ page }) => {
   await page.goto(onboardingPath);
   await page.getByTestId(useBrowserStorageTestId).click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId(newNoteTestId).click();
 
@@ -191,7 +191,7 @@ test("drag-drop image inserts an image block", async ({ page }) => {
 test("image caption renders and opens lightbox", async ({ page }) => {
   await page.goto(onboardingPath);
   await page.getByTestId(useBrowserStorageTestId).click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId(newNoteTestId).click();
 

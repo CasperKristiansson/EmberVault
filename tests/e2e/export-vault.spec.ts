@@ -132,7 +132,7 @@ test("export vault writes markdown files into chosen folder", async ({
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/onboarding");
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId("new-note").click();
   const bodyEditor = page.getByTestId("note-body");

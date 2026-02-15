@@ -10,7 +10,7 @@ test("interface density changes list row height", async ({ page }) => {
   await page.setViewportSize({ width: viewWidth, height: viewHeight });
   await page.goto("/onboarding");
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId("new-note").click();
 

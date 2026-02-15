@@ -37,7 +37,7 @@ test("import from folder creates a note from markdown", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/onboarding");
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId("open-settings").click();
   await page.getByRole("button", { name: "Import/Export" }).click();

@@ -26,6 +26,7 @@ Implement `StorageAdapter` with:
 - deleteTemplate(templateId)
 - writeAsset({ assetId, blob, meta })
 - readAsset(assetId)
+- deleteAsset(assetId)
 - listAssets()
 - writeUIState(state)
 - readUIState()
@@ -120,7 +121,19 @@ Notes:
     - Retry access
     - Switch to browser storage (IndexedDB)
 - Switching adapters:
+  - Switching storage mode in Settings migrates the current vault into the newly selected storage (notes + assets + vault index) after an explicit confirmation.
   - Provide “Export vault to folder” and “Import from folder” utilities
+
+## 6.1) Backup (Single File)
+
+- Backup file: compressed JSON (gzip when supported), format `"embervault-backup"`, version `1`
+- Contents:
+  - Vault snapshot (folder tree, tags, note index, etc.)
+  - Notes: canonical JSON plus derived Markdown
+  - Assets: base64-encoded blobs with a stored mime type
+- Restore behavior:
+  - Best-effort deletes existing notes and assets first to avoid mixing vaults
+  - Writes the vault, then writes notes, then writes assets
 
 ## 8) S3 layout (S3Adapter)
 

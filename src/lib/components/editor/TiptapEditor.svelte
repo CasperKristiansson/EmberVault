@@ -538,7 +538,7 @@
   };
 
   const handleSlashMenuHighlight = (index: number): void => {
-    if (slashMenuItems[index]?.enabled) {
+    if (slashMenuVisibleItems[index]?.enabled) {
       slashMenuSelectedIndex = index;
     }
   };
@@ -780,6 +780,23 @@
                 -1
               );
               return true;
+            }
+            if (slashMenuSlashPosition === null) {
+              if (event.key === "Backspace") {
+                event.preventDefault();
+                slashMenuQuery = slashMenuQuery.slice(0, -1);
+                return true;
+              }
+              if (
+                event.key.length === 1 &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                !event.altKey
+              ) {
+                event.preventDefault();
+                slashMenuQuery += event.key;
+                return true;
+              }
             }
             if (event.key === "Enter") {
               event.preventDefault();

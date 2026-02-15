@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("global search returns results with snippet", async ({ page }) => {
   await page.goto("/onboarding");
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId("new-note").click();
 
@@ -30,7 +30,7 @@ test("global search returns results with snippet", async ({ page }) => {
 test("global search finds note by partial typo", async ({ page }) => {
   await page.goto("/onboarding");
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId("new-note").click();
 

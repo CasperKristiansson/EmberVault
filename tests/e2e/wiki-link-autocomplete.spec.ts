@@ -6,7 +6,7 @@ test("wiki link autocomplete inserts note id", async ({ page }) => {
 
   await page.goto("/onboarding");
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   const createNote = async (title: string): Promise<void> => {
     await page.getByTestId("new-note").click();

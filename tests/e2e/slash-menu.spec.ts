@@ -13,7 +13,7 @@ test("slash menu inserts a checklist", async ({ page }) => {
   await page.goto(onboardingPath);
 
   await page.getByTestId(useBrowserStorageTestId).click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId(newNoteTestId).click();
 
@@ -30,7 +30,7 @@ test("slash menu inserts a checklist", async ({ page }) => {
 test("slash menu inserts a callout", async ({ page }) => {
   await page.goto(onboardingPath);
   await page.getByTestId(useBrowserStorageTestId).click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId(newNoteTestId).click();
   const bodyEditor = page.getByTestId(noteBodyTestId);
@@ -48,7 +48,7 @@ test("slash menu inserts an embed url block", async ({ page }) => {
 
   await page.goto(onboardingPath);
   await page.getByTestId(useBrowserStorageTestId).click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId(newNoteTestId).click();
   const bodyEditor = page.getByTestId(noteBodyTestId);
@@ -70,7 +70,7 @@ test("slash menu inserts an embed url block", async ({ page }) => {
 test("slash menu inserts an image from file picker", async ({ page }) => {
   await page.goto(onboardingPath);
   await page.getByTestId(useBrowserStorageTestId).click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId(newNoteTestId).click();
   const bodyEditor = page.getByTestId(noteBodyTestId);

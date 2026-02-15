@@ -6,7 +6,7 @@ test("right panel shows metadata tab for selected note", async ({ page }) => {
 
   await page.goto("/onboarding");
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId("new-note").click();
   const bodyEditor = page.getByTestId("note-body");

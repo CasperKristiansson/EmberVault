@@ -8,7 +8,7 @@ test("unresolved links can be resolved to a stable id", async ({ page }) => {
 
   await page.goto("/onboarding");
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   const bodyEditor = page.getByTestId("note-body");
 

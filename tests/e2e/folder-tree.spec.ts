@@ -5,7 +5,7 @@ test("create, rename, and delete an empty folder", async ({ page }) => {
   await page.goto("/onboarding");
 
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId("projects-toggle").click();
   await expect(page.getByTestId("projects-overlay")).toBeVisible();

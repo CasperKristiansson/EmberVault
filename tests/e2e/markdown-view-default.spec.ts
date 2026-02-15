@@ -10,7 +10,7 @@ test("markdown view by default opens notes in markdown preview", async ({
   await page.goto("/onboarding");
 
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
 
   await page.getByTestId("open-settings").click();
   await expect(page.getByTestId("settings-modal")).toBeVisible();

@@ -8,7 +8,7 @@ test("creates notes in folders and filters the list", async ({ page }) => {
   await page.goto("/onboarding");
 
   await page.getByTestId("use-browser-storage").click();
-  await page.waitForURL(/\/app\/?$/);
+  await expect(page).toHaveURL(/\/app\/?$/);
   await expect(page.getByTestId("new-note")).toBeEnabled();
 
   const openProjects = async (): Promise<void> => {
