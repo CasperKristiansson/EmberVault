@@ -75,7 +75,7 @@ test("onboarding can connect to s3 storage (network mocked)", async ({
 
   await page.getByRole("button", { name: "Connect S3" }).click();
 
-  await expect(page).toHaveURL("**/app");
+  await expect(page).toHaveURL(/\/app\/?$/);
   await expect(page.getByTestId("note-list-title")).toBeVisible();
 
   expect(objects.has("embervault/vault.json")).toBe(true);
