@@ -1,4 +1,20 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+
+type Locator = import("@playwright/test").Locator;
+type Page = import("@playwright/test").Page;
+
+const onboardingPath = "/onboarding";
+const appPathPattern = /\/app\/?$/;
+const connectS3Label = "Connect S3";
+const settingsModalTestId = "settings-modal";
+const openSettingsTestId = "open-settings";
+const storageSkipMessage =
+  "Playwright WebKit does not reliably support the Web APIs needed for S3 storage tests.";
+const onboardingSkipMessage =
+  "Playwright WebKit does not reliably support the Web APIs needed for S3 onboarding in this test harness.";
+const mockAccessKeyId = "AKIA_TEST";
+const mockSecretAccessKey = "SECRET_TEST";
+const vaultStorageKey = "embervault/vault.json";
 
 const extractObjectKey = (url: string): string => {
   const missingIndex = -1;
@@ -13,17 +29,10 @@ const extractObjectKey = (url: string): string => {
       : url.indexOf("/", schemeIndex + schemeDelimiterLength);
   const path = pathIndex === missingIndex ? "/" : url.slice(pathIndex);
   const pathWithoutQuery = path.split("?")[firstSegment] ?? path;
-  return pathWithoutQuery.replace(/^\/+/u, "");
+  return pathWithoutQuery.replace(/^\/+/, "");
 };
 
-test("onboarding can connect to s3 storage (network mocked)", async ({
-  page,
-  browserName,
-}) => {
-  test.skip(
-    browserName === "webkit",
-    "Playwright WebKit does not reliably support the Web APIs needed for S3 onboarding in this test harness."
-  );
+const mockS3Network = async (page: Page): Promise<Map<string, string>> => {
   const objects = new Map<string, string>();
 
   // Route matching behaves differently across engines; use a catch-all route
@@ -63,20 +72,146 @@ test("onboarding can connect to s3 storage (network mocked)", async ({
       return;
     }
 
+    if (request.method() === "DELETE") {
+      objects.delete(key);
+      await route.fulfill({ status: 200, body: "" });
+      return;
+    }
+
     await route.fulfill({ status: 200, body: "" });
   });
 
-  await page.goto("/onboarding");
+  return objects;
+};
 
-  await page.getByLabel("Bucket").fill("bucket");
-  await page.getByLabel("Region").fill("us-east-1");
-  await page.getByLabel("Access key ID").fill("AKIA_TEST");
-  await page.getByLabel("Secret access key").fill("SECRET_TEST");
+const fillS3Form = async (
+  root: Page | Locator,
+  config: {
+    bucket: string;
+    region: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+    prefix?: string;
+  }
+): Promise<void> => {
+  await root.getByLabel("Bucket").fill(config.bucket);
+  await root.getByLabel("Region").fill(config.region);
+  await root
+    .getByLabel("Prefix (optional)")
+    .fill(config.prefix ?? "embervault/");
+  await root.getByLabel("Access key ID").fill(config.accessKeyId);
+  await root.getByLabel("Secret access key").fill(config.secretAccessKey);
+};
 
-  await page.getByRole("button", { name: "Connect S3" }).click();
+test("onboarding can connect to s3 storage (network mocked)", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName === "webkit", onboardingSkipMessage);
+  const objects = await mockS3Network(page);
 
-  await expect(page).toHaveURL(/\/app\/?$/);
+  await page.goto(onboardingPath);
+
+  await fillS3Form(page, {
+    bucket: "bucket",
+    region: "us-east-1",
+    accessKeyId: mockAccessKeyId,
+    secretAccessKey: mockSecretAccessKey,
+  });
+
+  await page.getByRole("button", { name: connectS3Label }).click();
+
+  await expect(page).toHaveURL(appPathPattern);
   await expect(page.getByTestId("note-list-title")).toBeVisible();
 
-  expect(objects.has("embervault/vault.json")).toBe(true);
+  expect(objects.has(vaultStorageKey)).toBe(true);
+});
+
+test("settings can migrate browser storage vault to s3", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName === "webkit", storageSkipMessage);
+
+  const objects = await mockS3Network(page);
+
+  await page.goto(onboardingPath);
+  await page.getByTestId("use-browser-storage").click();
+  await expect(page).toHaveURL(appPathPattern);
+
+  await page.getByTestId("new-note").click();
+  await expect(
+    page.locator('[data-testid^="note-row-"]').first()
+  ).toBeVisible();
+
+  await page.getByTestId(openSettingsTestId).click();
+  const settingsModal = page.getByTestId(settingsModalTestId);
+  await expect(settingsModal).toBeVisible();
+
+  await fillS3Form(settingsModal, {
+    bucket: "bucket-settings",
+    region: "us-east-1",
+    accessKeyId: mockAccessKeyId,
+    secretAccessKey: mockSecretAccessKey,
+  });
+  await settingsModal.getByRole("button", { name: connectS3Label }).click();
+
+  await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+  await expect(page.getByText("Switch to S3 storage")).toBeVisible();
+  await page.getByTestId("confirm-submit").click();
+
+  await expect(
+    page.getByRole("status").filter({ hasText: "Migration complete." })
+  ).toBeVisible();
+
+  await page.getByTestId(openSettingsTestId).click();
+  await expect(page.getByTestId(settingsModalTestId)).toContainText(
+    "Current bucket: bucket-settings"
+  );
+  await expect(
+    page
+      .getByTestId(settingsModalTestId)
+      .getByRole("button", { name: "Update credentials" })
+  ).toBeVisible();
+
+  expect(objects.has(vaultStorageKey)).toBe(true);
+});
+
+test("s3 settings persist after preference updates and reload", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName === "webkit", storageSkipMessage);
+
+  await mockS3Network(page);
+
+  await page.goto(onboardingPath);
+  await fillS3Form(page, {
+    bucket: "bucket-persist",
+    region: "us-east-1",
+    accessKeyId: mockAccessKeyId,
+    secretAccessKey: mockSecretAccessKey,
+  });
+  await page.getByRole("button", { name: connectS3Label }).click();
+
+  await expect(page).toHaveURL(appPathPattern);
+
+  await page.getByTestId(openSettingsTestId).click();
+  await expect(page.getByTestId(settingsModalTestId)).toBeVisible();
+  await page.getByRole("button", { name: "General" }).click();
+  const allNotesButton = page.getByRole("button", { name: "All notes" });
+  await allNotesButton.click();
+  await expect(allNotesButton).toHaveAttribute("data-active", "true");
+  await page.getByRole("button", { name: "Close settings" }).click();
+
+  await page.reload();
+  await expect(page).toHaveURL(appPathPattern);
+  await expect(page.getByTestId("note-list-title")).toBeVisible();
+
+  await page.getByTestId(openSettingsTestId).click();
+  const settingsModal = page.getByTestId(settingsModalTestId);
+  await expect(settingsModal).toContainText("Current bucket: bucket-persist");
+  await expect(
+    settingsModal.getByRole("button", { name: "Update credentials" })
+  ).toBeVisible();
 });

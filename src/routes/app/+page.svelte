@@ -1647,10 +1647,12 @@
       ...preferences,
       ...patch,
     });
+    const nextStorageMode = appSettings?.storageMode ?? activeStorageMode;
     const nextSettings: AppSettings = {
-      storageMode: appSettings?.storageMode ?? activeStorageMode,
+      storageMode: nextStorageMode,
       fsHandle: appSettings?.fsHandle,
       lastVaultName: appSettings?.lastVaultName,
+      s3: nextStorageMode === "s3" ? appSettings?.s3 : undefined,
       settings: nextPreferences,
     };
     await writeAppSettings(nextSettings);
