@@ -58,6 +58,11 @@ const commandKey = (command: unknown): string | null => {
   return typeof input.Key === "string" ? input.Key : null;
 };
 
+const commandBucket = (command: unknown): string | null => {
+  const input = commandInput(command);
+  return typeof input.Bucket === "string" ? input.Bucket : null;
+};
+
 const isStoredBody = (value: unknown): value is StoredBody =>
   typeof value === "string" ||
   value instanceof Blob ||
@@ -247,6 +252,26 @@ describe("S3Adapter", () => {
 
     expect(objects.has(vaultKey)).toBe(true);
     expect(await listOutboxItems()).toHaveLength(0);
+  });
+
+  it("normalizes bucket names that include s3 scheme syntax", async () => {
+    const { client, send } = createMockS3Transport();
+    const adapter = new S3Adapter(
+      {
+        ...s3Config,
+        bucket: "s3://bucket/path-segment",
+      },
+      { client }
+    );
+
+    await adapter.init();
+    await adapter.writeVault(createDefaultVault());
+    await adapter.flushNowForTests();
+
+    const bucketNames = send.mock.calls
+      .map(([command]) => commandBucket(command))
+      .filter((bucketName): bucketName is string => bucketName !== null);
+    expect(new Set(bucketNames)).toEqual(new Set(["bucket"]));
   });
 
   it("flushes note, template, asset, ui-state, and search index updates", async () => {

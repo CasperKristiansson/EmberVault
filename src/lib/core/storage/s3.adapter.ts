@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { toDerivedMarkdown } from "../utils/derived-markdown";
 import { IndexedDBAdapter, createDefaultVault } from "./indexeddb.adapter";
+import { normalizeS3ConfigInput } from "./s3/config";
 import { deleteOutboxItem, listOutboxItems, putOutboxItem } from "./s3/outbox";
 import type { SyncOutboxItem, SyncOutboxKind } from "./s3/outbox";
 import type {
@@ -218,18 +219,18 @@ export class S3Adapter implements StorageAdapter {
   private flushTimeout: number | null = null;
 
   public constructor(config: S3Config, options: InitOptions = {}) {
-    this.config = config;
-    this.prefix = normalizePrefix(config.prefix);
+    this.config = normalizeS3ConfigInput(config);
+    this.prefix = normalizePrefix(this.config.prefix);
     this.keys = buildKeys(this.prefix);
     this.cacheAdapter = new IndexedDBAdapter();
     this.client =
       options.client ??
       new S3Client({
-        region: config.region,
+        region: this.config.region,
         credentials: {
-          accessKeyId: config.accessKeyId,
-          secretAccessKey: config.secretAccessKey,
-          sessionToken: config.sessionToken,
+          accessKeyId: this.config.accessKeyId,
+          secretAccessKey: this.config.secretAccessKey,
+          sessionToken: this.config.sessionToken,
         },
       });
   }

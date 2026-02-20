@@ -109,6 +109,7 @@
     createDefaultVault,
   } from "$lib/core/storage/indexeddb.adapter";
   import { FileSystemAdapter } from "$lib/core/storage/filesystem.adapter";
+  import { normalizeS3ConfigInput } from "$lib/core/storage/s3/config";
   import { S3Adapter } from "$lib/core/storage/s3.adapter";
   import {
     readAppSettings,
@@ -1171,7 +1172,11 @@
       pushToast("Migration complete.", { tone: "success" });
     } catch (error) {
       dismissToast(toastId);
-      pushToast("Migration failed. Please retry.", { tone: "error" });
+      const reason =
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : "Please retry.";
+      pushToast(`Migration failed: ${reason}`, { tone: "error" });
     } finally {
       isRecoveringStorage = false;
       isLoading = false;
@@ -1273,16 +1278,7 @@
     if (isRecoveringStorage) {
       return;
     }
-    const trimmed: S3Config = {
-      bucket: config.bucket.trim(),
-      region: config.region.trim(),
-      prefix: config.prefix?.trim() ? config.prefix.trim() : undefined,
-      accessKeyId: config.accessKeyId.trim(),
-      secretAccessKey: config.secretAccessKey.trim(),
-      sessionToken: config.sessionToken?.trim()
-        ? config.sessionToken.trim()
-        : undefined,
-    };
+    const trimmed = normalizeS3ConfigInput(config);
     if (
       !trimmed.bucket ||
       !trimmed.region ||

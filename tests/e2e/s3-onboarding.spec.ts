@@ -15,6 +15,9 @@ const onboardingSkipMessage =
 const mockAccessKeyId = "AKIA_TEST";
 const mockSecretAccessKey = "SECRET_TEST";
 const vaultStorageKey = "embervault/vault.json";
+const testDraftBucket = "s3://embervault";
+const testDraftSessionToken = "SESSION_TOKEN";
+const sessionTokenLabel = "Session token (optional)";
 
 const extractObjectKey = (url: string): string => {
   const missingIndex = -1;
@@ -103,6 +106,22 @@ const fillS3Form = async (
   await root.getByLabel("Secret access key").fill(config.secretAccessKey);
 };
 
+const mockS3FailureNetwork = async (page: Page): Promise<void> => {
+  // eslint-disable-next-line sonarjs/arrow-function-convention
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    if (!request.url().includes("amazonaws.com")) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 403,
+      contentType: "application/xml",
+      body: '<?xml version="1.0" encoding="UTF-8"?><Error><Code>AccessDenied</Code><Message>Forbidden</Message></Error>',
+    });
+  });
+};
+
 test("onboarding can connect to s3 storage (network mocked)", async ({
   page,
   browserName,
@@ -113,7 +132,7 @@ test("onboarding can connect to s3 storage (network mocked)", async ({
   await page.goto(onboardingPath);
 
   await fillS3Form(page, {
-    bucket: "bucket",
+    bucket: "s3://bucket",
     region: "us-east-1",
     accessKeyId: mockAccessKeyId,
     secretAccessKey: mockSecretAccessKey,
@@ -149,7 +168,7 @@ test("settings can migrate browser storage vault to s3", async ({
   await expect(settingsModal).toBeVisible();
 
   await fillS3Form(settingsModal, {
-    bucket: "bucket-settings",
+    bucket: "s3://bucket-settings",
     region: "us-east-1",
     accessKeyId: mockAccessKeyId,
     secretAccessKey: mockSecretAccessKey,
@@ -214,4 +233,63 @@ test("s3 settings persist after preference updates and reload", async ({
   await expect(
     settingsModal.getByRole("button", { name: "Update credentials" })
   ).toBeVisible();
+});
+
+test("settings keeps s3 draft values after failed migration", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName === "webkit", storageSkipMessage);
+
+  await mockS3FailureNetwork(page);
+
+  await page.goto(onboardingPath);
+  await page.getByTestId("use-browser-storage").click();
+  await expect(page).toHaveURL(appPathPattern);
+
+  await page.getByTestId(openSettingsTestId).click();
+  const settingsModal = page.getByTestId(settingsModalTestId);
+  await expect(settingsModal).toBeVisible();
+
+  await fillS3Form(settingsModal, {
+    bucket: testDraftBucket,
+    region: "eu-north-1",
+    accessKeyId: mockAccessKeyId,
+    secretAccessKey: mockSecretAccessKey,
+  });
+  await settingsModal.getByLabel(sessionTokenLabel).fill(testDraftSessionToken);
+
+  await settingsModal.getByRole("button", { name: connectS3Label }).click();
+  await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+  await page.getByTestId("confirm-submit").click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Migration failed:" })
+  ).toBeVisible();
+
+  await page.getByTestId(openSettingsTestId).click();
+  const reopenedSettings = page.getByTestId(settingsModalTestId);
+  await expect(reopenedSettings.getByLabel("Bucket")).toHaveValue(
+    testDraftBucket
+  );
+  await expect(reopenedSettings.getByLabel("Region")).toHaveValue("eu-north-1");
+  await expect(reopenedSettings.getByLabel("Access key ID")).toHaveValue(
+    mockAccessKeyId
+  );
+  await expect(reopenedSettings.getByLabel("Secret access key")).toHaveValue(
+    mockSecretAccessKey
+  );
+  await expect(reopenedSettings.getByLabel(sessionTokenLabel)).toHaveValue(
+    testDraftSessionToken
+  );
+
+  await page.reload();
+  await expect(page).toHaveURL(appPathPattern);
+  await page.getByTestId(openSettingsTestId).click();
+  const reloadedSettings = page.getByTestId(settingsModalTestId);
+  await expect(reloadedSettings.getByLabel("Bucket")).toHaveValue(
+    testDraftBucket
+  );
+  await expect(reloadedSettings.getByLabel(sessionTokenLabel)).toHaveValue(
+    testDraftSessionToken
+  );
 });

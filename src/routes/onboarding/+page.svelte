@@ -4,6 +4,8 @@
     import { resolve } from "$app/paths";
     import { Cloud, Database, Folder } from "lucide-svelte";
     import { createDefaultVault } from "$lib/core/storage/indexeddb.adapter";
+    import { readS3Draft, writeS3Draft } from "$lib/core/storage/s3/draft";
+    import { normalizeS3ConfigInput } from "$lib/core/storage/s3/config";
     import {
       readAppSettings,
       writeAppSettings,
@@ -21,6 +23,20 @@
   let s3AccessKeyId = "";
   let s3SecretAccessKey = "";
   let s3SessionToken = "";
+  let hydratedS3Draft = false;
+
+  const loadS3Draft = (): void => {
+    const draft = readS3Draft();
+    if (!draft) {
+      return;
+    }
+    s3Bucket = draft.bucket;
+    s3Region = draft.region;
+    s3Prefix = draft.prefix || s3Prefix;
+    s3AccessKeyId = draft.accessKeyId;
+    s3SecretAccessKey = draft.secretAccessKey;
+    s3SessionToken = draft.sessionToken;
+  };
 
   const isAbortError = (error: unknown): boolean =>
     error instanceof Error && error.name === "AbortError";
@@ -95,8 +111,21 @@
     supportsFileSystem =
       typeof window !== "undefined" &&
       typeof window.showDirectoryPicker === "function";
+    loadS3Draft();
+    hydratedS3Draft = true;
     void attemptAutoEnter();
   });
+
+  $: if (hydratedS3Draft) {
+    writeS3Draft({
+      bucket: s3Bucket,
+      region: s3Region,
+      prefix: s3Prefix,
+      accessKeyId: s3AccessKeyId,
+      secretAccessKey: s3SecretAccessKey,
+      sessionToken: s3SessionToken,
+    });
+  }
 
   const initBrowserStorage = async (): Promise<void> => {
     if (isBusy) {
@@ -151,14 +180,15 @@
     }
   };
 
-  const buildS3Config = (): S3Config => ({
-    bucket: s3Bucket.trim(),
-    region: s3Region.trim(),
-    prefix: s3Prefix.trim() ? s3Prefix.trim() : undefined,
-    accessKeyId: s3AccessKeyId.trim(),
-    secretAccessKey: s3SecretAccessKey.trim(),
-    sessionToken: s3SessionToken.trim() ? s3SessionToken.trim() : undefined,
-  });
+  const buildS3Config = (): S3Config =>
+    normalizeS3ConfigInput({
+      bucket: s3Bucket,
+      region: s3Region,
+      prefix: s3Prefix,
+      accessKeyId: s3AccessKeyId,
+      secretAccessKey: s3SecretAccessKey,
+      sessionToken: s3SessionToken,
+    });
 
   const initS3Storage = async (): Promise<void> => {
     if (isBusy) {

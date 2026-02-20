@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { motion } from "@motionone/svelte";
   import {
     ArrowDownUp,
@@ -15,7 +16,9 @@
     X,
   } from "lucide-svelte";
   import { prefersReducedMotion } from "$lib/state/motion.store";
+  import { readS3Draft, writeS3Draft } from "$lib/core/storage/s3/draft";
   import type { StorageMode } from "$lib/state/adapter.store";
+  import { normalizeS3ConfigInput } from "$lib/core/storage/s3/config";
   import type { AppPreferences, S3Config } from "$lib/core/storage/types";
   import type { VaultIntegrityReport } from "$lib/core/utils/vault-integrity";
 
@@ -87,21 +90,59 @@
   let s3SecretAccessKey = "";
   let s3SessionToken = "";
   let s3Dirty = false;
+  let useDraftValues = false;
+  let hydratedS3Draft = false;
 
-  $: if (!s3Dirty) {
+  $: if (!s3Dirty && !useDraftValues) {
     s3Bucket = settingsS3Bucket ?? s3Bucket;
     s3Region = settingsS3Region ?? s3Region;
     s3Prefix = settingsS3Prefix ?? s3Prefix;
   }
 
-  const buildS3Config = (): S3Config => ({
-    bucket: s3Bucket.trim(),
-    region: s3Region.trim(),
-    prefix: s3Prefix.trim() ? s3Prefix.trim() : undefined,
-    accessKeyId: s3AccessKeyId.trim(),
-    secretAccessKey: s3SecretAccessKey.trim(),
-    sessionToken: s3SessionToken.trim() ? s3SessionToken.trim() : undefined,
+  onMount(() => {
+    const draft = readS3Draft();
+    if (!draft) {
+      hydratedS3Draft = true;
+      return;
+    }
+    const hasDraftValues = Object.values(draft).some(
+      (value) => value.trim().length > 0
+    );
+    if (!hasDraftValues) {
+      hydratedS3Draft = true;
+      return;
+    }
+    useDraftValues = true;
+    s3Bucket = draft.bucket;
+    s3Region = draft.region;
+    s3Prefix = draft.prefix || s3Prefix;
+    s3AccessKeyId = draft.accessKeyId;
+    s3SecretAccessKey = draft.secretAccessKey;
+    s3SessionToken = draft.sessionToken;
+    s3Dirty = true;
+    hydratedS3Draft = true;
   });
+
+  $: if (hydratedS3Draft) {
+    writeS3Draft({
+      bucket: s3Bucket,
+      region: s3Region,
+      prefix: s3Prefix,
+      accessKeyId: s3AccessKeyId,
+      secretAccessKey: s3SecretAccessKey,
+      sessionToken: s3SessionToken,
+    });
+  }
+
+  const buildS3Config = (): S3Config =>
+    normalizeS3ConfigInput({
+      bucket: s3Bucket,
+      region: s3Region,
+      prefix: s3Prefix,
+      accessKeyId: s3AccessKeyId,
+      secretAccessKey: s3SecretAccessKey,
+      sessionToken: s3SessionToken,
+    });
 
   let restoreBackupInput: HTMLInputElement | null = null;
 
