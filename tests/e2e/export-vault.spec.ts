@@ -140,6 +140,10 @@ test("export vault writes markdown files into chosen folder", async ({
   await page.keyboard.type("Export note");
   await page.keyboard.press("Enter");
   await page.keyboard.type("Hello from export");
+  await expect(page.locator(".app-shell")).toHaveAttribute(
+    "data-save-state",
+    "saved"
+  );
 
   await page.getByTestId("open-settings").click();
   await page.getByRole("button", { name: "Import/Export" }).click();
