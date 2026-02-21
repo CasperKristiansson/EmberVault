@@ -35,6 +35,7 @@ const resolveSubtleCrypto = (): SubtleCrypto => {
 
 export const hashBlobSha256 = async (blob: Blob): Promise<string> => {
   const buffer = await readBlobArrayBuffer(blob);
-  const digest = await resolveSubtleCrypto().digest("SHA-256", buffer);
+  const digestInput = new Uint8Array(buffer);
+  const digest = await resolveSubtleCrypto().digest("SHA-256", digestInput);
   return bufferToHex(digest);
 };
