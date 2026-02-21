@@ -190,20 +190,25 @@ const rebuildFolderChildren = (folders: Vault["folders"]): Vault["folders"] => {
     ])
   ) as Vault["folders"];
 
-  for (const folder of Object.values(next) as Vault["folders"][string][]) {
+  for (const folder of Object.values(next)) {
     if (folder.parentId) {
       const parent = next[folder.parentId];
-      if (parent) {
-        parent.childFolderIds.push(folder.id);
-      }
+      parent.childFolderIds.push(folder.id);
     }
   }
 
   return next;
 };
 
+/* eslint-disable sonarjs/too-many-break-or-continue-in-loop */
 const resolveFolderPathById = (
-  folders: Vault["folders"],
+  folders: Record<
+    string,
+    {
+      name: string;
+      parentId: string | null;
+    }
+  >,
   folderId: string | null
 ): string[] => {
   if (!folderId) {
@@ -217,19 +222,21 @@ const resolveFolderPathById = (
     depth < maxFolderTraversalDepth && currentId !== null;
     depth += 1
   ) {
-    if (seen.has(currentId)) {
+    const resolvedId = currentId;
+    if (resolvedId === null || seen.has(resolvedId)) {
       break;
     }
-    seen.add(currentId);
-    const folder: Vault["folders"][string] | undefined = folders[currentId];
-    if (!folder) {
+    seen.add(resolvedId);
+    if (!(resolvedId in folders)) {
       break;
     }
+    const folder = folders[resolvedId];
     path.push(folder.name);
     currentId = folder.parentId;
   }
   return path.toReversed();
 };
+/* eslint-enable sonarjs/too-many-break-or-continue-in-loop */
 
 const createUniqueIdentifier = (
   desiredId: string,
@@ -358,7 +365,9 @@ export const mergeVaultBackups = (input: {
     const folderName = path[path.length - 1] ?? "";
     const parentPathKey = toFolderPathKey(parentPath);
     const parentId =
-      parentPath.length > 0 ? (mergedFolderIdByPath.get(parentPathKey) ?? null) : null;
+      parentPath.length > 0
+        ? (mergedFolderIdByPath.get(parentPathKey) ?? null)
+        : null;
     const existingByName = existingFolderByParentAndName.get(
       toFolderLookupKey(parentId, folderName)
     );

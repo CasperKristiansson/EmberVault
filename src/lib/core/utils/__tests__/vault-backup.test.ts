@@ -187,6 +187,7 @@ const createMemoryAdapter = (): {
   };
 };
 
+/* eslint-disable sonarjs/max-lines-per-function, sonarjs/no-duplicate-string */
 describe("vault backup", () => {
   it("roundtrips serialize/parse", async () => {
     const memory = createMemoryAdapter();
@@ -457,7 +458,11 @@ describe("vault backup", () => {
       },
     });
 
-    const mergedIds = merged.notes.map((entry) => entry.noteId).sort();
+    const mergedIds = merged.notes
+      // eslint-disable-next-line sonarjs/arrow-function-convention
+      .map((entry) => entry.noteId)
+      .toSorted((first, second) => first.localeCompare(second));
     expect(mergedIds).toEqual(["phone-note", "remote-note"]);
   });
 });
+/* eslint-enable sonarjs/max-lines-per-function, sonarjs/no-duplicate-string */

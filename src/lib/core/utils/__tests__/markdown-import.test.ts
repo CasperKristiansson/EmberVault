@@ -37,24 +37,18 @@ describe("importMarkdownToNote", () => {
     });
     expect(result.title).toBe("Real title");
     expect(result.plainText).toContain("const x = 1;");
-    const content = (result.pmDocument.content ?? []) as Array<{
-      type?: string;
-      attrs?: Record<string, unknown>;
-    }>;
-    const codeBlock = content.find((node) => node.type === "codeBlock");
-    expect(codeBlock?.attrs?.language).toBe("ts");
+    const serialized = JSON.stringify(result.pmDocument);
+    expect(serialized).toContain('"type":"codeBlock"');
+    expect(serialized).toContain('"language":"ts"');
   });
 
   it("imports markdown lists into ProseMirror list nodes", () => {
     const result = importMarkdownToNote({
       fileName: "lists.md",
-      markdown:
-        "# Lists\n\n- alpha\n- beta\n\n1. first\n2. second\n",
+      markdown: "# Lists\n\n- alpha\n- beta\n\n1. first\n2. second\n",
     });
-    const content = (result.pmDocument.content ?? []) as Array<{
-      type?: string;
-    }>;
-    expect(content.some((node) => node.type === "bulletList")).toBe(true);
-    expect(content.some((node) => node.type === "orderedList")).toBe(true);
+    const serialized = JSON.stringify(result.pmDocument);
+    expect(serialized).toContain('"type":"bulletList"');
+    expect(serialized).toContain('"type":"orderedList"');
   });
 });
