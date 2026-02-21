@@ -1,6 +1,10 @@
-# Local-Only Notes (Web App) — Technical Specification
+# Local-First Notes (Web App) — Technical Specification
 
 Version: 0.1 Owner: (you) Audience: Coding agent (primary)
+
+Spec correction (2026-02-21):
+- Optional direct AWS S3 sync is supported in production (client-direct; no backend).
+- S3 startup uses a staged, remote-first boot flow with explicit retry/failure recovery UI.
 
 ## 0) Non-negotiables
 

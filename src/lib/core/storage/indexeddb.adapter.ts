@@ -15,6 +15,7 @@ import type {
   AssetMeta,
   NoteDocumentFile,
   NoteIndexEntry,
+  SyncStatus,
   StorageAdapter,
   TemplateIndexEntry,
   UIState,
@@ -426,6 +427,22 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
     }
     return null;
+  }
+
+  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/class-methods-use-this, @typescript-eslint/require-await
+  public async getSyncStatus(): Promise<SyncStatus> {
+    return {
+      state: "idle",
+      pendingCount: 0,
+      lastSuccessAt: null,
+      lastError: null,
+      lastInitResolution: null,
+    };
+  }
+
+  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/class-methods-use-this
+  public async flushPendingSync(): Promise<void> {
+    // IndexedDB mode does not maintain an async sync queue.
   }
 
   private async openAndCloseDatabase(): Promise<void> {

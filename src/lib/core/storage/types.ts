@@ -114,6 +114,33 @@ export type S3Config = {
   sessionToken?: string;
 };
 
+export const syncStates = {
+  idle: "idle",
+  syncing: "syncing",
+  offline: "offline",
+  error: "error",
+} as const;
+
+export type SyncState = (typeof syncStates)[keyof typeof syncStates];
+
+export const syncInitResolutions = {
+  remoteApplied: "remote_applied",
+  localPushed: "local_pushed",
+  createdDefault: "created_default",
+} as const;
+
+export type SyncInitResolution =
+  | (typeof syncInitResolutions)[keyof typeof syncInitResolutions]
+  | null;
+
+export type SyncStatus = {
+  state: SyncState;
+  pendingCount: number;
+  lastSuccessAt: number | null;
+  lastError: string | null;
+  lastInitResolution: SyncInitResolution;
+};
+
 export type AppSettings = {
   storageMode: "filesystem" | "idb" | "s3";
   fsHandle?: FileSystemDirectoryHandle;
@@ -156,4 +183,6 @@ export type StorageAdapter = {
   readUIState: () => Promise<UIState | null>;
   writeSearchIndex: (snapshot: string) => Promise<void>;
   readSearchIndex: () => Promise<string | null>;
+  getSyncStatus: () => Promise<SyncStatus>;
+  flushPendingSync: () => Promise<void>;
 };

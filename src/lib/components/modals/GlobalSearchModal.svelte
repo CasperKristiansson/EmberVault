@@ -18,6 +18,7 @@
 
   export let vault: Vault | null = null;
   export let searchState: SearchIndexState | null = null;
+  export let searchLoading = false;
   export let onClose: () => void = () => {};
   export let onOpenNote: (noteId: string) => void | Promise<void> = async () => {};
 
@@ -285,6 +286,10 @@
       />
     </div>
 
+    {#if searchLoading && !searchState}
+      <div class="indexing-note">Indexing notes...</div>
+    {/if}
+
     <div class="filter-grid">
       <label class="filter-field">
         <span class="filter-label">Folder</span>
@@ -415,8 +420,10 @@
     </div>
 
     <div class="search-results" data-testid="search-results">
-      {#if !searchState}
+      {#if !searchState && searchLoading}
         <div class="results-empty">Indexing notes...</div>
+      {:else if !searchState}
+        <div class="results-empty">Search index unavailable.</div>
       {:else if results.length === 0}
         <div class="results-empty">No results.</div>
       {:else}
@@ -531,6 +538,11 @@
     border-color: rgba(255, 138, 42, 0.4);
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+
+  .indexing-note {
+    font-size: 12px;
+    color: var(--text-2);
   }
 
   .filter-grid {

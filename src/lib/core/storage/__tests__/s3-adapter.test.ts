@@ -459,3 +459,106 @@ describe("S3Adapter", () => {
     expect(loadedAsset?.type).toBe(remoteAsset.type);
   });
 });
+describe("S3Adapter sync telemetry", () => {
+  beforeEach(async () => {
+    await deleteIndexedDatabase({
+      databaseNameOverride: s3CacheDatabaseName,
+    });
+  });
+
+  afterEach(async () => {
+    await deleteIndexedDatabase({
+      databaseNameOverride: s3CacheDatabaseName,
+    });
+  });
+
+  it("persists sync status telemetry and reconciliation outcome", async () => {
+    const { client } = createMockS3Transport();
+    const adapter = new S3Adapter(s3Config, { client });
+    await adapter.init();
+
+    const initStatus = await adapter.getSyncStatus();
+    expect(initStatus.lastInitResolution).toBe("created_default");
+    expect(initStatus.pendingCount).toBe(0);
+    expect(initStatus.lastSuccessAt).toBeTypeOf("number");
+
+    await adapter.writeNote({
+      noteId: "sync-note",
+      noteDocument: createNote("sync-note", "Sync note", "Body"),
+      derivedMarkdown: "# Sync note\n\nBody",
+    });
+
+    const queuedStatus = await adapter.getSyncStatus();
+    expect(queuedStatus.pendingCount).toBeGreaterThan(0);
+
+    await adapter.flushNowForTests();
+
+    const flushedStatus = await adapter.getSyncStatus();
+    expect(flushedStatus.state).toBe("idle");
+    expect(flushedStatus.pendingCount).toBe(0);
+    expect(flushedStatus.lastSuccessAt).toBeTypeOf("number");
+  });
+
+  it("classifies auth errors and records outbox retry metadata", async () => {
+    const send = vi.fn(
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async (command: unknown) => {
+        if (command instanceof PutObjectCommand) {
+          throw Object.assign(new Error("Forbidden"), {
+            $metadata: { httpStatusCode: 403 },
+          });
+        }
+        if (command instanceof GetObjectCommand) {
+          throw createNotFoundError();
+        }
+        return {};
+      }
+    );
+    const adapter = new S3Adapter(s3Config, {
+      client: { send } satisfies S3Transport,
+    });
+
+    await adapter.init();
+    await adapter.writeVault(createDefaultVault());
+    await adapter.flushNowForTests();
+
+    const status = await adapter.getSyncStatus();
+    expect(status.state).toBe("error");
+    expect(status.lastError?.startsWith("auth:")).toBe(true);
+
+    const outbox = await listOutboxItems(s3CacheDatabaseName);
+    expect(outbox.length).toBeGreaterThan(0);
+    expect(outbox[0]?.retryCount).toBeGreaterThan(0);
+    expect(outbox[0]?.lastAttemptAt).toBeTypeOf("number");
+    expect(outbox[0]?.lastError?.startsWith("auth:")).toBe(true);
+  });
+
+  it("classifies timeout failures from aborted requests", async () => {
+    const send = vi.fn(
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async (command: unknown) => {
+        if (command instanceof GetObjectCommand) {
+          throw createNotFoundError();
+        }
+        if (command instanceof PutObjectCommand) {
+          const abortError = new Error("Aborted");
+          abortError.name = "AbortError";
+          throw abortError;
+        }
+        return {};
+      }
+    );
+    const timeoutClient: S3Transport = {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      send: send as unknown as S3Transport["send"],
+    };
+    const adapter = new S3Adapter(s3Config, { client: timeoutClient });
+
+    await adapter.init();
+    await adapter.writeVault(createDefaultVault());
+    await adapter.flushNowForTests();
+
+    const status = await adapter.getSyncStatus();
+    expect(status.lastError?.startsWith("timeout:")).toBe(true);
+  });
+});

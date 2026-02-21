@@ -102,6 +102,7 @@
   import {
     adapter as adapterStore,
     initAdapter,
+    initAdapterAsync,
     storageMode as storageModeStore,
     type StorageMode,
   } from "$lib/state/adapter.store";
@@ -111,7 +112,6 @@
   } from "$lib/core/storage/indexeddb.adapter";
   import { FileSystemAdapter } from "$lib/core/storage/filesystem.adapter";
   import { normalizeS3ConfigInput } from "$lib/core/storage/s3/config";
-  import { S3Adapter } from "$lib/core/storage/s3.adapter";
   import {
     readAppSettings,
     writeAppSettings,
@@ -124,6 +124,7 @@
     NoteDocumentFile,
     NoteIndexEntry,
     S3Config,
+    SyncStatus,
     Vault,
     StorageAdapter,
     UIState,
@@ -234,6 +235,61 @@
   let backlinksRequestSeq = 0;
   let backlinksTargetId: string | null = null;
   let backlinksTargetTitle: string | null = null;
+  type StartupStage =
+    | "idle"
+    | "s3_connecting"
+    | "vault_loading"
+    | "workspace_restoring"
+    | "ready"
+    | "search_indexing_bg"
+    | "failed";
+  type StartupState = {
+    stage: StartupStage;
+    attempt: number;
+    maxAttempts: number;
+    error: string | null;
+    blocking: boolean;
+  };
+  const s3StartupMaxAttempts = 3;
+  const s3StartupRequestTimeoutMs = 7000;
+  const s3StartupBackoffMs = [800, 1600, 3200] as const;
+  const startupStageLabels: Record<StartupStage, string> = {
+    idle: "Starting app...",
+    s3_connecting: "Connecting to S3...",
+    vault_loading: "Loading vault...",
+    workspace_restoring: "Restoring workspace...",
+    ready: "Ready",
+    search_indexing_bg: "Indexing notes in background...",
+    failed: "Could not connect to S3.",
+  };
+  const createDefaultStartupState = (): StartupState => ({
+    stage: "idle",
+    attempt: 0,
+    maxAttempts: s3StartupMaxAttempts,
+    error: null,
+    blocking: false,
+  });
+  const createDefaultSyncStatus = (): SyncStatus => ({
+    state: "idle",
+    pendingCount: 0,
+    lastSuccessAt: null,
+    lastError: null,
+    lastInitResolution: null,
+  });
+  let startupState: StartupState = createDefaultStartupState();
+  let s3StartupConfig: S3Config | null = null;
+  let syncStatus: SyncStatus = createDefaultSyncStatus();
+  let syncStatusPoller: number | null = null;
+  let syncStatusRequestInFlight = false;
+  let searchIndexReady = false;
+  let searchIndexLoading = false;
+  let searchIndexBackgroundTask: Promise<void> | null = null;
+  let mobileKeyboardInset = 0;
+  let startupStageLabel = startupStageLabels.idle;
+  let startupOverlayVisible = false;
+  let syncBadgeLabel = "Idle";
+  let syncBadgeDetail = "No pending changes";
+  let syncInitResolutionLabel: string | null = null;
 
   const saveDelay = 400;
   const uiStateDelay = 800;
@@ -599,6 +655,76 @@
       await writeAppSettings(fallbackSettings);
       appSettings = fallbackSettings;
     }
+  };
+
+  const getErrorMessage = (
+    error: unknown,
+    fallback: string = "Please retry."
+  ): string => {
+    if (!(error instanceof Error)) {
+      return fallback;
+    }
+    const message = error.message.trim();
+    return message.length > 0 ? message : fallback;
+  };
+
+  const waitForDelay = async (ms: number): Promise<void> => {
+    if (!Number.isFinite(ms) || ms <= 0) {
+      return;
+    }
+    await new Promise<void>((resolveDelay) => {
+      setTimeout(resolveDelay, ms);
+    });
+  };
+
+  const setStartupState = (patch: Partial<StartupState>): void => {
+    startupState = {
+      ...startupState,
+      ...patch,
+    };
+  };
+
+  const resetStartupState = (): void => {
+    startupState = createDefaultStartupState();
+  };
+
+  const formatSyncTimestamp = (timestamp: number | null): string => {
+    if (!timestamp) {
+      return "Never";
+    }
+    try {
+      return new Date(timestamp).toLocaleString();
+    } catch {
+      return "Unknown";
+    }
+  };
+
+  const syncStateLabel = (state: SyncStatus["state"]): string => {
+    if (state === "syncing") {
+      return "Syncing";
+    }
+    if (state === "offline") {
+      return "Offline";
+    }
+    if (state === "error") {
+      return "Needs attention";
+    }
+    return "Idle";
+  };
+
+  const syncInitResolutionText = (
+    resolution: SyncStatus["lastInitResolution"]
+  ): string | null => {
+    if (resolution === "remote_applied") {
+      return "Startup reconciliation: remote applied";
+    }
+    if (resolution === "local_pushed") {
+      return "Startup reconciliation: local pushed";
+    }
+    if (resolution === "created_default") {
+      return "Startup reconciliation: new vault created";
+    }
+    return null;
   };
 
   const adapterErrorToastMessage = "Storage error. Please retry.";
@@ -1056,6 +1182,72 @@
     }
   };
 
+  const refreshSyncStatus = async (): Promise<void> => {
+    if (activeStorageMode !== "s3") {
+      syncStatus = createDefaultSyncStatus();
+      return;
+    }
+    if (syncStatusRequestInFlight) {
+      return;
+    }
+    syncStatusRequestInFlight = true;
+    try {
+      syncStatus = await adapter.getSyncStatus();
+    } catch (error) {
+      syncStatus = {
+        ...syncStatus,
+        state: "error",
+        lastError: getErrorMessage(error, "Unable to read sync status."),
+      };
+    } finally {
+      syncStatusRequestInFlight = false;
+    }
+  };
+
+  const stopSyncStatusPolling = (): void => {
+    if (syncStatusPoller !== null) {
+      clearInterval(syncStatusPoller);
+      syncStatusPoller = null;
+    }
+  };
+
+  const ensureSyncStatusPolling = (): void => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (activeStorageMode !== "s3") {
+      stopSyncStatusPolling();
+      syncStatus = createDefaultSyncStatus();
+      return;
+    }
+    if (syncStatusPoller !== null) {
+      return;
+    }
+    void refreshSyncStatus();
+    syncStatusPoller = window.setInterval(() => {
+      void refreshSyncStatus();
+    }, 2500);
+  };
+
+  const retrySyncNow = async (): Promise<void> => {
+    if (activeStorageMode !== "s3") {
+      return;
+    }
+    try {
+      await adapter.flushPendingSync();
+      await refreshSyncStatus();
+      pushToast("Sync retry started.", { tone: "success" });
+    } catch (error) {
+      const message = getErrorMessage(error, "Sync retry failed.");
+      syncStatus = {
+        ...syncStatus,
+        state: "error",
+        lastError: message,
+      };
+      pushToast(message, { tone: "error" });
+    }
+  };
+
   const createNoteDocument = (): NoteDocumentFile => {
     const timestamp = Date.now();
     const resolvedFolderId =
@@ -1090,6 +1282,61 @@
     return stored ? vault : null;
   };
 
+  const ensureVaultForAdapterStrict = async (
+    activeAdapter: StorageAdapter
+  ): Promise<Vault> => {
+    const existing = await activeAdapter.readVault();
+    if (existing) {
+      return existing;
+    }
+    const vault = createDefaultVault();
+    await activeAdapter.writeVault(vault);
+    return vault;
+  };
+
+  const runS3StartupWithRetries = async (
+    operation: (attempt: number) => Promise<void>
+  ): Promise<void> => {
+    resetStartupState();
+    setStartupState({
+      blocking: true,
+      stage: "s3_connecting",
+      maxAttempts: s3StartupMaxAttempts,
+    });
+    let latestError: unknown = null;
+    for (
+      let attempt = 1;
+      attempt <= s3StartupMaxAttempts;
+      attempt += 1
+    ) {
+      try {
+        setStartupState({
+          stage: "s3_connecting",
+          attempt,
+          error: null,
+          blocking: true,
+        });
+        await operation(attempt);
+        return;
+      } catch (error) {
+        latestError = error;
+        setStartupState({
+          stage: "failed",
+          attempt,
+          blocking: true,
+          error: getErrorMessage(error, "Failed to connect to S3."),
+        });
+        if (attempt < s3StartupMaxAttempts) {
+          const waitIndex = Math.min(attempt - 1, s3StartupBackoffMs.length - 1);
+          await waitForDelay(s3StartupBackoffMs[waitIndex] ?? 0);
+        }
+      }
+    }
+    throw latestError instanceof Error
+      ? latestError
+      : new Error("S3 startup failed.");
+  };
+
   const retryFolderAccess = async (): Promise<void> => {
     if (
       isRecoveringStorage ||
@@ -1115,6 +1362,9 @@
       }
       await persistStorageChoice("filesystem", { handle });
       await initializeWorkspace();
+      stopSyncStatusPolling();
+      syncStatus = createDefaultSyncStatus();
+      resetStartupState();
     } catch (error) {
       if (isAbortError(error)) {
         return;
@@ -1149,6 +1399,9 @@
       }
       await persistStorageChoice("idb");
       await initializeWorkspace();
+      stopSyncStatusPolling();
+      syncStatus = createDefaultSyncStatus();
+      resetStartupState();
       if (notifyFallback) {
         notifyAdapterFailure(adapterFallbackToastMessage);
       }
@@ -1156,6 +1409,77 @@
       isRecoveringStorage = false;
       isLoading = false;
     }
+  };
+
+  const createS3Adapter = async (
+    config: S3Config,
+    options: { requestTimeoutMs?: number } = {}
+  ): Promise<StorageAdapter> => {
+    const module = await import("$lib/core/storage/s3.adapter");
+    return new module.S3Adapter(config, {
+      requestTimeoutMs: options.requestTimeoutMs,
+    });
+  };
+
+  const initializeS3Startup = async (config: S3Config): Promise<boolean> => {
+    s3StartupConfig = config;
+    isLoading = true;
+    try {
+      await runS3StartupWithRetries(async (attempt) => {
+        const nextAdapter = await initAdapterAsync("s3", {
+          s3Config: config,
+          s3RequestTimeoutMs: s3StartupRequestTimeoutMs,
+        });
+        setStartupState({
+          stage: "vault_loading",
+          attempt,
+          blocking: true,
+        });
+        await nextAdapter.init();
+        setStartupState({
+          stage: "workspace_restoring",
+          attempt,
+          blocking: true,
+        });
+        await initializeWorkspace({
+          skipAdapterInit: true,
+          deferSearchIndex: true,
+          strict: true,
+        });
+      });
+      setStartupState({
+        stage: "search_indexing_bg",
+        blocking: false,
+        error: null,
+      });
+      void loadSearchIndexInBackground();
+      await refreshSyncStatus();
+      return true;
+    } catch (error) {
+      console.warn("S3 startup failed:", error);
+      isLoading = false;
+      return false;
+    }
+  };
+
+  const retryS3Startup = async (): Promise<void> => {
+    if (!s3StartupConfig || isRecoveringStorage) {
+      return;
+    }
+    isRecoveringStorage = true;
+    try {
+      await initializeS3Startup(s3StartupConfig);
+    } finally {
+      isRecoveringStorage = false;
+    }
+  };
+
+  const goToOnboardingFromStartupFailure = async (): Promise<void> => {
+    resetStartupState();
+    stopSyncStatusPolling();
+    syncStatus = createDefaultSyncStatus();
+    isLoading = false;
+    await goto(resolve("/onboarding"));
   };
 
   const migrateCurrentVaultToStorage = async (target: {
@@ -1189,7 +1513,9 @@
         if (!target.s3Config) {
           throw new Error("Missing S3 config for migration.");
         }
-        stagedAdapter = new S3Adapter(target.s3Config);
+        stagedAdapter = await createS3Adapter(target.s3Config, {
+          requestTimeoutMs: s3StartupRequestTimeoutMs,
+        });
       } else {
         stagedAdapter = new IndexedDBAdapter();
       }
@@ -1212,10 +1538,15 @@
         backup: backupToRestore,
       });
 
-      const nextAdapter = initAdapter(mode, {
-        directoryHandle: target.directoryHandle,
-        s3Config: target.s3Config,
-      });
+      const nextAdapter =
+        mode === "s3"
+          ? await initAdapterAsync("s3", {
+              s3Config: target.s3Config,
+              s3RequestTimeoutMs: s3StartupRequestTimeoutMs,
+            })
+          : initAdapter(mode, {
+              directoryHandle: target.directoryHandle,
+            });
       const ready = await runAdapterVoid(() => nextAdapter.init());
       if (!ready) {
         throw new Error("Failed to initialize migrated storage.");
@@ -1225,6 +1556,13 @@
         s3: target.s3Config,
       });
       await initializeWorkspace();
+      if (mode === "s3") {
+        await refreshSyncStatus();
+      } else {
+        stopSyncStatusPolling();
+        syncStatus = createDefaultSyncStatus();
+        resetStartupState();
+      }
 
       dismissToast(toastId);
       pushToast("Migration complete.", { tone: "success" });
@@ -1270,7 +1608,10 @@
     isRecoveringStorage = true;
     isLoading = true;
     try {
-      const nextAdapter = initAdapter("s3", { s3Config: config });
+      const nextAdapter = await initAdapterAsync("s3", {
+        s3Config: config,
+        s3RequestTimeoutMs: s3StartupRequestTimeoutMs,
+      });
       const ready = await runAdapterVoid(() => nextAdapter.init());
       if (!ready) {
         return;
@@ -1281,6 +1622,8 @@
       }
       await persistStorageChoice("s3", { s3: config });
       await initializeWorkspace();
+      await refreshSyncStatus();
+      resetStartupState();
       pushToast("Connected to S3.", { tone: "success" });
     } catch (error) {
       const handled = await handleAdapterError(error);
@@ -1658,6 +2001,9 @@
   };
 
   const openGlobalSearch = (): void => {
+    if (!searchState && !searchIndexBackgroundTask) {
+      void loadSearchIndexInBackground();
+    }
     openModal("global-search");
   };
 
@@ -1736,6 +2082,13 @@
     if (isMobileViewport) {
       projectsOverlayOpen = false;
     }
+  };
+
+  const openProjectsView = (): void => {
+    workspaceMode = "notes";
+    mobileView = "notes";
+    mobileRightPanelOpen = false;
+    projectsOverlayOpen = true;
   };
 
   const openNoteFromList = async (noteId: string): Promise<void> => {
@@ -1820,6 +2173,9 @@
     if (!isRightPanelOverlayViewport) {
       mobileRightPanelOpen = false;
     }
+    const visualViewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const inset = Math.round(window.innerHeight - visualViewportHeight);
+    mobileKeyboardInset = Math.max(0, inset);
   };
 
   const toggleProjectsOverlay = (): void => {
@@ -1851,6 +2207,10 @@
     if (isRightPanelOverlayViewport) {
       mobileRightPanelOpen = true;
     }
+  };
+
+  const closeRightPanelOverlay = (): void => {
+    mobileRightPanelOpen = false;
   };
 
   const sortNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] => {
@@ -1897,9 +2257,14 @@
   $: noteListCount = filteredNotes.length;
   $: noteListEmptyMessage = favoritesOnly ? "No favorites yet." : "No notes yet.";
 
-  const loadNotes = async (): Promise<void> => {
+  const loadNotes = async (
+    options: { strict?: boolean } = {}
+  ): Promise<void> => {
+    const strict = options.strict === true;
     const loadedNotes = sortNotes(
-      await runAdapterTask(() => adapter.listNotes(), [])
+      strict
+        ? await adapter.listNotes()
+        : await runAdapterTask(() => adapter.listNotes(), [])
     );
     if (Object.keys(favoriteOverrides).length > 0) {
       notes = loadedNotes.map((note) => {
@@ -1909,10 +2274,9 @@
     } else {
       notes = loadedNotes;
     }
-    const storedVault = await runAdapterTask(
-      () => adapter.readVault(),
-      null
-    );
+    const storedVault = strict
+      ? await adapter.readVault()
+      : await runAdapterTask(() => adapter.readVault(), null);
     if (storedVault) {
       vault = storedVault;
     }
@@ -2120,19 +2484,57 @@
 
   const loadSearchIndex = async (): Promise<void> => {
     if (!vault) {
+      searchState = null;
+      searchIndexReady = false;
+      searchIndexLoading = false;
       return;
     }
-    const snapshot = await runAdapterTask(() => adapter.readSearchIndex(), null);
-    if (snapshot) {
-      searchState = { index: loadMiniSearchIndex(snapshot) };
+    searchIndexLoading = true;
+    try {
+      const snapshot = await runAdapterTask(() => adapter.readSearchIndex(), null);
+      if (snapshot) {
+        searchState = { index: loadMiniSearchIndex(snapshot) };
+        searchIndexReady = true;
+        return;
+      }
+      const noteDocuments = await loadNoteDocumentsForIndex();
+      const index = buildSearchIndex(noteDocuments);
+      searchState = { index };
+      searchIndexReady = true;
+      await runAdapterVoid(() =>
+        adapter.writeSearchIndex(serializeSearchIndex(index))
+      );
+    } finally {
+      searchIndexLoading = false;
+    }
+  };
+
+  const loadSearchIndexInBackground = async (): Promise<void> => {
+    if (searchIndexBackgroundTask) {
+      await searchIndexBackgroundTask;
       return;
     }
-    const noteDocuments = await loadNoteDocumentsForIndex();
-    const index = buildSearchIndex(noteDocuments);
-    searchState = { index };
-    await runAdapterVoid(() =>
-      adapter.writeSearchIndex(serializeSearchIndex(index))
-    );
+    if (startupState.stage !== "failed") {
+      setStartupState({
+        stage: "search_indexing_bg",
+        blocking: false,
+      });
+    }
+    const task = (async () => {
+      try {
+        await loadSearchIndex();
+      } finally {
+        searchIndexBackgroundTask = null;
+        if (startupState.stage === "search_indexing_bg") {
+          setStartupState({
+            stage: "ready",
+            blocking: false,
+          });
+        }
+      }
+    })();
+    searchIndexBackgroundTask = task;
+    await task;
   };
 
   const updateSearchIndexForDocument = async (
@@ -3059,7 +3461,12 @@
     activeFolderId = folderId;
   };
 
-  const initializeFromAppSettings = async (): Promise<boolean> => {
+  type AppInitializationPlan = {
+    ready: boolean;
+    s3Config?: S3Config;
+  };
+
+  const initializeFromAppSettings = async (): Promise<AppInitializationPlan> => {
     const stored = await loadAppSettings();
     const ephemeralHandle = getEphemeralHandle();
     if (!stored?.storageMode) {
@@ -3071,11 +3478,11 @@
           settings: preferences,
         };
         initAdapter("filesystem", { directoryHandle: ephemeralHandle });
-        return true;
+        return { ready: true };
       }
       isLoading = false;
       await goto(resolve("/onboarding"));
-      return false;
+      return { ready: false };
     }
     if (stored.storageMode === "filesystem") {
       const resolvedHandle = stored.fsHandle ?? ephemeralHandle;
@@ -3089,58 +3496,97 @@
       if (!resolvedHandle) {
         isLoading = false;
         await goto(resolve("/onboarding"));
-        return false;
+        return { ready: false };
       }
       if (!supportsFileSystemAccess()) {
         await persistStorageChoice("idb");
         initAdapter("idb");
         notifyAdapterFailure(adapterFallbackToastMessage);
-        return true;
+        return { ready: true };
       }
       initAdapter("filesystem", { directoryHandle: resolvedHandle });
-      return true;
+      return { ready: true };
     }
     if (stored.storageMode === "s3") {
       if (!stored.s3) {
         isLoading = false;
         await goto(resolve("/onboarding"));
-        return false;
+        return { ready: false };
       }
-      initAdapter("s3", { s3Config: stored.s3 });
-      return true;
+      return { ready: true, s3Config: stored.s3 };
     }
     initAdapter("idb");
-    return true;
+    return { ready: true };
   };
 
   const initializeApp = async (): Promise<void> => {
-    const ready = await initializeFromAppSettings();
-    if (!ready) {
+    const plan = await initializeFromAppSettings();
+    if (!plan.ready) {
+      return;
+    }
+    if (plan.s3Config) {
+      await initializeS3Startup(plan.s3Config);
       return;
     }
     await initializeWorkspace();
   };
 
-  const initializeWorkspace = async (): Promise<void> => {
+  type InitializeWorkspaceOptions = {
+    skipAdapterInit?: boolean;
+    deferSearchIndex?: boolean;
+    strict?: boolean;
+  };
+
+  const initializeWorkspace = async (
+    options: InitializeWorkspaceOptions = {}
+  ): Promise<void> => {
+    const strict = options.strict === true;
+    const deferSearchIndex = options.deferSearchIndex === true;
     isLoading = true;
-    const ready = await runAdapterVoid(() => adapter.init());
-    if (!ready) {
-      isLoading = false;
-      return;
+    if (!options.skipAdapterInit) {
+      if (strict) {
+        await adapter.init();
+      } else {
+        const ready = await runAdapterVoid(() => adapter.init());
+        if (!ready) {
+          isLoading = false;
+          return;
+        }
+      }
     }
-    const storedVault = await ensureVaultForAdapter(adapter);
-    if (!storedVault) {
+    const storedVault = strict
+      ? await ensureVaultForAdapterStrict(adapter)
+      : await ensureVaultForAdapter(adapter);
+    if (!storedVault && !strict) {
       if (!permissionModalId) {
         await goto(resolve("/onboarding"));
       }
       isLoading = false;
       return;
     }
-    vault = storedVault;
-    await loadNotes();
-    await loadSearchIndex();
+    vault = storedVault ?? vault;
+    await loadNotes({ strict });
     await restoreWorkspaceState();
     activeFolderId = null;
+    if (deferSearchIndex) {
+      searchState = null;
+      searchIndexReady = false;
+      searchIndexLoading = true;
+      void loadSearchIndexInBackground();
+    } else {
+      await loadSearchIndex();
+    }
+    if (activeStorageMode === "s3") {
+      ensureSyncStatusPolling();
+      await refreshSyncStatus();
+    }
+    if (startupState.stage !== "failed") {
+      setStartupState({
+        stage: deferSearchIndex ? "search_indexing_bg" : "ready",
+        blocking: false,
+        error: null,
+      });
+    }
     isLoading = false;
   };
 
@@ -3187,17 +3633,26 @@
       updateViewportState();
       updateProjectsOverlayLeft();
     };
+    const handleVisualViewportChange = (): void => {
+      updateViewportState();
+    };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("keydown", handleGlobalShortcut);
     window.addEventListener("resize", handleWindowResize);
+    window.addEventListener("orientationchange", handleWindowResize);
+    window.visualViewport?.addEventListener("resize", handleVisualViewportChange);
+    window.visualViewport?.addEventListener("scroll", handleVisualViewportChange);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("keydown", handleGlobalShortcut);
       window.removeEventListener("resize", handleWindowResize);
+      window.removeEventListener("orientationchange", handleWindowResize);
+      window.visualViewport?.removeEventListener("resize", handleVisualViewportChange);
+      window.visualViewport?.removeEventListener("scroll", handleVisualViewportChange);
     };
   });
 
@@ -3219,6 +3674,7 @@
     adapterUnsubscribe();
     storageModeUnsubscribe();
     modalStackUnsubscribe();
+    stopSyncStatusPolling();
   });
 
   $: {
@@ -3228,6 +3684,19 @@
       mobileView = resolvedView;
     }
   }
+
+  $: startupStageLabel = startupStageLabels[startupState.stage];
+  $: startupOverlayVisible =
+    activeStorageMode === "s3" &&
+    startupState.blocking &&
+    (startupState.stage !== "ready" || Boolean(startupState.error));
+  $: syncBadgeLabel = syncStateLabel(syncStatus.state);
+  $: syncBadgeDetail =
+    syncStatus.pendingCount > 0
+      ? `${syncStatus.pendingCount} pending`
+      : `Last sync: ${formatSyncTimestamp(syncStatus.lastSuccessAt)}`;
+  $: syncInitResolutionLabel = syncInitResolutionText(syncStatus.lastInitResolution);
+  $: activeStorageMode, ensureSyncStatusPolling();
 </script>
 
 <AppShell
@@ -3235,7 +3704,9 @@
   {mobileView}
   {mobileRightPanelOpen}
   {workspaceMode}
+  {mobileKeyboardInset}
   interfaceDensity={preferences.interfaceDensity}
+  on:closeRightPanel={closeRightPanelOverlay}
 >
   <div slot="topbar" class="topbar-content" data-mode={workspaceMode}>
     <div
@@ -3281,6 +3752,18 @@
       {/each}
     </div>
     <div class="topbar-actions">
+      {#if activeStorageMode === "s3"}
+        <button
+          class="sync-badge"
+          type="button"
+          data-testid="sync-status-badge"
+          data-state={syncStatus.state}
+          on:click={openSettings}
+        >
+          <span class="sync-badge-title">{syncBadgeLabel}</span>
+          <span class="sync-badge-detail">{syncBadgeDetail}</span>
+        </button>
+      {/if}
       <RightPanelTabs
         activeTab={rightPanelTab}
         onSelect={handleRightPanelTabSelect}
@@ -3296,6 +3779,17 @@
           }}
         >
           <X aria-hidden="true" size={16} />
+        </button>
+      {/if}
+      {#if isMobileViewport && mobileView === "editor"}
+        <button
+          class="button secondary topbar-back-button"
+          type="button"
+          aria-label="Back to list"
+          data-testid="mobile-back-to-list"
+          on:click={() => setMobileView("notes")}
+        >
+          Back to list
         </button>
       {/if}
       <button
@@ -3548,6 +4042,7 @@
     trashedNotes={trashedNotes}
     activeNoteId={activeTabId}
     {searchState}
+    searchLoading={searchIndexLoading && !searchIndexReady}
     onOpenNote={activateTab}
     onRestoreTrashedNote={restoreTrashedNote}
     onDeleteTrashedNotePermanent={openPermanentDeleteConfirm}
@@ -3565,6 +4060,7 @@
     onRebuildSearchIndex={rebuildSearchIndex}
     onClearWorkspaceState={clearWorkspaceState}
     onResetPreferences={resetPreferences}
+    onRetrySync={retrySyncNow}
     onRunIntegrityCheck={handleRunIntegrityCheck}
     onRepairVault={handleRepairVault}
     storageMode={activeStorageMode}
@@ -3574,6 +4070,10 @@
     settingsS3Bucket={appSettings?.s3?.bucket ?? null}
     settingsS3Region={appSettings?.s3?.region ?? null}
     settingsS3Prefix={appSettings?.s3?.prefix ?? null}
+    settingsSyncStatus={syncStatus}
+    settingsSyncStateLabel={syncBadgeLabel}
+    settingsSyncLastSuccess={formatSyncTimestamp(syncStatus.lastSuccessAt)}
+    settingsSyncInitResolution={syncInitResolutionLabel}
     supportsFileSystem={supportsFileSystem}
     settingsBusy={
       isRecoveringStorage ||
@@ -3590,6 +4090,47 @@
   />
 
   <ToastHost slot="toast" />
+
+  <svelte:fragment slot="startup-overlay">
+    {#if startupOverlayVisible}
+      <div class="startup-overlay" data-testid="s3-startup-overlay">
+        <div class="startup-card" role="status" aria-live="polite">
+          <div class="startup-title">{startupStageLabel}</div>
+          <div class="startup-copy">
+            Attempt {Math.max(1, startupState.attempt)} of {startupState.maxAttempts}
+          </div>
+          {#if startupState.stage === "search_indexing_bg"}
+            <div class="startup-copy muted">
+              You can start using notes while indexing completes.
+            </div>
+          {/if}
+          {#if startupState.error}
+            <div class="startup-error">{startupState.error}</div>
+          {/if}
+          {#if startupState.stage === "failed"}
+            <div class="startup-actions">
+              <button
+                class="button primary"
+                type="button"
+                data-testid="retry-s3-startup"
+                on:click={() => void retryS3Startup()}
+              >
+                Retry connection
+              </button>
+              <button
+                class="button secondary"
+                type="button"
+                data-testid="back-to-onboarding"
+                on:click={() => void goToOnboardingFromStartupFailure()}
+              >
+                Back to onboarding
+              </button>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+  </svelte:fragment>
 
   <div slot="bottom-nav" class="mobile-nav-content">
     <button
@@ -3617,11 +4158,12 @@
     <button
       class="mobile-nav-button"
       type="button"
-      data-testid="mobile-nav-search"
-      aria-disabled="true"
-      disabled
+      data-testid="mobile-nav-projects"
+      class:active={mobileView === "notes" && projectsOverlayOpen}
+      aria-pressed={mobileView === "notes" && projectsOverlayOpen}
+      on:click={openProjectsView}
     >
-      Search
+      Projects
     </button>
     <button
       class="mobile-nav-button"
@@ -3828,6 +4370,48 @@
     gap: 8px;
   }
 
+  .sync-badge {
+    min-width: 132px;
+    max-width: 220px;
+    height: 32px;
+    padding: 4px 10px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-2);
+    color: var(--text-0);
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 2px;
+    cursor: pointer;
+  }
+
+  .sync-badge[data-state="syncing"] {
+    border-color: color-mix(in srgb, var(--accent-0) 45%, var(--stroke-0));
+  }
+
+  .sync-badge[data-state="offline"],
+  .sync-badge[data-state="error"] {
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--stroke-0));
+  }
+
+  .sync-badge-title {
+    font-size: 11px;
+    line-height: 1.1;
+    font-weight: 600;
+  }
+
+  .sync-badge-detail {
+    font-size: 10px;
+    color: var(--text-2);
+    line-height: 1.1;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 100%;
+  }
+
   .icon-button {
     width: 32px;
     height: 32px;
@@ -4021,6 +4605,83 @@
     color: var(--text-2);
     cursor: not-allowed;
     opacity: 0.7;
+  }
+
+  .topbar-back-button {
+    height: 32px;
+    white-space: nowrap;
+  }
+
+  .startup-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(7, 9, 12, 0.55);
+    backdrop-filter: blur(8px);
+  }
+
+  .startup-card {
+    width: min(420px, 100%);
+    border-radius: var(--r-lg);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-1);
+    box-shadow: var(--shadow-panel);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .startup-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-0);
+  }
+
+  .startup-copy {
+    font-size: 13px;
+    color: var(--text-1);
+  }
+
+  .startup-copy.muted {
+    color: var(--text-2);
+  }
+
+  .startup-error {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--danger);
+    word-break: break-word;
+  }
+
+  .startup-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 767px) {
+    .sync-badge {
+      min-width: 92px;
+      padding: 4px 8px;
+    }
+
+    .sync-badge-detail {
+      display: none;
+    }
+
+    .topbar-back-button {
+      padding: 0 10px;
+    }
+
+    .startup-overlay {
+      padding: 16px;
+    }
   }
 
 </style>

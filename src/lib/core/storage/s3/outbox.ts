@@ -18,29 +18,67 @@ export type SyncOutboxItem = {
   kind: SyncOutboxKind;
   id?: string;
   queuedAt: number;
+  retryCount: number;
+  lastAttemptAt: number | null;
+  lastError: string | null;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const isOptionalString = (value: unknown): value is string | undefined =>
+  value === undefined || typeof value === "string";
+
+const isOptionalNullableString = (
+  value: unknown
+): value is string | null | undefined =>
+  value === undefined || value === null || typeof value === "string";
+
+const isOptionalNumber = (value: unknown): value is number | undefined =>
+  value === undefined || typeof value === "number";
+
+const isOptionalNullableNumber = (
+  value: unknown
+): value is number | null | undefined =>
+  value === undefined || value === null || typeof value === "number";
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
 const isOutboxItem = (value: unknown): value is SyncOutboxItem => {
   if (!isRecord(value)) {
     return false;
   }
-  if (typeof value.key !== "string" || value.key.length === 0) {
+  if (!isNonEmptyString(value.key)) {
     return false;
   }
-  if (typeof value.kind !== "string" || value.kind.length === 0) {
+  if (!isNonEmptyString(value.kind)) {
     return false;
   }
   if (typeof value.queuedAt !== "number") {
     return false;
   }
-  if (value.id !== undefined && typeof value.id !== "string") {
-    return false;
-  }
-  return true;
+  const optionalChecks = [
+    isOptionalString(value.id),
+    isOptionalNumber(value.retryCount),
+    isOptionalNullableNumber(value.lastAttemptAt),
+    isOptionalNullableString(value.lastError),
+  ];
+  return optionalChecks.every(Boolean);
 };
+
+const toOutboxItem = (
+  value: Omit<SyncOutboxItem, "retryCount" | "lastAttemptAt" | "lastError"> & {
+    retryCount?: number;
+    lastAttemptAt?: number | null;
+    lastError?: string | null;
+  }
+): SyncOutboxItem => ({
+  ...value,
+  retryCount: value.retryCount ?? 0,
+  lastAttemptAt: value.lastAttemptAt ?? null,
+  lastError: value.lastError ?? null,
+});
 
 const withOutboxStore = async <T>(
   mode: IDBTransactionMode,
@@ -61,13 +99,21 @@ const withOutboxStore = async <T>(
 };
 
 export const putOutboxItem = async (
-  item: Omit<SyncOutboxItem, "queuedAt"> & { queuedAt?: number },
+  item: Omit<
+    SyncOutboxItem,
+    "queuedAt" | "retryCount" | "lastAttemptAt" | "lastError"
+  > & {
+    queuedAt?: number;
+    retryCount?: number;
+    lastAttemptAt?: number | null;
+    lastError?: string | null;
+  },
   databaseNameOverride?: string
 ): Promise<void> => {
-  const payload: SyncOutboxItem = {
+  const payload = toOutboxItem({
     ...item,
     queuedAt: item.queuedAt ?? Date.now(),
-  };
+  });
   await withOutboxStore(
     "readwrite",
     (store) => store.put(payload),
@@ -86,7 +132,36 @@ export const listOutboxItems = async (
   if (!Array.isArray(stored)) {
     return [];
   }
-  return stored.filter(isOutboxItem);
+  return stored.filter(isOutboxItem).map((item) => toOutboxItem(item));
+};
+
+export const markOutboxItemAttempt = async (
+  input: {
+    key: string;
+    lastError: string | null;
+  },
+  databaseNameOverride?: string
+): Promise<void> => {
+  const existing = await withOutboxStore<unknown>(
+    "readonly",
+    (store) => store.get(input.key),
+    databaseNameOverride
+  );
+  if (!isOutboxItem(existing)) {
+    return;
+  }
+  const item = toOutboxItem(existing);
+  const updated = toOutboxItem({
+    ...item,
+    retryCount: item.retryCount + 1,
+    lastAttemptAt: Date.now(),
+    lastError: input.lastError,
+  });
+  await withOutboxStore(
+    "readwrite",
+    (store) => store.put(updated),
+    databaseNameOverride
+  );
 };
 
 export const deleteOutboxItem = async (

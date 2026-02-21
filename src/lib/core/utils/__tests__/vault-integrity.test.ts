@@ -113,6 +113,19 @@ const createMemoryAdapter = (): {
       await yieldOnce();
       return null;
     },
+    async getSyncStatus() {
+      await yieldOnce();
+      return {
+        state: "idle",
+        pendingCount: 0,
+        lastSuccessAt: null,
+        lastError: null,
+        lastInitResolution: null,
+      };
+    },
+    async flushPendingSync() {
+      await yieldOnce();
+    },
   };
 
   const getVault = (): Vault | null => vault;

@@ -9,13 +9,20 @@ import {
 import { toDerivedMarkdown } from "../utils/derived-markdown";
 import { IndexedDBAdapter, createDefaultVault } from "./indexeddb.adapter";
 import { normalizeS3ConfigInput } from "./s3/config";
-import { deleteOutboxItem, listOutboxItems, putOutboxItem } from "./s3/outbox";
+import {
+  deleteOutboxItem,
+  listOutboxItems,
+  markOutboxItemAttempt,
+  putOutboxItem,
+} from "./s3/outbox";
+import { readSyncMeta, writeSyncMeta } from "./s3/sync-meta";
 import type { SyncOutboxItem, SyncOutboxKind } from "./s3/outbox";
 import type {
   AssetMeta,
   NoteDocumentFile,
   NoteIndexEntry,
   S3Config,
+  SyncStatus,
   StorageAdapter,
   TemplateIndexEntry,
   UIState,
@@ -27,6 +34,16 @@ export type S3Transport = {
 };
 
 export const s3CacheDatabaseName = "local-notes-s3-cache";
+
+const defaultSyncStatus = (): SyncStatus => ({
+  state: "idle",
+  pendingCount: 0,
+  lastSuccessAt: null,
+  lastError: null,
+  lastInitResolution: null,
+});
+
+type SyncErrorCategory = "timeout" | "network" | "auth" | "cors" | "unknown";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -135,6 +152,78 @@ const isNotFoundError = (error: unknown): boolean => {
   );
 };
 
+const isTimeoutError = (error: unknown): boolean =>
+  error instanceof Error && error.name === "TimeoutError";
+
+const isAuthError = (error: unknown): boolean => {
+  if (!isRecord(error)) {
+    return false;
+  }
+  const metadata = error.$metadata;
+  if (!isRecord(metadata) || typeof metadata.httpStatusCode !== "number") {
+    return false;
+  }
+  return metadata.httpStatusCode === 401 || metadata.httpStatusCode === 403;
+};
+
+const isCorsError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("cors") ||
+    message.includes("preflight") ||
+    message.includes("access-control-allow-origin")
+  );
+};
+
+const isNetworkError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("network request failed") ||
+    message.includes("load failed")
+  );
+};
+
+const classifySyncError = (error: unknown): SyncErrorCategory => {
+  if (isTimeoutError(error)) {
+    return "timeout";
+  }
+  if (isAuthError(error)) {
+    return "auth";
+  }
+  if (isCorsError(error)) {
+    return "cors";
+  }
+  if (isNetworkError(error)) {
+    return "network";
+  }
+  return "unknown";
+};
+
+const toSyncErrorMessage = (
+  category: SyncErrorCategory,
+  error: unknown
+): string => {
+  const message =
+    error instanceof Error && error.message.trim().length > 0
+      ? error.message.trim()
+      : "Unknown sync failure.";
+  return `${category}: ${message}`;
+};
+
+const createTimeoutError = (): Error => {
+  const error = new Error("S3 request timed out.");
+  error.name = "TimeoutError";
+  return error;
+};
+
 const isBodyInit = (value: unknown): value is BodyInit => {
   if (typeof value === "string") {
     return true;
@@ -207,6 +296,7 @@ const buildKeys = (prefix: string): S3Keys => ({
 
 type InitOptions = {
   client?: S3Transport;
+  requestTimeoutMs?: number;
 };
 
 export class S3Adapter implements StorageAdapter {
@@ -216,6 +306,8 @@ export class S3Adapter implements StorageAdapter {
   private readonly client: S3Transport;
   private readonly cacheAdapter: IndexedDBAdapter;
   private readonly cacheDatabaseName: string;
+  private readonly requestTimeoutMs: number;
+  private syncStatus: SyncStatus = defaultSyncStatus();
 
   private flushInFlight = false;
   private flushTimer: number | null = null;
@@ -229,6 +321,7 @@ export class S3Adapter implements StorageAdapter {
     this.cacheAdapter = new IndexedDBAdapter({
       databaseName: this.cacheDatabaseName,
     });
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 7000;
     this.client =
       options.client ??
       new S3Client({
@@ -243,6 +336,11 @@ export class S3Adapter implements StorageAdapter {
 
   public async init(): Promise<void> {
     await this.cacheAdapter.init();
+    await this.hydrateSyncStatus();
+    await this.setSyncStatus({
+      state: "syncing",
+      lastError: null,
+    });
 
     const remoteVault = await this.readRemoteJson<Vault>(this.keys.vault);
     const localVault = await this.cacheAdapter.readVault();
@@ -253,14 +351,24 @@ export class S3Adapter implements StorageAdapter {
       await (useRemoteVault
         ? this.cacheAdapter.writeVault(remoteVault)
         : this.queueOutboxItem({ key: "vault", kind: "vault" }));
+      await this.setSyncStatus({
+        lastInitResolution: useRemoteVault ? "remote_applied" : "local_pushed",
+      });
     } else if (localVault) {
       await this.queueOutboxItem({ key: "vault", kind: "vault" });
+      await this.setSyncStatus({
+        lastInitResolution: "local_pushed",
+      });
     } else {
       const vault = createDefaultVault();
       await this.cacheAdapter.writeVault(vault);
       await this.queueOutboxItem({ key: "vault", kind: "vault" });
+      await this.setSyncStatus({
+        lastInitResolution: "created_default",
+      });
     }
 
+    await this.refreshPendingCount();
     // Kick off an early flush, then keep flushing periodically.
     await this.flushOutbox();
     this.startFlushLoop();
@@ -510,6 +618,15 @@ export class S3Adapter implements StorageAdapter {
     return null;
   }
 
+  public async getSyncStatus(): Promise<SyncStatus> {
+    await this.refreshPendingCount();
+    return { ...this.syncStatus };
+  }
+
+  public async flushPendingSync(): Promise<void> {
+    await this.flushOutbox();
+  }
+
   private startFlushLoop(): void {
     if (import.meta.env.MODE === "test") {
       return;
@@ -545,6 +662,54 @@ export class S3Adapter implements StorageAdapter {
     }, 800);
   }
 
+  private async hydrateSyncStatus(): Promise<void> {
+    const persisted = await readSyncMeta(this.cacheDatabaseName);
+    if (persisted) {
+      this.syncStatus = persisted.status;
+    }
+  }
+
+  private async refreshPendingCount(): Promise<void> {
+    const items = await listOutboxItems(this.cacheDatabaseName);
+    if (items.length === this.syncStatus.pendingCount) {
+      return;
+    }
+    await this.setSyncStatus({ pendingCount: items.length });
+  }
+
+  private async setSyncStatus(patch: Partial<SyncStatus>): Promise<void> {
+    this.syncStatus = {
+      ...this.syncStatus,
+      ...patch,
+    };
+    await writeSyncMeta(this.syncStatus, this.cacheDatabaseName);
+  }
+
+  private async sendCommand(command: unknown): Promise<unknown> {
+    if (!Number.isFinite(this.requestTimeoutMs) || this.requestTimeoutMs <= 0) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      return this.client.send(command as never);
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, this.requestTimeoutMs);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      const typedCommand = command as never;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      const typedOptions = { abortSignal: controller.signal } as never;
+      return await this.client.send(typedCommand, typedOptions);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw createTimeoutError();
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   private async flushOutbox(): Promise<void> {
     if (this.flushInFlight) {
       return;
@@ -553,14 +718,64 @@ export class S3Adapter implements StorageAdapter {
     try {
       const items = await listOutboxItems(this.cacheDatabaseName);
       const ordered = sortOutboxItems(items);
-      for (const item of ordered) {
-        // eslint-disable-next-line no-await-in-loop
-        await this.flushOutboxItem(item);
-        // eslint-disable-next-line no-await-in-loop
-        await deleteOutboxItem(item.key, this.cacheDatabaseName);
+      await this.setSyncStatus({
+        pendingCount: ordered.length,
+      });
+      if (ordered.length === 0) {
+        await this.setSyncStatus({
+          state: "idle",
+          lastError: null,
+        });
+        return;
       }
-    } catch {
-      // Keep queued items for retry.
+      await this.setSyncStatus({
+        state: "syncing",
+        lastError: null,
+      });
+      for (const item of ordered) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await this.flushOutboxItem(item);
+          // eslint-disable-next-line no-await-in-loop
+          await deleteOutboxItem(item.key, this.cacheDatabaseName);
+          // eslint-disable-next-line no-await-in-loop
+          await this.setSyncStatus({
+            pendingCount: Math.max(0, this.syncStatus.pendingCount - 1),
+          });
+        } catch (error) {
+          // eslint-disable-next-line no-await-in-loop
+          await markOutboxItemAttempt(
+            {
+              key: item.key,
+              lastError: toSyncErrorMessage(classifySyncError(error), error),
+            },
+            this.cacheDatabaseName
+          );
+          const category = classifySyncError(error);
+          const nextState: SyncStatus["state"] =
+            category === "auth" || category === "unknown" ? "error" : "offline";
+          // eslint-disable-next-line no-await-in-loop
+          await this.setSyncStatus({
+            state: nextState,
+            lastError: toSyncErrorMessage(category, error),
+          });
+          return;
+        }
+      }
+      await this.setSyncStatus({
+        state: "idle",
+        pendingCount: 0,
+        lastSuccessAt: Date.now(),
+        lastError: null,
+      });
+    } catch (error) {
+      const category = classifySyncError(error);
+      const nextState: SyncStatus["state"] =
+        category === "auth" || category === "unknown" ? "error" : "offline";
+      await this.setSyncStatus({
+        state: nextState,
+        lastError: toSyncErrorMessage(category, error),
+      });
     } finally {
       this.flushInFlight = false;
     }
@@ -607,9 +822,18 @@ export class S3Adapter implements StorageAdapter {
   }
 
   private async queueOutboxItem(
-    item: Omit<SyncOutboxItem, "queuedAt"> & { queuedAt?: number }
+    item: Omit<
+      SyncOutboxItem,
+      "queuedAt" | "retryCount" | "lastAttemptAt" | "lastError"
+    > & {
+      queuedAt?: number;
+      retryCount?: number;
+      lastAttemptAt?: number | null;
+      lastError?: string | null;
+    }
   ): Promise<void> {
     await putOutboxItem(item, this.cacheDatabaseName);
+    await this.refreshPendingCount();
   }
 
   private async flushVaultItem(): Promise<void> {
@@ -714,7 +938,7 @@ export class S3Adapter implements StorageAdapter {
 
     while (!done && page < maxPages) {
       // eslint-disable-next-line no-await-in-loop
-      const response: unknown = await this.client.send(
+      const response: unknown = await this.sendCommand(
         new ListObjectsV2Command({
           Bucket: this.config.bucket,
           Prefix: assetPrefix,
@@ -738,7 +962,7 @@ export class S3Adapter implements StorageAdapter {
 
   private async readRemoteText(key: string): Promise<string | null> {
     try {
-      const response: unknown = await this.client.send(
+      const response: unknown = await this.sendCommand(
         new GetObjectCommand({ Bucket: this.config.bucket, Key: key })
       );
       const body = isRecord(response) ? response.Body : undefined;
@@ -765,7 +989,7 @@ export class S3Adapter implements StorageAdapter {
 
   private async readRemoteBlob(key: string): Promise<Blob | null> {
     try {
-      const response: unknown = await this.client.send(
+      const response: unknown = await this.sendCommand(
         new GetObjectCommand({ Bucket: this.config.bucket, Key: key })
       );
       const body = isRecord(response) ? response.Body : undefined;
@@ -782,7 +1006,7 @@ export class S3Adapter implements StorageAdapter {
   }
 
   private async putJson(key: string, value: unknown): Promise<void> {
-    await this.client.send(
+    await this.sendCommand(
       new PutObjectCommand({
         Bucket: this.config.bucket,
         Key: key,
@@ -797,7 +1021,7 @@ export class S3Adapter implements StorageAdapter {
     value: string,
     contentType: string
   ): Promise<void> {
-    await this.client.send(
+    await this.sendCommand(
       new PutObjectCommand({
         Bucket: this.config.bucket,
         Key: key,
@@ -808,7 +1032,7 @@ export class S3Adapter implements StorageAdapter {
   }
 
   private async putBlob(key: string, blob: Blob): Promise<void> {
-    await this.client.send(
+    await this.sendCommand(
       new PutObjectCommand({
         Bucket: this.config.bucket,
         Key: key,
@@ -820,7 +1044,7 @@ export class S3Adapter implements StorageAdapter {
 
   private async deleteObjectIfExists(key: string): Promise<void> {
     try {
-      await this.client.send(
+      await this.sendCommand(
         new DeleteObjectCommand({ Bucket: this.config.bucket, Key: key })
       );
     } catch (error) {

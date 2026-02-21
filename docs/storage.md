@@ -32,6 +32,8 @@ Implement `StorageAdapter` with:
 - readUIState()
 - writeSearchIndex(snapshot)
 - readSearchIndex()
+- getSyncStatus()
+- flushPendingSync()
 
 Adapters:
 
@@ -97,10 +99,13 @@ DB name: `local-notes` Object stores:
 - uiState (key: "ui")
 - searchIndex (key: "search") -> serialized MiniSearch index
 - appSettings (key: "app") -> { storageMode: "filesystem" | "idb" | "s3", fsHandle?: FileSystemDirectoryHandle, lastVaultName?: string, s3?: { bucket: string, region: string, prefix?: string, accessKeyId: string, secretAccessKey: string, sessionToken?: string }, settings?: { ... } }
+- syncOutbox (key: "key") -> queued S3 sync operations with metadata (`retryCount`, `lastAttemptAt`, `lastError`)
+- syncMeta (key: "sync") -> persisted sync telemetry (`state`, `pendingCount`, `lastSuccessAt`, `lastError`, `lastInitResolution`)
 
 Notes:
 - appSettings lives in IndexedDB regardless of primary storage, and is used to remember the user’s storage choice across launches.
 - settings is reserved for future global settings (non-vault-specific).
+- Schema version is currently `5` with backward compatibility defaults for legacy outbox items.
 
 ## 5) Image handling
 
@@ -151,6 +156,7 @@ S3 keys are stored under a user-configurable `prefix` (default: `embervault/`).
 Notes:
 - Soft-deleted notes remain under `notes/` and are hidden by `deletedAt` in the vault index.
 - Sync policy: last-write-wins. Local cache is updated immediately; remote is updated via a coalesced outbox.
+- Startup policy: remote-first for S3 mode with bounded retries (3 attempts, 7s timeout per attempt, 800/1600/3200ms backoff) and explicit failure recovery actions.
 
 ## 7) Autosave & consistency
 

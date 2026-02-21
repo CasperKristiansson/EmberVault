@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createEventDispatcher } from "svelte";
   import type { MobileView } from "$lib/core/utils/mobile-view";
 
   export let saveState: "idle" | "saving" | "saved" = "idle";
@@ -6,10 +7,20 @@
   export let mobileRightPanelOpen = false;
   export let workspaceMode: "notes" = "notes";
   export let interfaceDensity: "comfortable" | "compact" = "comfortable";
+  export let mobileKeyboardInset = 0;
+
+  const dispatch = createEventDispatcher<{
+    closeRightPanel: void;
+  }>();
+
+  const handleCloseRightPanel = (): void => {
+    dispatch("closeRightPanel");
+  };
 </script>
 
 <div
   class="app-shell"
+  style={`--mobile-keyboard-inset:${Math.max(0, mobileKeyboardInset)}px;`}
   data-save-state={saveState}
   data-mobile-view={mobileView}
   data-mobile-right-panel={mobileRightPanelOpen ? "open" : "closed"}
@@ -28,6 +39,14 @@
     <slot name="editor" />
   </main>
 
+  <button
+    class="right-panel-backdrop"
+    type="button"
+    aria-label="Close right panel"
+    data-testid="right-panel-backdrop"
+    on:click={handleCloseRightPanel}
+  ></button>
+
   <aside class="right-panel" data-testid="right-panel-pane">
     <slot name="right-panel" />
   </aside>
@@ -42,6 +61,7 @@
 
   <slot name="modal" />
   <slot name="toast" />
+  <slot name="startup-overlay" />
 </div>
 
 <style>
@@ -58,6 +78,7 @@
     --density-editor-gap: 16px;
     --density-right-panel-padding: 20px 16px;
     --density-right-panel-gap: 12px;
+    --mobile-keyboard-inset: 0px;
 
     display: grid;
     grid-template-columns: minmax(280px, var(--note-list-width)) minmax(0, 1fr)
@@ -129,6 +150,14 @@
     display: none;
   }
 
+  .right-panel-backdrop {
+    display: none;
+    border: 0;
+    padding: 0;
+    background: rgba(7, 9, 12, 0.48);
+    backdrop-filter: blur(2px);
+  }
+
   .app-shell-default-slot {
     display: none;
   }
@@ -152,7 +181,7 @@
 
     .right-panel {
       position: fixed;
-      top: 44px;
+      top: calc(44px + env(safe-area-inset-top));
       right: 0;
       bottom: 0;
       width: min(320px, 86vw);
@@ -162,8 +191,18 @@
       transition: transform 160ms ease;
     }
 
+    .right-panel-backdrop {
+      position: fixed;
+      inset: calc(44px + env(safe-area-inset-top)) 0 0 0;
+      z-index: 18;
+    }
+
     .app-shell[data-mobile-right-panel="open"] .right-panel {
       transform: translateX(0);
+    }
+
+    .app-shell[data-mobile-right-panel="open"] .right-panel-backdrop {
+      display: block;
     }
   }
 
@@ -176,7 +215,7 @@
     .topbar {
       grid-column: 1;
       grid-row: 1;
-      padding: 0 12px;
+      padding: env(safe-area-inset-top) 12px 0;
     }
 
     .note-list,
@@ -205,8 +244,8 @@
 
     .right-panel {
       position: fixed;
-      top: 44px;
-      bottom: 56px;
+      top: calc(44px + env(safe-area-inset-top));
+      bottom: calc(56px + env(safe-area-inset-bottom));
       width: min(320px, 86vw);
       z-index: 20;
       box-shadow: var(--shadow-panel);
@@ -221,14 +260,23 @@
       transform: translateX(0);
     }
 
+    .app-shell[data-mobile-right-panel="open"] .right-panel-backdrop {
+      display: block;
+      position: fixed;
+      inset: calc(44px + env(safe-area-inset-top)) 0
+        calc(56px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset)) 0;
+      z-index: 18;
+    }
+
     .mobile-nav {
       grid-column: 1;
       grid-row: 3;
       display: flex;
       align-items: center;
       justify-content: space-around;
-      height: 56px;
-      padding: 0 12px;
+      height: calc(56px + env(safe-area-inset-bottom));
+      padding: 0 12px env(safe-area-inset-bottom);
+      transform: translateY(calc(var(--mobile-keyboard-inset) * -1));
       background: var(--bg-1);
       border-top: 1px solid var(--stroke-0);
     }

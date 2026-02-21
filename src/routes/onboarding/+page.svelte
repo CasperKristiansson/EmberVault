@@ -11,7 +11,11 @@
       writeAppSettings,
     } from "$lib/core/storage/app-settings";
     import type { AppSettings, S3Config } from "$lib/core/storage/types";
-    import { initAdapter, type StorageMode } from "$lib/state/adapter.store";
+    import {
+      initAdapter,
+      initAdapterAsync,
+      type StorageMode,
+    } from "$lib/state/adapter.store";
 
   let supportsFileSystem = false;
   let isBusy = false;
@@ -208,7 +212,7 @@
     isBusy = true;
     activeMode = "s3";
     try {
-      const adapter = initAdapter("s3", { s3Config: config });
+      const adapter = await initAdapterAsync("s3", { s3Config: config });
       await adapter.init();
       const existingVault = await adapter.readVault();
       if (!existingVault) {

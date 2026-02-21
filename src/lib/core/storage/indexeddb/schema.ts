@@ -1,5 +1,5 @@
 export const databaseName = "local-notes";
-export const databaseVersion = 4;
+export const databaseVersion = 5;
 
 export const storeNames = {
   vault: "vault",
@@ -10,6 +10,7 @@ export const storeNames = {
   searchIndex: "searchIndex",
   appSettings: "appSettings",
   syncOutbox: "syncOutbox",
+  syncMeta: "syncMeta",
 } as const;
 
 export type StoreName = (typeof storeNames)[keyof typeof storeNames];
@@ -35,6 +36,7 @@ export const storeKeyPaths: Record<StoreName, StoreKeyPath> = {
   [storeNames.searchIndex]: null,
   [storeNames.appSettings]: null,
   [storeNames.syncOutbox]: syncOutboxKey,
+  [storeNames.syncMeta]: null,
 };
 
 const ensureObjectStore = (
@@ -62,6 +64,7 @@ export const createObjectStores = (database: IDBDatabase): void => {
     storeNames.searchIndex,
     storeNames.appSettings,
     storeNames.syncOutbox,
+    storeNames.syncMeta,
   ];
 
   for (const storeName of storeList) {
@@ -71,3 +74,4 @@ export const createObjectStores = (database: IDBDatabase): void => {
 export const uiStateKey = "ui";
 export const appSettingsKey = "app";
 export const searchIndexKey = "search";
+export const syncMetaKey = "sync";

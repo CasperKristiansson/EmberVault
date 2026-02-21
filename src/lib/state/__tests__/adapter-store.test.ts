@@ -3,7 +3,12 @@ import { get } from "svelte/store";
 import { FileSystemAdapter } from "$lib/core/storage/filesystem.adapter";
 import { IndexedDBAdapter } from "$lib/core/storage/indexeddb.adapter";
 import { S3Adapter } from "$lib/core/storage/s3.adapter";
-import { adapter, initAdapter, storageMode } from "$lib/state/adapter.store";
+import {
+  adapter,
+  initAdapter,
+  initAdapterAsync,
+  storageMode,
+} from "$lib/state/adapter.store";
 
 describe("adapter.store", () => {
   it("initializes the IndexedDB adapter", () => {
@@ -30,14 +35,14 @@ describe("adapter.store", () => {
     expect(get(adapter)).toBe(activeAdapter);
   });
 
-  it("requires config for s3 mode", () => {
+  it("throws in sync init for s3 mode", () => {
     expect(() => initAdapter("s3")).toThrow(
-      "S3 storage requires configuration."
+      "S3 adapter requires async initialization."
     );
   });
 
-  it("initializes the S3 adapter with configuration", () => {
-    const activeAdapter = initAdapter("s3", {
+  it("initializes the S3 adapter with configuration", async () => {
+    const activeAdapter = await initAdapterAsync("s3", {
       s3Config: {
         bucket: "bucket",
         region: "us-east-1",

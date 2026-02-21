@@ -19,7 +19,11 @@
   import { readS3Draft, writeS3Draft } from "$lib/core/storage/s3/draft";
   import type { StorageMode } from "$lib/state/adapter.store";
   import { normalizeS3ConfigInput } from "$lib/core/storage/s3/config";
-  import type { AppPreferences, S3Config } from "$lib/core/storage/types";
+  import type {
+    AppPreferences,
+    S3Config,
+    SyncStatus,
+  } from "$lib/core/storage/types";
   import type { VaultIntegrityReport } from "$lib/core/utils/vault-integrity";
 
   const defaultPreferences: AppPreferences = {
@@ -43,6 +47,16 @@
   export let settingsS3Bucket: string | null = null;
   export let settingsS3Region: string | null = null;
   export let settingsS3Prefix: string | null = null;
+  export let settingsSyncStatus: SyncStatus = {
+    state: "idle",
+    pendingCount: 0,
+    lastSuccessAt: null,
+    lastError: null,
+    lastInitResolution: null,
+  };
+  export let settingsSyncStateLabel = "Idle";
+  export let settingsSyncLastSuccess = "Never";
+  export let settingsSyncInitResolution: string | null = null;
   export let supportsFileSystem = true;
   export let settingsBusy = false;
   export let preferences: AppPreferences = defaultPreferences;
@@ -69,6 +83,7 @@
   export let onRebuildSearchIndex: (() => void | Promise<void>) | null = null;
   export let onClearWorkspaceState: (() => void | Promise<void>) | null = null;
   export let onResetPreferences: (() => void | Promise<void>) | null = null;
+  export let onRetrySync: (() => void | Promise<void>) | null = null;
 
   type SettingsSection =
     | "storage"
@@ -92,6 +107,7 @@
   let s3Dirty = false;
   let useDraftValues = false;
   let hydratedS3Draft = false;
+  let syncErrorCategory: string | null = null;
 
   $: if (!s3Dirty && !useDraftValues) {
     s3Bucket = settingsS3Bucket ?? s3Bucket;
@@ -190,6 +206,29 @@
       integrityBusy = false;
     }
   };
+
+  const resolveStorageLabel = (mode: StorageMode): string => {
+    if (mode === "filesystem") {
+      return "Folder vault";
+    }
+    if (mode === "s3") {
+      return "AWS S3";
+    }
+    return "Browser storage";
+  };
+
+  const parseSyncErrorCategory = (value: string | null): string | null => {
+    if (!value) {
+      return null;
+    }
+    const separator = value.indexOf(":");
+    if (separator < 0) {
+      return "unknown";
+    }
+    return value.slice(0, separator).trim() || "unknown";
+  };
+
+  $: syncErrorCategory = parseSyncErrorCategory(settingsSyncStatus.lastError);
 </script>
 
 <div
@@ -453,6 +492,43 @@
               >
                 {storageMode === "s3" ? "Update credentials" : "Connect S3"}
               </button>
+              {#if storageMode === "s3"}
+                <div class="sync-status-card" data-testid="settings-sync-status">
+                  <div class="sync-status-row">
+                    <span class="sync-status-label">State</span>
+                    <span class="sync-status-value">{settingsSyncStateLabel}</span>
+                  </div>
+                  <div class="sync-status-row">
+                    <span class="sync-status-label">Pending changes</span>
+                    <span class="sync-status-value">{settingsSyncStatus.pendingCount}</span>
+                  </div>
+                  <div class="sync-status-row">
+                    <span class="sync-status-label">Last successful sync</span>
+                    <span class="sync-status-value">{settingsSyncLastSuccess}</span>
+                  </div>
+                  {#if syncErrorCategory}
+                    <div class="sync-status-row">
+                      <span class="sync-status-label">Last error category</span>
+                      <span class="sync-status-value">{syncErrorCategory}</span>
+                    </div>
+                  {/if}
+                  {#if settingsSyncStatus.lastError}
+                    <div class="sync-error">{settingsSyncStatus.lastError}</div>
+                  {/if}
+                  {#if settingsSyncInitResolution}
+                    <div class="sync-resolution">{settingsSyncInitResolution}</div>
+                  {/if}
+                  <button
+                    class="button secondary"
+                    type="button"
+                    data-testid="settings-retry-sync"
+                    on:click={() => void onRetrySync?.()}
+                    disabled={!onRetrySync || settingsBusy}
+                  >
+                    Retry sync now
+                  </button>
+                </div>
+              {/if}
             </div>
           </div>
         {:else if activeSection === "general"}
@@ -1143,15 +1219,31 @@
 
           <div class="info-grid">
             <div class="info-row">
-              <div class="info-label">Storage</div>
-              <div class="info-value">
-                {storageMode === "filesystem" ? "Folder vault" : "Browser storage"}
-              </div>
+              <div class="info-label">Storage mode</div>
+              <div class="info-value">{resolveStorageLabel(storageMode)}</div>
             </div>
             <div class="info-row">
               <div class="info-label">Vault</div>
               <div class="info-value">{settingsVaultName ?? "Not set"}</div>
             </div>
+            {#if storageMode === "s3"}
+              <div class="info-row">
+                <div class="info-label">S3 bucket</div>
+                <div class="info-value">{settingsS3Bucket ?? "Not set"}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">S3 prefix</div>
+                <div class="info-value">{settingsS3Prefix || "embervault/"}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Pending sync</div>
+                <div class="info-value">{settingsSyncStatus.pendingCount}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Last sync</div>
+                <div class="info-value">{settingsSyncLastSuccess}</div>
+              </div>
+            {/if}
             <div class="info-row">
               <div class="info-label">Build</div>
               <div class="info-value">Local</div>
@@ -1354,6 +1446,43 @@
   }
 
   .card-meta span {
+    color: var(--text-1);
+  }
+
+  .sync-status-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--stroke-0);
+    background: var(--bg-2);
+  }
+
+  .sync-status-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .sync-status-label {
+    color: var(--text-2);
+  }
+
+  .sync-status-value {
+    color: var(--text-0);
+    text-align: right;
+  }
+
+  .sync-error {
+    font-size: 12px;
+    color: var(--danger);
+    word-break: break-word;
+  }
+
+  .sync-resolution {
+    font-size: 12px;
     color: var(--text-1);
   }
 

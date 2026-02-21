@@ -10,6 +10,7 @@
     AppPreferences,
     NoteIndexEntry,
     S3Config,
+    SyncStatus,
     Vault,
   } from "$lib/core/storage/types";
   import type { VaultIntegrityReport } from "$lib/core/utils/vault-integrity";
@@ -19,6 +20,7 @@
 
   export let vault: Vault | null = null;
   export let searchState: SearchIndexState | null = null;
+  export let searchLoading = false;
   export let notes: NoteIndexEntry[] = [];
   export let trashedNotes: NoteIndexEntry[] = [];
   export let activeNoteId: string | null = null;
@@ -56,11 +58,22 @@
   export let onRebuildSearchIndex: (() => void | Promise<void>) | null = null;
   export let onClearWorkspaceState: (() => void | Promise<void>) | null = null;
   export let onResetPreferences: (() => void | Promise<void>) | null = null;
+  export let onRetrySync: (() => void | Promise<void>) | null = null;
   export let storageMode: StorageMode = "idb";
   export let settingsVaultName: string | null = null;
   export let settingsS3Bucket: string | null = null;
   export let settingsS3Region: string | null = null;
   export let settingsS3Prefix: string | null = null;
+  export let settingsSyncStatus: SyncStatus = {
+    state: "idle",
+    pendingCount: 0,
+    lastSuccessAt: null,
+    lastError: null,
+    lastInitResolution: null,
+  };
+  export let settingsSyncStateLabel = "Idle";
+  export let settingsSyncLastSuccess = "Never";
+  export let settingsSyncInitResolution: string | null = null;
   export let supportsFileSystem = true;
   export let settingsBusy = false;
   export let preferences: AppPreferences = {
@@ -247,6 +260,7 @@
       this={GlobalSearchModalComponent}
       {vault}
       {searchState}
+      {searchLoading}
       onClose={handleClose}
       onOpenNote={onOpenNote}
     />
@@ -294,6 +308,10 @@
       {settingsS3Bucket}
       {settingsS3Region}
       {settingsS3Prefix}
+      {settingsSyncStatus}
+      {settingsSyncStateLabel}
+      {settingsSyncLastSuccess}
+      {settingsSyncInitResolution}
       {supportsFileSystem}
       {settingsBusy}
       {preferences}
@@ -311,6 +329,7 @@
       onRebuildSearchIndex={onRebuildSearchIndex}
       onClearWorkspaceState={onClearWorkspaceState}
       onResetPreferences={onResetPreferences}
+      onRetrySync={onRetrySync}
     />
   {/if}
 {:else if $activeModal?.type === "confirm"}
