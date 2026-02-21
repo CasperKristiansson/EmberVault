@@ -1,16 +1,15 @@
 import { expect, test } from "@playwright/test";
+import { enterBrowserStorageApp } from "./helpers/enter-browser-storage-app";
 
 test("markdown view by default opens notes in markdown preview", async ({
   page,
 }) => {
   const title = "Markdown default note";
   const hiddenCount = 0;
+  const tabClosedCount = 0;
 
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto("/onboarding");
-
-  await page.getByTestId("use-browser-storage").click();
-  await expect(page).toHaveURL(/\/app\/?$/);
+  await enterBrowserStorageApp(page);
 
   await page.getByTestId("open-settings").click();
   await expect(page.getByTestId("settings-modal")).toBeVisible();
@@ -28,10 +27,17 @@ test("markdown view by default opens notes in markdown preview", async ({
   await expect(editor).toBeFocused();
   await page.keyboard.type(title);
   await page.keyboard.press("Enter");
+  await expect(page.locator('[data-save-state="saved"]')).toBeVisible();
 
   const tab = page.getByTestId("tab-list").getByTestId("tab-item").first();
   await tab.click();
+  await tab.hover();
   await tab.getByTestId("tab-close").click();
+  if ((await tab.count()) > tabClosedCount) {
+    await tab.hover();
+    await tab.getByTestId("tab-close").click();
+  }
+  await expect(tab).toHaveCount(tabClosedCount);
 
   await page.getByTestId("note-list").getByText(title, { exact: true }).click();
   await expect(page.getByTestId("markdown-preview")).toBeVisible();

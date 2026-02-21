@@ -214,6 +214,15 @@ const resolveFolderPathById = (
   if (!folderId) {
     return [];
   }
+  const folderById = new Map<string, { name: string; parentId: string | null }>(
+    Object.entries(folders) as [
+      string,
+      {
+        name: string;
+        parentId: string | null;
+      },
+    ][]
+  );
   const path: string[] = [];
   const seen = new Set<string>();
   let currentId: string | null = folderId;
@@ -223,14 +232,14 @@ const resolveFolderPathById = (
     depth += 1
   ) {
     const resolvedId = currentId;
-    if (resolvedId === null || seen.has(resolvedId)) {
+    if (seen.has(resolvedId)) {
       break;
     }
     seen.add(resolvedId);
-    if (!(resolvedId in folders)) {
+    const folder = folderById.get(resolvedId);
+    if (!folder) {
       break;
     }
-    const folder = folders[resolvedId];
     path.push(folder.name);
     currentId = folder.parentId;
   }

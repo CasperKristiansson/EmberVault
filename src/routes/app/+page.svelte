@@ -1733,7 +1733,9 @@
     workspaceMode = "notes";
     mobileView = "notes";
     mobileRightPanelOpen = false;
-    projectsOverlayOpen = false;
+    if (isMobileViewport) {
+      projectsOverlayOpen = false;
+    }
   };
 
   const openNoteFromList = async (noteId: string): Promise<void> => {
