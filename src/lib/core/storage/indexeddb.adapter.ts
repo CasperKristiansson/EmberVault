@@ -58,8 +58,16 @@ type AssetRecord = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+type IndexedDatabaseAdapterOptions = {
+  databaseName?: string;
+};
+
 export class IndexedDBAdapter implements StorageAdapter {
-  private readonly adapterDatabaseName = databaseName;
+  private readonly adapterDatabaseName: string;
+
+  public constructor(options: IndexedDatabaseAdapterOptions = {}) {
+    this.adapterDatabaseName = options.databaseName ?? databaseName;
+  }
 
   public async init(): Promise<void> {
     await this.openAndCloseDatabase();
@@ -421,7 +429,9 @@ export class IndexedDBAdapter implements StorageAdapter {
   }
 
   private async openAndCloseDatabase(): Promise<void> {
-    const database = await openIndexedDatabase();
+    const database = await openIndexedDatabase({
+      databaseNameOverride: this.adapterDatabaseName,
+    });
     if (database.name !== this.adapterDatabaseName) {
       database.close();
       throw new Error(
@@ -450,7 +460,9 @@ export class IndexedDBAdapter implements StorageAdapter {
   private async withDatabase<T>(
     action: (database: IDBDatabase) => T | Promise<T>
   ): Promise<T> {
-    const database = await openIndexedDatabase();
+    const database = await openIndexedDatabase({
+      databaseNameOverride: this.adapterDatabaseName,
+    });
     if (database.name !== this.adapterDatabaseName) {
       database.close();
       throw new Error(

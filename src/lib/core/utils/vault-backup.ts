@@ -141,6 +141,110 @@ const gunzipBlobIfNeeded = async (blob: Blob): Promise<Blob> => {
   return new Blob([buffer], { type: jsonMimeType });
 };
 
+const pathSegmentSeparator = "\u001F";
+const noteConflictSeparator = "\u001E";
+const maxFolderTraversalDepth = 64;
+
+const normalizeComparisonToken = (value: string): string =>
+  value.trim().toLowerCase();
+
+const toFolderPathKey = (segments: string[]): string =>
+  segments.map(normalizeComparisonToken).join(pathSegmentSeparator);
+
+const toFolderLookupKey = (
+  parentId: string | null,
+  folderName: string
+): string =>
+  `${parentId ?? "__root__"}${noteConflictSeparator}${normalizeComparisonToken(folderName)}`;
+
+const toNoteConflictKey = (
+  title: string,
+  folderPathSegments: string[],
+  fallbackId: string
+): string => {
+  const normalizedTitle = normalizeComparisonToken(title);
+  return `${toFolderPathKey(folderPathSegments)}${noteConflictSeparator}${
+    normalizedTitle.length > 0 ? normalizedTitle : fallbackId
+  }`;
+};
+
+const deepCloneFolders = (folders: Vault["folders"]): Vault["folders"] =>
+  Object.fromEntries(
+    Object.entries(folders).map(([id, folder]) => [
+      id,
+      {
+        ...folder,
+        childFolderIds: [...folder.childFolderIds],
+      },
+    ])
+  );
+
+const rebuildFolderChildren = (folders: Vault["folders"]): Vault["folders"] => {
+  const next = Object.fromEntries(
+    Object.entries(folders).map(([id, folder]) => [
+      id,
+      {
+        ...folder,
+        childFolderIds: [],
+      },
+    ])
+  ) as Vault["folders"];
+
+  for (const folder of Object.values(next) as Vault["folders"][string][]) {
+    if (folder.parentId) {
+      const parent = next[folder.parentId];
+      if (parent) {
+        parent.childFolderIds.push(folder.id);
+      }
+    }
+  }
+
+  return next;
+};
+
+const resolveFolderPathById = (
+  folders: Vault["folders"],
+  folderId: string | null
+): string[] => {
+  if (!folderId) {
+    return [];
+  }
+  const path: string[] = [];
+  const seen = new Set<string>();
+  let currentId: string | null = folderId;
+  for (
+    let depth = 0;
+    depth < maxFolderTraversalDepth && currentId !== null;
+    depth += 1
+  ) {
+    if (seen.has(currentId)) {
+      break;
+    }
+    seen.add(currentId);
+    const folder: Vault["folders"][string] | undefined = folders[currentId];
+    if (!folder) {
+      break;
+    }
+    path.push(folder.name);
+    currentId = folder.parentId;
+  }
+  return path.toReversed();
+};
+
+const createUniqueIdentifier = (
+  desiredId: string,
+  existingIds: Set<string>
+): string => {
+  if (!existingIds.has(desiredId)) {
+    return desiredId;
+  }
+  let suffix = 1;
+  while (existingIds.has(`${desiredId}-merged-${suffix}`)) {
+    suffix += 1;
+  }
+  return `${desiredId}-merged-${suffix}`;
+};
+
 export const createVaultBackup = async (input: {
   adapter: StorageAdapter;
   vault: Vault;
@@ -188,6 +292,217 @@ export const createVaultBackup = async (input: {
     assets,
   };
 };
+
+/* eslint-disable sonarjs/cognitive-complexity, sonarjs/cyclomatic-complexity, unicorn/no-array-sort, sonarjs/too-many-break-or-continue-in-loop, no-continue, unicorn/prefer-at, sonarjs/shorthand-property-grouping, sonarjs/arrow-function-convention */
+export const mergeVaultBackups = (input: {
+  base: VaultBackupV1;
+  incoming: VaultBackupV1;
+}): VaultBackupV1 => {
+  const { base, incoming } = input;
+  let mergedFolders = deepCloneFolders(base.vault.folders);
+
+  const baseFolderPathById = Object.fromEntries(
+    Object.keys(base.vault.folders).map((folderId) => [
+      folderId,
+      resolveFolderPathById(base.vault.folders, folderId),
+    ])
+  ) as Record<string, string[]>;
+  const incomingFolderPathById = Object.fromEntries(
+    Object.keys(incoming.vault.folders).map((folderId) => [
+      folderId,
+      resolveFolderPathById(incoming.vault.folders, folderId),
+    ])
+  ) as Record<string, string[]>;
+
+  const folderIds = new Set(Object.keys(mergedFolders));
+  const mergedFolderIdByPath = new Map<string, string>();
+  for (const folderId of Object.keys(mergedFolders)) {
+    const pathKey = toFolderPathKey(
+      resolveFolderPathById(mergedFolders, folderId)
+    );
+    if (pathKey.length > 0) {
+      mergedFolderIdByPath.set(pathKey, folderId);
+    }
+  }
+
+  const existingFolderByParentAndName = new Map<string, string>();
+  for (const folder of Object.values(mergedFolders)) {
+    existingFolderByParentAndName.set(
+      toFolderLookupKey(folder.parentId, folder.name),
+      folder.id
+    );
+  }
+
+  const incomingToMergedFolderId = new Map<string, string>();
+  for (const folderId of Object.keys(mergedFolders)) {
+    incomingToMergedFolderId.set(folderId, folderId);
+  }
+
+  const incomingFolderIdsByDepth = Object.entries(incomingFolderPathById)
+    .sort((first, second) => first[1].length - second[1].length)
+    .map(([folderId]) => folderId);
+
+  for (const incomingFolderId of incomingFolderIdsByDepth) {
+    const path = incomingFolderPathById[incomingFolderId] ?? [];
+    if (path.length === 0) {
+      continue;
+    }
+    const pathKey = toFolderPathKey(path);
+    const existingByPath = mergedFolderIdByPath.get(pathKey);
+    if (existingByPath) {
+      incomingToMergedFolderId.set(incomingFolderId, existingByPath);
+      continue;
+    }
+
+    const parentPath = path.slice(0, -1);
+    const folderName = path[path.length - 1] ?? "";
+    const parentPathKey = toFolderPathKey(parentPath);
+    const parentId =
+      parentPath.length > 0 ? (mergedFolderIdByPath.get(parentPathKey) ?? null) : null;
+    const existingByName = existingFolderByParentAndName.get(
+      toFolderLookupKey(parentId, folderName)
+    );
+    if (existingByName) {
+      incomingToMergedFolderId.set(incomingFolderId, existingByName);
+      mergedFolderIdByPath.set(pathKey, existingByName);
+      continue;
+    }
+
+    const nextFolderId = createUniqueIdentifier(incomingFolderId, folderIds);
+    folderIds.add(nextFolderId);
+    mergedFolders = {
+      ...mergedFolders,
+      [nextFolderId]: {
+        id: nextFolderId,
+        name: folderName,
+        parentId,
+        childFolderIds: [],
+      },
+    };
+    existingFolderByParentAndName.set(
+      toFolderLookupKey(parentId, folderName),
+      nextFolderId
+    );
+    mergedFolderIdByPath.set(pathKey, nextFolderId);
+    incomingToMergedFolderId.set(incomingFolderId, nextFolderId);
+  }
+
+  mergedFolders = rebuildFolderChildren(mergedFolders);
+
+  const mergedFolderPathById = Object.fromEntries(
+    Object.keys(mergedFolders).map((folderId) => [
+      folderId,
+      resolveFolderPathById(mergedFolders, folderId),
+    ])
+  ) as Record<string, string[]>;
+
+  const noteEntriesById = new Map<string, BackupNoteEntry>();
+  const conflictKeyToNoteId = new Map<string, string>();
+
+  const upsertMergedNote = (
+    entry: BackupNoteEntry,
+    folderIdResolver: (folderId: string | null) => string | null,
+    preferIncoming = false
+  ): void => {
+    const resolvedFolderId = folderIdResolver(entry.noteDocument.folderId);
+    const conflictKey = toNoteConflictKey(
+      entry.noteDocument.title,
+      resolvedFolderId ? (mergedFolderPathById[resolvedFolderId] ?? []) : [],
+      entry.noteId
+    );
+    const existingNoteId = conflictKeyToNoteId.get(conflictKey);
+
+    if (preferIncoming && existingNoteId) {
+      noteEntriesById.set(existingNoteId, {
+        ...entry,
+        noteId: existingNoteId,
+        noteDocument: {
+          ...entry.noteDocument,
+          id: existingNoteId,
+          folderId: resolvedFolderId,
+        },
+      });
+      return;
+    }
+
+    const desiredId = existingNoteId ?? entry.noteId;
+    const nextId =
+      existingNoteId ??
+      createUniqueIdentifier(desiredId, new Set(noteEntriesById.keys()));
+
+    noteEntriesById.set(nextId, {
+      ...entry,
+      noteId: nextId,
+      noteDocument: {
+        ...entry.noteDocument,
+        id: nextId,
+        folderId: resolvedFolderId,
+      },
+    });
+    conflictKeyToNoteId.set(conflictKey, nextId);
+  };
+
+  const resolveBaseFolderId = (folderId: string | null): string | null => {
+    if (!folderId) {
+      return null;
+    }
+    const path = baseFolderPathById[folderId] ?? [];
+    return mergedFolderIdByPath.get(toFolderPathKey(path)) ?? null;
+  };
+
+  const resolveIncomingFolderId = (folderId: string | null): string | null => {
+    if (!folderId) {
+      return null;
+    }
+    const mapped = incomingToMergedFolderId.get(folderId);
+    if (mapped) {
+      return mapped;
+    }
+    const path = incomingFolderPathById[folderId] ?? [];
+    return mergedFolderIdByPath.get(toFolderPathKey(path)) ?? null;
+  };
+
+  for (const entry of base.notes) {
+    upsertMergedNote(entry, resolveBaseFolderId);
+  }
+  for (const entry of incoming.notes) {
+    upsertMergedNote(entry, resolveIncomingFolderId, true);
+  }
+
+  const mergedAssetsById = new Map<string, BackupAssetEntry>();
+  for (const asset of base.assets) {
+    mergedAssetsById.set(asset.assetId, asset);
+  }
+  for (const asset of incoming.assets) {
+    mergedAssetsById.set(asset.assetId, asset);
+  }
+
+  return {
+    format: backupFormat,
+    version: 1,
+    createdAt: Math.max(base.createdAt, incoming.createdAt),
+    vault: {
+      id: base.vault.id || incoming.vault.id,
+      name: incoming.vault.name || base.vault.name,
+      createdAt: Math.min(base.vault.createdAt, incoming.vault.createdAt),
+      updatedAt: Math.max(base.vault.updatedAt, incoming.vault.updatedAt),
+      folders: mergedFolders,
+      tags: {
+        ...base.vault.tags,
+        ...incoming.vault.tags,
+      },
+      notesIndex: {},
+      templatesIndex: {},
+      settings: {
+        ...base.vault.settings,
+        ...incoming.vault.settings,
+      },
+    },
+    notes: [...noteEntriesById.values()],
+    assets: [...mergedAssetsById.values()],
+  };
+};
+/* eslint-enable sonarjs/cognitive-complexity, sonarjs/cyclomatic-complexity, unicorn/no-array-sort, sonarjs/too-many-break-or-continue-in-loop, no-continue, unicorn/prefer-at, sonarjs/shorthand-property-grouping, sonarjs/arrow-function-convention */
 
 export const serializeVaultBackup = async (input: {
   backup: VaultBackupV1;

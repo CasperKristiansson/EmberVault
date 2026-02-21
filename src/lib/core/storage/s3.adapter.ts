@@ -26,6 +26,8 @@ export type S3Transport = {
   send: S3Client["send"];
 };
 
+export const s3CacheDatabaseName = "local-notes-s3-cache";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -213,6 +215,7 @@ export class S3Adapter implements StorageAdapter {
   private readonly keys: S3Keys;
   private readonly client: S3Transport;
   private readonly cacheAdapter: IndexedDBAdapter;
+  private readonly cacheDatabaseName: string;
 
   private flushInFlight = false;
   private flushTimer: number | null = null;
@@ -222,7 +225,10 @@ export class S3Adapter implements StorageAdapter {
     this.config = normalizeS3ConfigInput(config);
     this.prefix = normalizePrefix(this.config.prefix);
     this.keys = buildKeys(this.prefix);
-    this.cacheAdapter = new IndexedDBAdapter();
+    this.cacheDatabaseName = s3CacheDatabaseName;
+    this.cacheAdapter = new IndexedDBAdapter({
+      databaseName: this.cacheDatabaseName,
+    });
     this.client =
       options.client ??
       new S3Client({
@@ -246,13 +252,13 @@ export class S3Adapter implements StorageAdapter {
         !localVault || remoteVault.updatedAt >= localVault.updatedAt;
       await (useRemoteVault
         ? this.cacheAdapter.writeVault(remoteVault)
-        : putOutboxItem({ key: "vault", kind: "vault" }));
+        : this.queueOutboxItem({ key: "vault", kind: "vault" }));
     } else if (localVault) {
-      await putOutboxItem({ key: "vault", kind: "vault" });
+      await this.queueOutboxItem({ key: "vault", kind: "vault" });
     } else {
       const vault = createDefaultVault();
       await this.cacheAdapter.writeVault(vault);
-      await putOutboxItem({ key: "vault", kind: "vault" });
+      await this.queueOutboxItem({ key: "vault", kind: "vault" });
     }
 
     // Kick off an early flush, then keep flushing periodically.
@@ -282,7 +288,7 @@ export class S3Adapter implements StorageAdapter {
 
   public async writeVault(vault: Vault): Promise<void> {
     await this.cacheAdapter.writeVault(vault);
-    await putOutboxItem({ key: "vault", kind: "vault" });
+    await this.queueOutboxItem({ key: "vault", kind: "vault" });
     this.scheduleFlush();
   }
 
@@ -346,12 +352,12 @@ export class S3Adapter implements StorageAdapter {
     derivedMarkdown: string;
   }): Promise<void> {
     await this.cacheAdapter.writeNote(input);
-    await putOutboxItem({
+    await this.queueOutboxItem({
       key: `note:${input.noteId}`,
       kind: "note",
       id: input.noteId,
     });
-    await putOutboxItem({ key: "vault", kind: "vault" });
+    await this.queueOutboxItem({ key: "vault", kind: "vault" });
     this.scheduleFlush();
   }
 
@@ -361,48 +367,56 @@ export class S3Adapter implements StorageAdapter {
     derivedMarkdown: string;
   }): Promise<void> {
     await this.cacheAdapter.writeTemplate(input);
-    await putOutboxItem({
+    await this.queueOutboxItem({
       key: `template:${input.templateId}`,
       kind: "template",
       id: input.templateId,
     });
-    await putOutboxItem({ key: "vault", kind: "vault" });
+    await this.queueOutboxItem({ key: "vault", kind: "vault" });
     this.scheduleFlush();
   }
 
   public async deleteNoteSoft(noteId: string): Promise<void> {
     await this.cacheAdapter.deleteNoteSoft(noteId);
-    await putOutboxItem({ key: `note:${noteId}`, kind: "note", id: noteId });
-    await putOutboxItem({ key: "vault", kind: "vault" });
+    await this.queueOutboxItem({
+      key: `note:${noteId}`,
+      kind: "note",
+      id: noteId,
+    });
+    await this.queueOutboxItem({ key: "vault", kind: "vault" });
     this.scheduleFlush();
   }
 
   public async restoreNote(noteId: string): Promise<void> {
     await this.cacheAdapter.restoreNote(noteId);
-    await putOutboxItem({ key: `note:${noteId}`, kind: "note", id: noteId });
-    await putOutboxItem({ key: "vault", kind: "vault" });
+    await this.queueOutboxItem({
+      key: `note:${noteId}`,
+      kind: "note",
+      id: noteId,
+    });
+    await this.queueOutboxItem({ key: "vault", kind: "vault" });
     this.scheduleFlush();
   }
 
   public async deleteNotePermanent(noteId: string): Promise<void> {
     await this.cacheAdapter.deleteNotePermanent(noteId);
-    await putOutboxItem({
+    await this.queueOutboxItem({
       key: `deleteNotePermanent:${noteId}`,
       kind: "deleteNotePermanent",
       id: noteId,
     });
-    await putOutboxItem({ key: "vault", kind: "vault" });
+    await this.queueOutboxItem({ key: "vault", kind: "vault" });
     this.scheduleFlush();
   }
 
   public async deleteTemplate(templateId: string): Promise<void> {
     await this.cacheAdapter.deleteTemplate(templateId);
-    await putOutboxItem({
+    await this.queueOutboxItem({
       key: `deleteTemplate:${templateId}`,
       kind: "deleteTemplate",
       id: templateId,
     });
-    await putOutboxItem({ key: "vault", kind: "vault" });
+    await this.queueOutboxItem({ key: "vault", kind: "vault" });
     this.scheduleFlush();
   }
 
@@ -412,7 +426,7 @@ export class S3Adapter implements StorageAdapter {
     meta?: AssetMeta;
   }): Promise<void> {
     await this.cacheAdapter.writeAsset(input);
-    await putOutboxItem({
+    await this.queueOutboxItem({
       key: `asset:${input.assetId}`,
       kind: "asset",
       id: input.assetId,
@@ -450,7 +464,7 @@ export class S3Adapter implements StorageAdapter {
 
   public async deleteAsset(assetId: string): Promise<void> {
     await this.cacheAdapter.deleteAsset(assetId);
-    await putOutboxItem({
+    await this.queueOutboxItem({
       key: `asset:${assetId}`,
       kind: "asset",
       id: assetId,
@@ -460,7 +474,7 @@ export class S3Adapter implements StorageAdapter {
 
   public async writeUIState(state: UIState): Promise<void> {
     await this.cacheAdapter.writeUIState(state);
-    await putOutboxItem({ key: "uiState", kind: "uiState" });
+    await this.queueOutboxItem({ key: "uiState", kind: "uiState" });
     this.scheduleFlush();
   }
 
@@ -479,7 +493,7 @@ export class S3Adapter implements StorageAdapter {
 
   public async writeSearchIndex(snapshot: string): Promise<void> {
     await this.cacheAdapter.writeSearchIndex(snapshot);
-    await putOutboxItem({ key: "searchIndex", kind: "searchIndex" });
+    await this.queueOutboxItem({ key: "searchIndex", kind: "searchIndex" });
     this.scheduleFlush();
   }
 
@@ -537,13 +551,13 @@ export class S3Adapter implements StorageAdapter {
     }
     this.flushInFlight = true;
     try {
-      const items = await listOutboxItems();
+      const items = await listOutboxItems(this.cacheDatabaseName);
       const ordered = sortOutboxItems(items);
       for (const item of ordered) {
         // eslint-disable-next-line no-await-in-loop
         await this.flushOutboxItem(item);
         // eslint-disable-next-line no-await-in-loop
-        await deleteOutboxItem(item.key);
+        await deleteOutboxItem(item.key, this.cacheDatabaseName);
       }
     } catch {
       // Keep queued items for retry.
@@ -590,6 +604,12 @@ export class S3Adapter implements StorageAdapter {
         break;
       }
     }
+  }
+
+  private async queueOutboxItem(
+    item: Omit<SyncOutboxItem, "queuedAt"> & { queuedAt?: number }
+  ): Promise<void> {
+    await putOutboxItem(item, this.cacheDatabaseName);
   }
 
   private async flushVaultItem(): Promise<void> {

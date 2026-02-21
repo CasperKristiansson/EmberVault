@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createVaultBackup,
+  mergeVaultBackups,
   parseVaultBackup,
   restoreVaultBackup,
   serializeVaultBackup,
@@ -17,17 +18,36 @@ const yieldOnce = async (): Promise<void> => {
 };
 
 const createVault = (
-  input: { notesIndex?: Record<string, NoteIndexEntry> } = {}
+  input: {
+    notesIndex?: Record<string, NoteIndexEntry>;
+    folders?: Vault["folders"];
+  } = {}
 ): Vault => ({
   id: "vault",
   name: "Test vault",
   createdAt: 1,
   updatedAt: 1,
-  folders: {},
+  folders: input.folders ?? {},
   tags: {},
   notesIndex: input.notesIndex ?? {},
   templatesIndex: {},
   settings: {},
+});
+
+const createNoteDocument = (
+  input: Partial<NoteDocumentFile> & { id: string; title: string }
+): NoteDocumentFile => ({
+  id: input.id,
+  title: input.title,
+  createdAt: input.createdAt ?? 1,
+  updatedAt: input.updatedAt ?? 1,
+  folderId: input.folderId ?? null,
+  tagIds: input.tagIds ?? [],
+  favorite: input.favorite ?? false,
+  deletedAt: input.deletedAt ?? null,
+  customFields: input.customFields ?? {},
+  pmDoc: input.pmDoc ?? { type: "doc", content: [] },
+  derived: input.derived ?? { plainText: "", outgoingLinks: [] },
 });
 
 const createMemoryAdapter = (): {
@@ -311,5 +331,133 @@ describe("vault backup", () => {
     expect(Object.keys(restoredVault?.notesIndex ?? {})).toEqual(["note-a"]);
     expect(memory.notes.has("note-b")).toBe(false);
     expect(memory.assets.size).toBe(0);
+  });
+
+  it("merges backups and keeps incoming note content for title conflicts", () => {
+    const baseFolderId = "remote-folder";
+    const incomingFolderId = "phone-folder";
+    const remoteNoteId = "remote-note";
+    const incomingNoteId = "phone-note";
+
+    const merged = mergeVaultBackups({
+      base: {
+        format: "embervault-backup",
+        version: 1,
+        createdAt: 10,
+        vault: createVault({
+          folders: {
+            [baseFolderId]: {
+              id: baseFolderId,
+              name: "Project A",
+              parentId: null,
+              childFolderIds: [],
+            },
+          },
+        }),
+        notes: [
+          {
+            noteId: remoteNoteId,
+            noteDocument: createNoteDocument({
+              id: remoteNoteId,
+              title: "Roadmap",
+              folderId: baseFolderId,
+              derived: { plainText: "remote content", outgoingLinks: [] },
+            }),
+            derivedMarkdown: "# Roadmap\n\nremote content",
+          },
+        ],
+        assets: [
+          { assetId: "asset-same", mime: "text/plain", dataBase64: "cmVtb3Rl" },
+        ],
+      },
+      incoming: {
+        format: "embervault-backup",
+        version: 1,
+        createdAt: 11,
+        vault: createVault({
+          folders: {
+            [incomingFolderId]: {
+              id: incomingFolderId,
+              name: "Project A",
+              parentId: null,
+              childFolderIds: [],
+            },
+          },
+        }),
+        notes: [
+          {
+            noteId: incomingNoteId,
+            noteDocument: createNoteDocument({
+              id: incomingNoteId,
+              title: "Roadmap",
+              folderId: incomingFolderId,
+              derived: { plainText: "incoming content", outgoingLinks: [] },
+            }),
+            derivedMarkdown: "# Roadmap\n\nincoming content",
+          },
+        ],
+        assets: [
+          {
+            assetId: "asset-same",
+            mime: "text/plain",
+            dataBase64: "aW5jb21pbmc=",
+          },
+        ],
+      },
+    });
+
+    expect(merged.notes).toHaveLength(1);
+    expect(merged.notes[0]?.noteId).toBe(remoteNoteId);
+    expect(merged.notes[0]?.noteDocument.id).toBe(remoteNoteId);
+    expect(merged.notes[0]?.derivedMarkdown).toContain("incoming content");
+    expect(merged.assets).toEqual([
+      {
+        assetId: "asset-same",
+        mime: "text/plain",
+        dataBase64: "aW5jb21pbmc=",
+      },
+    ]);
+  });
+
+  it("merges non-conflicting notes from both backups", () => {
+    const merged = mergeVaultBackups({
+      base: {
+        format: "embervault-backup",
+        version: 1,
+        createdAt: 1,
+        vault: createVault(),
+        notes: [
+          {
+            noteId: "remote-note",
+            noteDocument: createNoteDocument({
+              id: "remote-note",
+              title: "Remote",
+            }),
+            derivedMarkdown: "# Remote",
+          },
+        ],
+        assets: [],
+      },
+      incoming: {
+        format: "embervault-backup",
+        version: 1,
+        createdAt: 2,
+        vault: createVault(),
+        notes: [
+          {
+            noteId: "phone-note",
+            noteDocument: createNoteDocument({
+              id: "phone-note",
+              title: "Phone",
+            }),
+            derivedMarkdown: "# Phone",
+          },
+        ],
+        assets: [],
+      },
+    });
+
+    const mergedIds = merged.notes.map((entry) => entry.noteId).sort();
+    expect(mergedIds).toEqual(["phone-note", "remote-note"]);
   });
 });

@@ -64,6 +64,7 @@
       minmax(280px, var(--right-panel-width));
     grid-template-rows: 44px 1fr;
     height: 100vh;
+    height: 100svh;
     background: var(--bg-0);
     color: var(--text-0);
   }
@@ -130,6 +131,40 @@
 
   .app-shell-default-slot {
     display: none;
+  }
+
+  @media (max-width: 1100px) {
+    .app-shell {
+      grid-template-columns: minmax(240px, var(--note-list-width)) minmax(0, 1fr);
+    }
+
+    .topbar {
+      grid-column: 1 / 3;
+    }
+
+    .note-list {
+      grid-column: 1;
+    }
+
+    .editor {
+      grid-column: 2;
+    }
+
+    .right-panel {
+      position: fixed;
+      top: 44px;
+      right: 0;
+      bottom: 0;
+      width: min(320px, 86vw);
+      z-index: 20;
+      box-shadow: var(--shadow-panel);
+      transform: translateX(100%);
+      transition: transform 160ms ease;
+    }
+
+    .app-shell[data-mobile-right-panel="open"] .right-panel {
+      transform: translateX(0);
+    }
   }
 
   @media (max-width: 767px) {

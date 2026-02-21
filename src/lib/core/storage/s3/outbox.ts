@@ -44,9 +44,10 @@ const isOutboxItem = (value: unknown): value is SyncOutboxItem => {
 
 const withOutboxStore = async <T>(
   mode: IDBTransactionMode,
-  operation: (store: IDBObjectStore) => IDBRequest<T>
+  operation: (store: IDBObjectStore) => IDBRequest<T>,
+  databaseNameOverride?: string
 ): Promise<T> => {
-  const database = await openIndexedDatabase();
+  const database = await openIndexedDatabase({ databaseNameOverride });
   try {
     const transaction = database.transaction(storeNames.syncOutbox, mode);
     const store = transaction.objectStore(storeNames.syncOutbox);
@@ -60,18 +61,27 @@ const withOutboxStore = async <T>(
 };
 
 export const putOutboxItem = async (
-  item: Omit<SyncOutboxItem, "queuedAt"> & { queuedAt?: number }
+  item: Omit<SyncOutboxItem, "queuedAt"> & { queuedAt?: number },
+  databaseNameOverride?: string
 ): Promise<void> => {
   const payload: SyncOutboxItem = {
     ...item,
     queuedAt: item.queuedAt ?? Date.now(),
   };
-  await withOutboxStore("readwrite", (store) => store.put(payload));
+  await withOutboxStore(
+    "readwrite",
+    (store) => store.put(payload),
+    databaseNameOverride
+  );
 };
 
-export const listOutboxItems = async (): Promise<SyncOutboxItem[]> => {
-  const stored = await withOutboxStore<unknown[]>("readonly", (store) =>
-    store.getAll()
+export const listOutboxItems = async (
+  databaseNameOverride?: string
+): Promise<SyncOutboxItem[]> => {
+  const stored = await withOutboxStore<unknown[]>(
+    "readonly",
+    (store) => store.getAll(),
+    databaseNameOverride
   );
   if (!Array.isArray(stored)) {
     return [];
@@ -79,6 +89,13 @@ export const listOutboxItems = async (): Promise<SyncOutboxItem[]> => {
   return stored.filter(isOutboxItem);
 };
 
-export const deleteOutboxItem = async (key: string): Promise<void> => {
-  await withOutboxStore("readwrite", (store) => store.delete(key));
+export const deleteOutboxItem = async (
+  key: string,
+  databaseNameOverride?: string
+): Promise<void> => {
+  await withOutboxStore(
+    "readwrite",
+    (store) => store.delete(key),
+    databaseNameOverride
+  );
 };

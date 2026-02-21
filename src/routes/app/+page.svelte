@@ -47,6 +47,7 @@
   import { exportVaultToDirectory } from "$lib/core/utils/vault-export";
   import {
     createVaultBackup,
+    mergeVaultBackups,
     parseVaultBackup,
     restoreVaultBackup,
     serializeVaultBackup,
@@ -143,6 +144,12 @@
   let projectsOverlayOpen = false;
   let projectsOverlayLeft = 0;
   let noteListElement: HTMLDivElement | null = null;
+  const mobileBreakpoint = 767;
+  const rightPanelOverlayBreakpoint = 1100;
+  let viewportWidth = Number.POSITIVE_INFINITY;
+  let isMobileViewport = false;
+  let isRightPanelOverlayViewport = false;
+  let mobileRightPanelOpen = false;
   let modalStackEntries: { id: string }[] = [];
   const modalStackUnsubscribe = modalStackStore.subscribe((stack) => {
     modalStackEntries = stack;
@@ -806,6 +813,44 @@
     }
   };
 
+  const resolveImportRoots = async (
+    directory: FileSystemDirectoryHandle
+  ): Promise<{
+    notesRoot: FileSystemDirectoryHandle;
+    assetsRoot: FileSystemDirectoryHandle | null;
+  }> => {
+    const directNotes = await tryGetSubdirectory(directory, "notes");
+    if (directNotes) {
+      return {
+        notesRoot: directNotes,
+        assetsRoot: await tryGetSubdirectory(directory, "assets"),
+      };
+    }
+
+    const childDirectories: FileSystemDirectoryHandle[] = [];
+    for await (const entry of directory.values()) {
+      if (isDirectoryHandle(entry)) {
+        childDirectories.push(entry);
+      }
+    }
+
+    if (childDirectories.length === 1) {
+      const nestedRoot = childDirectories[0];
+      const nestedNotes = await tryGetSubdirectory(nestedRoot, "notes");
+      if (nestedNotes) {
+        return {
+          notesRoot: nestedNotes,
+          assetsRoot: await tryGetSubdirectory(nestedRoot, "assets"),
+        };
+      }
+    }
+
+    return {
+      notesRoot: directory,
+      assetsRoot: await tryGetSubdirectory(directory, "assets"),
+    };
+  };
+
   const handleImportFromFolder = async (): Promise<void> => {
     if (typeof window === "undefined") {
       return;
@@ -830,9 +875,7 @@
       const directory = await window.showDirectoryPicker();
       await flushPendingSave();
 
-      const notesRoot =
-        (await tryGetSubdirectory(directory, "notes")) ?? directory;
-      const assetsRoot = await tryGetSubdirectory(directory, "assets");
+      const { notesRoot, assetsRoot } = await resolveImportRoots(directory);
 
       const markdownFiles = await walkDirectoryForMarkdown(notesRoot);
 
@@ -1152,7 +1195,22 @@
       }
 
       await stagedAdapter.init();
-      await restoreVaultBackup({ adapter: stagedAdapter, backup });
+
+      const existingTargetVault = await stagedAdapter.readVault();
+      const backupToRestore = existingTargetVault
+        ? mergeVaultBackups({
+            base: await createVaultBackup({
+              adapter: stagedAdapter,
+              vault: existingTargetVault,
+            }),
+            incoming: backup,
+          })
+        : backup;
+
+      await restoreVaultBackup({
+        adapter: stagedAdapter,
+        backup: backupToRestore,
+      });
 
       const nextAdapter = initAdapter(mode, {
         directoryHandle: target.directoryHandle,
@@ -1596,6 +1654,7 @@
 
   const setMobileView = (view: MobileView): void => {
     mobileView = resolveMobileView(view, Boolean(activeNote));
+    mobileRightPanelOpen = false;
   };
 
   const openGlobalSearch = (): void => {
@@ -1673,6 +1732,8 @@
   const openNotesView = (): void => {
     workspaceMode = "notes";
     mobileView = "notes";
+    mobileRightPanelOpen = false;
+    projectsOverlayOpen = false;
   };
 
   const openNoteFromList = async (noteId: string): Promise<void> => {
@@ -1681,16 +1742,25 @@
     }
     if (preferences.openNoteBehavior !== "reuse-tab") {
       await activateTab(noteId);
+      if (isMobileViewport) {
+        mobileView = "editor";
+      }
       return;
     }
     openNotesView();
     const pane = getPaneState(activePane);
     if (pane.activeTabId === noteId) {
       await loadNote(noteId, activePane);
+      if (isMobileViewport) {
+        mobileView = "editor";
+      }
       return;
     }
     if (pane.tabs.includes(noteId)) {
       await activateTab(noteId, activePane);
+      if (isMobileViewport) {
+        mobileView = "editor";
+      }
       return;
     }
     await flushPendingSaveForNote(pane.activeTabId);
@@ -1709,6 +1779,9 @@
     });
     scheduleUiStateWrite();
     await loadNote(noteId, activePane);
+    if (isMobileViewport) {
+      mobileView = "editor";
+    }
   };
 
   const openAllNotesView = (): void => {
@@ -1733,6 +1806,18 @@
       return;
     }
     projectsOverlayLeft = noteListElement.getBoundingClientRect().right;
+  };
+
+  const updateViewportState = (): void => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    viewportWidth = window.innerWidth;
+    isMobileViewport = viewportWidth <= mobileBreakpoint;
+    isRightPanelOverlayViewport = viewportWidth <= rightPanelOverlayBreakpoint;
+    if (!isRightPanelOverlayViewport) {
+      mobileRightPanelOpen = false;
+    }
   };
 
   const toggleProjectsOverlay = (): void => {
@@ -1761,6 +1846,9 @@
   const handleRightPanelTabSelect = (tab: RightPanelTab): void => {
     rightPanelTab = tab;
     refreshBacklinksForNote(tab === "metadata" ? activeNote : null);
+    if (isRightPanelOverlayViewport) {
+      mobileRightPanelOpen = true;
+    }
   };
 
   const sortNotes = (list: NoteIndexEntry[]): NoteIndexEntry[] => {
@@ -3056,6 +3144,7 @@
 
   onMount(() => {
     supportsFileSystem = supportsFileSystemAccess();
+    updateViewportState();
     void initializeApp();
 
     const handleGlobalShortcut = (event: KeyboardEvent): void => {
@@ -3092,14 +3181,21 @@
       void flushUiStateWrite();
     };
 
+    const handleWindowResize = (): void => {
+      updateViewportState();
+      updateProjectsOverlayLeft();
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("keydown", handleGlobalShortcut);
+    window.addEventListener("resize", handleWindowResize);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("keydown", handleGlobalShortcut);
+      window.removeEventListener("resize", handleWindowResize);
     };
   });
 
@@ -3112,10 +3208,8 @@
       updateProjectsOverlayLeft();
     });
     observer.observe(noteListElement);
-    window.addEventListener("resize", updateProjectsOverlayLeft);
     return () => {
       observer.disconnect();
-      window.removeEventListener("resize", updateProjectsOverlayLeft);
     };
   });
 
@@ -3137,6 +3231,7 @@
 <AppShell
   {saveState}
   {mobileView}
+  {mobileRightPanelOpen}
   {workspaceMode}
   interfaceDensity={preferences.interfaceDensity}
 >
@@ -3188,6 +3283,19 @@
         activeTab={rightPanelTab}
         onSelect={handleRightPanelTabSelect}
       />
+      {#if isRightPanelOverlayViewport && mobileRightPanelOpen}
+        <button
+          class="icon-button"
+          type="button"
+          aria-label="Close right panel"
+          data-testid="close-right-panel"
+          on:click={() => {
+            mobileRightPanelOpen = false;
+          }}
+        >
+          <X aria-hidden="true" size={16} />
+        </button>
+      {/if}
       <button
         class="icon-button"
         type="button"
@@ -3223,85 +3331,129 @@
       </button>
     </div>
 
-    <header class="note-list-header">
-      <div>
-        <div class="note-list-title" data-testid="note-list-title">
-          {noteListTitle}
-        </div>
-        <div class="note-list-subtitle">{noteListCount} total</div>
-      </div>
-      <div class="note-list-actions">
-        <button
-          class="icon-button"
-          type="button"
-          data-testid="open-global-search"
-          aria-label="Open global search"
-          on:click={openGlobalSearch}
-        >
-          <Search aria-hidden="true" size={16} />
-        </button>
-        <button
-          class="button primary"
-          data-testid="new-note"
-          on:click={createNote}
-          disabled={isLoading}
-        >
-          New note
-        </button>
-      </div>
-    </header>
-
-    <div class="note-list-filters" aria-label="Note filters">
-      <button
-        class={`filter-chip${favoritesOnly ? " active" : ""}`}
-        type="button"
-        aria-pressed={favoritesOnly}
-        data-testid="filter-favorites"
-        on:click={toggleFavoritesFilter}
+    {#if isMobileViewport && projectsOverlayOpen}
+      <section
+        class="projects-inline"
+        data-testid="projects-overlay"
+        aria-label="Projects"
       >
-        Favorites
-      </button>
-    </div>
-
-    {#if isLoading}
-      <div class="note-list-empty">Loading notes...</div>
-    {:else if filteredNotes.length === 0}
-      <div class="note-list-empty">
-        <div>{noteListEmptyMessage}</div>
-        {#if favoritesOnly}
+        <header class="projects-overlay-header">
+          <div class="projects-overlay-title">Projects</div>
           <button
-            class="button secondary"
+            class="icon-button"
             type="button"
-            on:click={() => {
-              favoritesOnly = false;
-            }}
+            aria-label="Close projects"
+            data-testid="projects-close"
+            on:click={closeProjectsOverlay}
           >
-            Clear filters
+            <X aria-hidden="true" size={16} />
           </button>
-        {/if}
-      </div>
+        </header>
+
+        <button
+          class="projects-all-notes"
+          type="button"
+          data-testid="projects-all-notes"
+          on:click={selectAllNotesFromProjects}
+        >
+          All notes
+        </button>
+
+        <FolderTree
+          folders={vault?.folders ?? {}}
+          notesIndex={vault?.notesIndex ?? {}}
+          {activeFolderId}
+          {draggingNoteId}
+          loading={isLoading}
+          onSelect={selectFolderFromProjects}
+          onCreate={createFolder}
+          onRename={renameFolder}
+          onDelete={deleteFolder}
+          onOpenTrash={openTrashFromProjects}
+          onNoteDrop={handleFolderNoteDrop}
+        />
+      </section>
     {:else}
-      <NoteListVirtualized
-        notes={filteredNotes}
-        activeNoteId={activeTabId}
-        {titleOverrides}
-        onSelect={noteId => void openNoteFromList(noteId)}
-        onToggleFavorite={handleFavoriteToggle}
-        draggable={true}
-        draggingNoteId={draggingNoteId}
-        dropTargetNoteId={dropTargetNoteId}
-        onDragStart={handleNoteDragStart}
-        onDragOver={handleNoteDragOver}
-        onDrop={handleNoteDrop}
-        onDragEnd={handleNoteDragEnd}
-        showMeta={preferences.showNoteDates}
-        showPreview={preferences.showNotePreview}
-        showTags={preferences.showTagPillsInList}
-        tagsById={vault?.tags ?? {}}
-      />
+      <header class="note-list-header">
+        <div>
+          <div class="note-list-title" data-testid="note-list-title">
+            {noteListTitle}
+          </div>
+          <div class="note-list-subtitle">{noteListCount} total</div>
+        </div>
+        <div class="note-list-actions">
+          <button
+            class="icon-button"
+            type="button"
+            data-testid="open-global-search"
+            aria-label="Open global search"
+            on:click={openGlobalSearch}
+          >
+            <Search aria-hidden="true" size={16} />
+          </button>
+          <button
+            class="button primary"
+            data-testid="new-note"
+            on:click={createNote}
+            disabled={isLoading}
+          >
+            New note
+          </button>
+        </div>
+      </header>
+
+      <div class="note-list-filters" aria-label="Note filters">
+        <button
+          class={`filter-chip${favoritesOnly ? " active" : ""}`}
+          type="button"
+          aria-pressed={favoritesOnly}
+          data-testid="filter-favorites"
+          on:click={toggleFavoritesFilter}
+        >
+          Favorites
+        </button>
+      </div>
+
+      {#if isLoading}
+        <div class="note-list-empty">Loading notes...</div>
+      {:else if filteredNotes.length === 0}
+        <div class="note-list-empty">
+          <div>{noteListEmptyMessage}</div>
+          {#if favoritesOnly}
+            <button
+              class="button secondary"
+              type="button"
+              on:click={() => {
+                favoritesOnly = false;
+              }}
+            >
+              Clear filters
+            </button>
+          {/if}
+        </div>
+      {:else}
+        <NoteListVirtualized
+          notes={filteredNotes}
+          activeNoteId={activeTabId}
+          {titleOverrides}
+          onSelect={noteId => void openNoteFromList(noteId)}
+          onToggleFavorite={handleFavoriteToggle}
+          draggable={true}
+          draggingNoteId={draggingNoteId}
+          dropTargetNoteId={dropTargetNoteId}
+          onDragStart={handleNoteDragStart}
+          onDragOver={handleNoteDragOver}
+          onDrop={handleNoteDrop}
+          onDragEnd={handleNoteDragEnd}
+          showMeta={preferences.showNoteDates}
+          showPreview={preferences.showNotePreview}
+          showTags={preferences.showTagPillsInList}
+          tagsById={vault?.tags ?? {}}
+        />
+      {/if}
     {/if}
 
-    {#if projectsOverlayOpen}
+    {#if !isMobileViewport && projectsOverlayOpen}
       <aside
         class="projects-overlay"
         data-testid="projects-overlay"
@@ -3444,10 +3596,7 @@
       type="button"
       data-testid="mobile-nav-notes"
       aria-pressed={workspaceMode === "notes" && mobileView === "notes"}
-      on:click={() => {
-        workspaceMode = "notes";
-        setMobileView("notes");
-      }}
+      on:click={openNotesView}
     >
       Notes
     </button>
@@ -3555,6 +3704,15 @@
 
   .projects-all-notes:hover {
     background: var(--bg-2);
+  }
+
+  .projects-inline {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    gap: 8px;
+    overflow: auto;
   }
 
   @media (max-width: 767px) {

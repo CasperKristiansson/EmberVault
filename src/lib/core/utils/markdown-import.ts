@@ -83,9 +83,9 @@ const createHeading = (level: number, text: string): PmNode => ({
   content: text.trim().length > 0 ? [{ type: "text", text: text.trim() }] : [],
 });
 
-const createCodeBlock = (code: string): PmNode => ({
+const createCodeBlock = (code: string, language: string | null): PmNode => ({
   type: "codeBlock",
-  attrs: { language: null },
+  attrs: { language },
   content: code.trim().length > 0 ? [{ type: "text", text: code }] : [],
 });
 
@@ -120,8 +120,62 @@ const parseHeadingLine = (
   return text.length > 0 ? { level: count, text } : null;
 };
 
-const isFenceDelimiter = (line: string): boolean =>
-  line.trim().startsWith("```");
+const parseFenceLanguage = (line: string): string | null => {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("```")) {
+    return null;
+  }
+  const language = trimmed.slice(3).trim();
+  return language.length > 0 ? language : null;
+};
+
+type ListLineParse = {
+  kind: "bullet" | "ordered";
+  text: string;
+  start?: number;
+};
+
+const parseListLine = (line: string): ListLineParse | null => {
+  const trimmedStart = line.trimStart();
+  const bulletMatch = /^[-*+]\s+(.+)$/u.exec(trimmedStart);
+  if (bulletMatch?.[1]) {
+    return {
+      kind: "bullet",
+      text: bulletMatch[1].trim(),
+    };
+  }
+  const orderedMatch = /^(\d+)\.\s+(.+)$/u.exec(trimmedStart);
+  if (orderedMatch?.[2]) {
+    return {
+      kind: "ordered",
+      start: Number.parseInt(orderedMatch[1] ?? "1", 10),
+      text: orderedMatch[2].trim(),
+    };
+  }
+  return null;
+};
+
+const createListNode = (
+  kind: "bullet" | "ordered",
+  items: string[],
+  orderedStart: number | null
+): PmNode => {
+  const listItems = items.map((text) => ({
+    type: "listItem",
+    content: [createParagraph([text])],
+  }));
+  if (kind === "ordered") {
+    return {
+      type: "orderedList",
+      attrs: { start: orderedStart ?? 1 },
+      content: listItems,
+    };
+  }
+  return {
+    type: "bulletList",
+    content: listItems,
+  };
+};
 
 const buildContentLines = (
   lines: string[],
@@ -160,19 +214,23 @@ const parseContentLines = (
 
   let inFence = false;
   let fenceLines: string[] = [];
+  let fenceLanguage: string | null = null;
 
-  for (const rawLine of contentLines) {
-    const line = rawLine;
-    if (isFenceDelimiter(line)) {
+  for (let index = 0; index < contentLines.length; index += 1) {
+    const line = contentLines[index] ?? "";
+    const fence = parseFenceLanguage(line);
+    if (fence !== null || line.trim() === "```") {
       if (inFence) {
         flushParagraph();
         const code = fenceLines.join("\n");
-        pmBlocks.push(createCodeBlock(code));
+        pmBlocks.push(createCodeBlock(code, fenceLanguage));
         plainTextBlocks.push(code.trim());
         fenceLines = [];
+        fenceLanguage = null;
         inFence = false;
       } else {
         flushParagraph();
+        fenceLanguage = fence;
         inFence = true;
       }
     } else if (inFence) {
@@ -187,7 +245,38 @@ const parseContentLines = (
         pmBlocks.push(createHeading(heading.level, heading.text));
         plainTextBlocks.push(heading.text);
       } else {
-        paragraphLines.push(stripBlockQuotePrefix(line));
+        const firstListItem = parseListLine(trimmed);
+        if (!firstListItem) {
+          paragraphLines.push(stripBlockQuotePrefix(line));
+          continue;
+        }
+        flushParagraph();
+
+        const listItems: string[] = [firstListItem.text];
+        const orderedStart = firstListItem.kind === "ordered"
+          ? (firstListItem.start ?? 1)
+          : null;
+        for (
+          let nextIndex = index + 1;
+          nextIndex < contentLines.length;
+          nextIndex += 1
+        ) {
+          const candidateLine = contentLines[nextIndex] ?? "";
+          if (candidateLine.trim().length === 0) {
+            break;
+          }
+          const parsedCandidate = parseListLine(candidateLine);
+          if (!parsedCandidate || parsedCandidate.kind !== firstListItem.kind) {
+            break;
+          }
+          listItems.push(parsedCandidate.text);
+          index = nextIndex;
+        }
+
+        pmBlocks.push(
+          createListNode(firstListItem.kind, listItems, orderedStart)
+        );
+        plainTextBlocks.push(listItems.join("\n"));
       }
     }
   }
@@ -195,7 +284,7 @@ const parseContentLines = (
   if (inFence) {
     flushParagraph();
     const code = fenceLines.join("\n");
-    pmBlocks.push(createCodeBlock(code));
+    pmBlocks.push(createCodeBlock(code, fenceLanguage));
     plainTextBlocks.push(code.trim());
   } else {
     flushParagraph();

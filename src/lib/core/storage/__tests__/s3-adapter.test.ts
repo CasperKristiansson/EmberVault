@@ -12,7 +12,7 @@ import {
   deleteIndexedDatabase,
 } from "../indexeddb.adapter";
 import { listOutboxItems } from "../s3/outbox";
-import { S3Adapter } from "../s3.adapter";
+import { S3Adapter, s3CacheDatabaseName } from "../s3.adapter";
 import type { S3Transport } from "../s3.adapter";
 import type { NoteDocumentFile } from "../types";
 
@@ -237,11 +237,15 @@ const s3Config = {
 
 describe("S3Adapter", () => {
   beforeEach(async () => {
-    await deleteIndexedDatabase();
+    await deleteIndexedDatabase({
+      databaseNameOverride: s3CacheDatabaseName,
+    });
   });
 
   afterEach(async () => {
-    await deleteIndexedDatabase();
+    await deleteIndexedDatabase({
+      databaseNameOverride: s3CacheDatabaseName,
+    });
   });
 
   it("creates and uploads a vault when none exists remotely", async () => {
@@ -251,7 +255,7 @@ describe("S3Adapter", () => {
     await adapter.init();
 
     expect(objects.has(vaultKey)).toBe(true);
-    expect(await listOutboxItems()).toHaveLength(0);
+    expect(await listOutboxItems(s3CacheDatabaseName)).toHaveLength(0);
   });
 
   it("normalizes bucket names that include s3 scheme syntax", async () => {
@@ -324,7 +328,7 @@ describe("S3Adapter", () => {
     expect(await readStoredBodyAsText(searchIndexBody)).toContain(
       '"tokens":["title"]'
     );
-    expect(await listOutboxItems()).toHaveLength(0);
+    expect(await listOutboxItems(s3CacheDatabaseName)).toHaveLength(0);
   });
 
   it("flushes delete operations for notes, templates, and assets", async () => {
@@ -367,7 +371,7 @@ describe("S3Adapter", () => {
     expect(objects.has(templateJsonKey(templateToDelete))).toBe(false);
     expect(objects.has(templateMarkdownKey(templateToDelete))).toBe(false);
     expect(objects.has(assetKey(assetToDelete))).toBe(false);
-    expect(await listOutboxItems()).toHaveLength(0);
+    expect(await listOutboxItems(s3CacheDatabaseName)).toHaveLength(0);
   });
 
   it("lists remote assets across paginated responses and merges local assets", async () => {
