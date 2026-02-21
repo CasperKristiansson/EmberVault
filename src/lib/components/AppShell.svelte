@@ -88,6 +88,7 @@
     height: 100svh;
     background: var(--bg-0);
     color: var(--text-0);
+    overflow-x: clip;
   }
 
   .topbar {
@@ -99,6 +100,7 @@
     padding: 0 16px;
     background: var(--bg-1);
     border-bottom: 1px solid var(--stroke-0);
+    overflow: hidden;
   }
 
   .note-list {

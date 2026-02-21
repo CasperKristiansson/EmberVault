@@ -3709,50 +3709,56 @@
   on:closeRightPanel={closeRightPanelOverlay}
 >
   <div slot="topbar" class="topbar-content" data-mode={workspaceMode}>
-    <div
-      class="topbar-tabs"
-      role="tablist"
-      aria-label="Open notes"
-      data-testid="tab-list"
-    >
-      {#each activeTabs as tabId (tabId)}
-        <div
-          class="tab"
-          role="tab"
-          tabindex={tabId === activeTabId ? 0 : -1}
-          aria-selected={tabId === activeTabId}
-          data-testid="tab-item"
-          data-note-id={tabId}
-          data-active={tabId === activeTabId}
-          data-drop-target={dropTargetTabId === tabId}
-          data-dragging={draggingTabId === tabId}
-          draggable="true"
-          on:click={() => void activateTab(tabId)}
-          on:keydown={event => handleTabKeydown(event, tabId)}
-          on:dragstart={event => handleTabDragStart(event, tabId)}
-          on:dragover={event => handleTabDragOver(event, tabId)}
-          on:drop={event => handleTabDrop(event, tabId)}
-          on:dragend={handleTabDragEnd}
-        >
-          <span class="tab-title" data-testid="tab-title">
-            {getTabTitle(tabId, tabTitles)}
-          </span>
-          <button
-            class="tab-close"
-            type="button"
-            aria-label="Close tab"
-          data-testid="tab-close"
-          data-note-id={tabId}
-          draggable="false"
-          on:click|stopPropagation={() => void handleCloseTab(tabId)}
-        >
-            <X aria-hidden="true" size={14} />
-          </button>
-        </div>
-      {/each}
-    </div>
+    {#if isMobileViewport}
+      <div class="topbar-mobile-title" data-testid="topbar-mobile-title">
+        {activeTabId ? getTabTitle(activeTabId, tabTitles) : "EmberVault"}
+      </div>
+    {:else}
+      <div
+        class="topbar-tabs"
+        role="tablist"
+        aria-label="Open notes"
+        data-testid="tab-list"
+      >
+        {#each activeTabs as tabId (tabId)}
+          <div
+            class="tab"
+            role="tab"
+            tabindex={tabId === activeTabId ? 0 : -1}
+            aria-selected={tabId === activeTabId}
+            data-testid="tab-item"
+            data-note-id={tabId}
+            data-active={tabId === activeTabId}
+            data-drop-target={dropTargetTabId === tabId}
+            data-dragging={draggingTabId === tabId}
+            draggable="true"
+            on:click={() => void activateTab(tabId)}
+            on:keydown={event => handleTabKeydown(event, tabId)}
+            on:dragstart={event => handleTabDragStart(event, tabId)}
+            on:dragover={event => handleTabDragOver(event, tabId)}
+            on:drop={event => handleTabDrop(event, tabId)}
+            on:dragend={handleTabDragEnd}
+          >
+            <span class="tab-title" data-testid="tab-title">
+              {getTabTitle(tabId, tabTitles)}
+            </span>
+            <button
+              class="tab-close"
+              type="button"
+              aria-label="Close tab"
+            data-testid="tab-close"
+            data-note-id={tabId}
+            draggable="false"
+            on:click|stopPropagation={() => void handleCloseTab(tabId)}
+          >
+              <X aria-hidden="true" size={14} />
+            </button>
+          </div>
+        {/each}
+      </div>
+    {/if}
     <div class="topbar-actions">
-      {#if activeStorageMode === "s3"}
+      {#if activeStorageMode === "s3" && !isMobileViewport}
         <button
           class="sync-badge"
           type="button"
@@ -3764,10 +3770,35 @@
           <span class="sync-badge-detail">{syncBadgeDetail}</span>
         </button>
       {/if}
-      <RightPanelTabs
-        activeTab={rightPanelTab}
-        onSelect={handleRightPanelTabSelect}
-      />
+      {#if isMobileViewport}
+        <div class="mobile-panel-tabs" role="group" aria-label="Panel tabs">
+          <button
+            class="mobile-panel-tab"
+            class:active={rightPanelTab === "outline"}
+            type="button"
+            aria-label="Open outline panel"
+            aria-pressed={rightPanelTab === "outline"}
+            on:click={() => void handleRightPanelTabSelect("outline")}
+          >
+            O
+          </button>
+          <button
+            class="mobile-panel-tab"
+            class:active={rightPanelTab === "metadata"}
+            type="button"
+            aria-label="Open metadata panel"
+            aria-pressed={rightPanelTab === "metadata"}
+            on:click={() => void handleRightPanelTabSelect("metadata")}
+          >
+            M
+          </button>
+        </div>
+      {:else}
+        <RightPanelTabs
+          activeTab={rightPanelTab}
+          onSelect={handleRightPanelTabSelect}
+        />
+      {/if}
       {#if isRightPanelOverlayViewport && mobileRightPanelOpen}
         <button
           class="icon-button"
@@ -3792,15 +3823,17 @@
           Back to list
         </button>
       {/if}
-      <button
-        class="icon-button"
-        type="button"
-        aria-label="Open help"
-        data-testid="open-help"
-        on:click={openHelp}
-      >
-        <HelpCircle aria-hidden="true" size={18} />
-      </button>
+      {#if !isMobileViewport}
+        <button
+          class="icon-button topbar-help-button"
+          type="button"
+          aria-label="Open help"
+          data-testid="open-help"
+          on:click={openHelp}
+        >
+          <HelpCircle aria-hidden="true" size={18} />
+        </button>
+      {/if}
       <button
         class="icon-button settings-button"
         type="button"
@@ -4272,6 +4305,8 @@
     justify-content: space-between;
     width: 100%;
     gap: 16px;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .topbar-tabs {
@@ -4368,6 +4403,52 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  .topbar-mobile-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    color: var(--text-0);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-panel-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .mobile-panel-tab {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--r-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-1);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .mobile-panel-tab:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
+  .mobile-panel-tab.active {
+    background: var(--bg-2);
+    border-color: var(--stroke-0);
+    color: var(--text-0);
+  }
+
+  .mobile-panel-tab:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   .sync-badge {
@@ -4666,6 +4747,14 @@
   }
 
   @media (max-width: 767px) {
+    .topbar-content {
+      gap: 8px;
+    }
+
+    .topbar-actions {
+      gap: 6px;
+    }
+
     .sync-badge {
       min-width: 92px;
       padding: 4px 8px;
@@ -4681,6 +4770,16 @@
 
     .startup-overlay {
       padding: 16px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .sync-badge {
+      display: none;
+    }
+
+    .topbar-help-button {
+      display: none;
     }
   }
 
