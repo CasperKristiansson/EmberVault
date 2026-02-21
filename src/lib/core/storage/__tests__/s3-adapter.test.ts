@@ -561,4 +561,58 @@ describe("S3Adapter sync telemetry", () => {
     const status = await adapter.getSyncStatus();
     expect(status.lastError?.startsWith("timeout:")).toBe(true);
   });
+
+  it("classifies network failures from failed fetch errors", async () => {
+    const send = vi.fn(
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async (command: unknown) => {
+        if (command instanceof GetObjectCommand) {
+          throw createNotFoundError();
+        }
+        if (command instanceof PutObjectCommand) {
+          throw new TypeError("Failed to fetch");
+        }
+        return {};
+      }
+    );
+    const adapter = new S3Adapter(s3Config, {
+      client: { send } satisfies S3Transport,
+    });
+
+    await adapter.init();
+    await adapter.writeVault(createDefaultVault());
+    await adapter.flushNowForTests();
+
+    const status = await adapter.getSyncStatus();
+    expect(status.state).toBe("offline");
+    expect(status.lastError?.startsWith("network:")).toBe(true);
+  });
+
+  it("classifies cors failures from missing access-control headers", async () => {
+    const send = vi.fn(
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async (command: unknown) => {
+        if (command instanceof GetObjectCommand) {
+          throw createNotFoundError();
+        }
+        if (command instanceof PutObjectCommand) {
+          throw new TypeError(
+            "No 'Access-Control-Allow-Origin' header is present on the requested resource."
+          );
+        }
+        return {};
+      }
+    );
+    const adapter = new S3Adapter(s3Config, {
+      client: { send } satisfies S3Transport,
+    });
+
+    await adapter.init();
+    await adapter.writeVault(createDefaultVault());
+    await adapter.flushNowForTests();
+
+    const status = await adapter.getSyncStatus();
+    expect(status.state).toBe("offline");
+    expect(status.lastError?.startsWith("cors:")).toBe(true);
+  });
 });

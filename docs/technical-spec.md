@@ -93,7 +93,7 @@ Hybrid, capability-driven:
 - Persist the user’s storage choice (and FS directory handle when applicable) in IndexedDB to avoid re-prompting on every launch
 
 AWS S3 implementation:
-- Uses AWS SDK v3 (`@aws-sdk/client-s3`) in the client bundle.
+- Uses AWS SDK v3 (`@aws-sdk/client-s3`) via lazy-loaded S3 adapter paths so default startup excludes S3 code.
 - Credentials are stored in IndexedDB app settings when the user enables S3 mode.
 
 See `storage.md` for canonical on-disk structure and fallback rules.
