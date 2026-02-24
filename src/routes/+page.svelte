@@ -1,100 +1,143 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import { onMount } from "svelte";
   import AppPreviewFrame from "$lib/components/landing/AppPreviewFrame.svelte";
   import EditorInfographicStack from "$lib/components/landing/EditorInfographicStack.svelte";
   import FeatureHighlights from "$lib/components/landing/FeatureHighlights.svelte";
   import PrivacyPanel from "$lib/components/landing/PrivacyPanel.svelte";
   import StorageExplainer from "$lib/components/landing/StorageExplainer.svelte";
+  import { readAppSettings } from "$lib/core/storage/app-settings";
+  import {
+    consumeSkipLandingAutoRedirect,
+    hasStoredVaultSession,
+  } from "$lib/core/utils/app-session";
+
+  let isCheckingStoredVault = true;
+
+  const autoRedirectToWorkspace = async (): Promise<void> => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (consumeSkipLandingAutoRedirect(window.sessionStorage)) {
+      return;
+    }
+    const storedSettings = await readAppSettings();
+    if (!hasStoredVaultSession(storedSettings)) {
+      return;
+    }
+    await goto(resolve("/app"));
+  };
+
+  onMount(() => {
+    void (async () => {
+      try {
+        await autoRedirectToWorkspace();
+      } finally {
+        isCheckingStoredVault = false;
+      }
+    })();
+  });
 </script>
 
-<div class="landing">
-  <main class="main">
-    <section class="section hero">
-      <div class="container hero-grid">
-        <div class="hero-copy">
-          <div class="wordmark">
-            <span class="dot" aria-hidden="true"></span>
-            EmberVault
+{#if isCheckingStoredVault}
+  <div class="landing-loading" data-testid="landing-session-loading" aria-busy="true"></div>
+{:else}
+  <div class="landing">
+    <main class="main">
+      <section class="section hero">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <div class="wordmark">
+              <span class="dot" aria-hidden="true"></span>
+              EmberVault
+            </div>
+            <h1>Local-first. No accounts. No cloud.</h1>
+            <p class="subhead">
+              A calm, macOS-like notes app that runs entirely on your device. Your notes stay
+              local, private, and fast - even offline.
+            </p>
+            <div class="cta-row">
+              <a class="btn primary" href={resolve("/onboarding")}>Choose storage</a>
+              <a class="btn secondary" href="#how-it-works">Learn how it works</a>
+            </div>
           </div>
-          <h1>Local-first. No accounts. No cloud.</h1>
-          <p class="subhead">
-            A calm, macOS-like notes app that runs entirely on your device. Your notes stay local,
-            private, and fast - even offline.
-          </p>
-          <div class="cta-row">
-            <a class="btn primary" href={resolve("/onboarding")}>Choose storage</a>
-            <a class="btn secondary" href="#how-it-works">Learn how it works</a>
+
+          <div class="hero-preview">
+            <AppPreviewFrame />
           </div>
         </div>
+      </section>
 
-        <div class="hero-preview">
-          <AppPreviewFrame />
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="how-it-works">
-      <div class="container section-head">
-        <h2>How it works</h2>
-        <p class="section-copy">
-          EmberVault keeps everything local while still feeling instant - search, tabs, and
-          structured notes without the cloud.
-        </p>
-      </div>
-      <div class="container">
-        <FeatureHighlights />
-      </div>
-    </section>
-
-    <section class="section storage-section" id="storage">
-      <div class="container split-grid">
-        <div class="section-copy-block">
-          <h2>Choose how your notes live locally</h2>
+      <section class="section" id="how-it-works">
+        <div class="container section-head">
+          <h2>How it works</h2>
           <p class="section-copy">
-            Pick folder storage for full control, or stay entirely in the browser. Either way, your
-            vault never leaves your device.
+            EmberVault keeps everything local while still feeling instant - search, tabs, and
+            structured notes without the cloud.
           </p>
         </div>
-        <StorageExplainer />
-      </div>
-    </section>
+        <div class="container">
+          <FeatureHighlights />
+        </div>
+      </section>
 
-    <section class="section editor-section" id="editor">
-      <div class="container split-grid editor-grid">
-        <div class="section-copy-block editor-copy">
-          <h2>Write fast. Structure when you want.</h2>
+      <section class="section storage-section" id="storage">
+        <div class="container split-grid">
+          <div class="section-copy-block">
+            <h2>Choose how your notes live locally</h2>
+            <p class="section-copy">
+              Pick folder storage for full control, or stay entirely in the browser. Either way,
+              your vault never leaves your device.
+            </p>
+          </div>
+          <StorageExplainer />
+        </div>
+      </section>
+
+      <section class="section editor-section" id="editor">
+        <div class="container split-grid editor-grid">
+          <div class="section-copy-block editor-copy">
+            <h2>Write fast. Structure when you want.</h2>
+            <p class="section-copy">
+              Block-based editing with Markdown-friendly workflows - headings, lists, checklists,
+              tables, code, and LaTeX math.
+            </p>
+            <ul class="editor-list">
+              <li>Markdown paste, export, and clean structure.</li>
+              <li>Inline math that stays editable and readable.</li>
+              <li>Syntax-highlighted code blocks for fast reference.</li>
+              <li>Tables and checklists that stay lightweight.</li>
+            </ul>
+          </div>
+          <div class="editor-visual">
+            <EditorInfographicStack />
+          </div>
+        </div>
+      </section>
+
+      <section class="section privacy-section" id="privacy">
+        <div class="container privacy-head">
+          <h2>Privacy you can verify</h2>
           <p class="section-copy">
-            Block-based editing with Markdown-friendly workflows - headings, lists, checklists,
-            tables, code, and LaTeX math.
+            Everything stays on your device, with zero telemetry and no hidden sync layer.
           </p>
-          <ul class="editor-list">
-            <li>Markdown paste, export, and clean structure.</li>
-            <li>Inline math that stays editable and readable.</li>
-            <li>Syntax-highlighted code blocks for fast reference.</li>
-            <li>Tables and checklists that stay lightweight.</li>
-          </ul>
         </div>
-        <div class="editor-visual">
-          <EditorInfographicStack />
+        <div class="container privacy-strip">
+          <PrivacyPanel />
         </div>
-      </div>
-    </section>
-
-    <section class="section privacy-section" id="privacy">
-      <div class="container privacy-head">
-        <h2>Privacy you can verify</h2>
-        <p class="section-copy">
-          Everything stays on your device, with zero telemetry and no hidden sync layer.
-        </p>
-      </div>
-      <div class="container privacy-strip">
-        <PrivacyPanel />
-      </div>
-    </section>
-  </main>
-</div>
+      </section>
+    </main>
+  </div>
+{/if}
 
 <style>
+  .landing-loading {
+    min-height: 100vh;
+    min-height: 100svh;
+    background: var(--bg-0);
+  }
+
   .landing {
     --page-pad: 28px;
     --section-gap: 110px;

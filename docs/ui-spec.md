@@ -75,9 +75,11 @@ Structure (top to bottom):
    - Note list (virtualized when > 100)
 3. Projects view (when Projects is pressed):
    - Top option: “All notes” (clears selection and returns to Notes view)
+   - Top option: “Back to homepage” (opens `/`)
    - Buttons: “Trash”, “Add new folder”
    - Folder tree (scrollable)
    - Selecting a folder returns to Notes view and filters the note list
+   - On both desktop and mobile, this view replaces the note-list pane content (no separate desktop overlay)
 
 Folder tree:
 

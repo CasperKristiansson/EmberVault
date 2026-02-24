@@ -10,6 +10,7 @@
       readAppSettings,
       writeAppSettings,
     } from "$lib/core/storage/app-settings";
+    import { hasStoredVaultSession } from "$lib/core/utils/app-session";
     import type { AppSettings, S3Config } from "$lib/core/storage/types";
     import {
       initAdapter,
@@ -97,13 +98,7 @@
 
   const attemptAutoEnter = async (): Promise<void> => {
     const stored = await readAppSettings();
-    if (!stored?.storageMode) {
-      return;
-    }
-    if (stored.storageMode === "filesystem" && !stored.fsHandle) {
-      return;
-    }
-    if (stored.storageMode === "s3" && !stored.s3) {
+    if (!stored || !hasStoredVaultSession(stored)) {
       return;
     }
     isBusy = true;

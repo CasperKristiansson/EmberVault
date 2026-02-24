@@ -105,6 +105,12 @@
     type MobileView,
   } from "$lib/core/utils/mobile-view";
   import { openAllNotesView as openAllNotesViewFilters } from "$lib/core/utils/notes-view";
+  import { markSkipLandingAutoRedirectOnce } from "$lib/core/utils/app-session";
+  import {
+    noteListViews,
+    resolveNoteListView,
+    type NoteListView,
+  } from "$lib/core/utils/note-list-view";
   import {
     adapter as adapterStore,
     initAdapter,
@@ -149,8 +155,7 @@
   let appSettings: AppSettings | null = null;
   let supportsFileSystem = false;
   let projectsOverlayOpen = false;
-  let projectsOverlayLeft = 0;
-  let noteListElement: HTMLDivElement | null = null;
+  let noteListView: NoteListView = noteListViews.notes;
   const mobileBreakpoint = 767;
   const rightPanelOverlayBreakpoint = 1100;
   let viewportWidth = Number.POSITIVE_INFINITY;
@@ -2062,9 +2067,7 @@
     workspaceMode = "notes";
     mobileView = "notes";
     mobileRightPanelOpen = false;
-    if (isMobileViewport) {
-      projectsOverlayOpen = false;
-    }
+    projectsOverlayOpen = false;
   };
 
   const openProjectsView = (): void => {
@@ -2139,13 +2142,6 @@
     openModal("trash");
   };
 
-  const updateProjectsOverlayLeft = (): void => {
-    if (!noteListElement) {
-      return;
-    }
-    projectsOverlayLeft = noteListElement.getBoundingClientRect().right;
-  };
-
   const updateViewportState = (): void => {
     if (typeof window === "undefined") {
       return;
@@ -2172,6 +2168,15 @@
   const openTrashFromProjects = (): void => {
     closeProjectsOverlay();
     openTrashView();
+  };
+
+  const openHomepageFromProjects = async (): Promise<void> => {
+    closeProjectsOverlay();
+    await flushPendingSave();
+    if (typeof window !== "undefined") {
+      markSkipLandingAutoRedirectOnce(window.sessionStorage);
+    }
+    await goto(resolve("/"));
   };
 
   const selectAllNotesFromProjects = (): void => {
@@ -3614,7 +3619,6 @@
 
     const handleWindowResize = (): void => {
       updateViewportState();
-      updateProjectsOverlayLeft();
     };
     const handleVisualViewportChange = (): void => {
       updateViewportState();
@@ -3639,20 +3643,6 @@
     };
   });
 
-  onMount(() => {
-    updateProjectsOverlayLeft();
-    if (!noteListElement) {
-      return;
-    }
-    const observer = new ResizeObserver(() => {
-      updateProjectsOverlayLeft();
-    });
-    observer.observe(noteListElement);
-    return () => {
-      observer.disconnect();
-    };
-  });
-
   onDestroy(() => {
     adapterUnsubscribe();
     storageModeUnsubscribe();
@@ -3667,6 +3657,7 @@
       mobileView = resolvedView;
     }
   }
+  $: noteListView = resolveNoteListView(projectsOverlayOpen);
 
   $: startupStageLabel = startupStageLabels[startupState.stage];
   $: startupOverlayVisible =
@@ -3830,7 +3821,7 @@
     </div>
   </div>
 
-  <div slot="note-list" class="note-list-content" bind:this={noteListElement}>
+  <div slot="note-list" class="note-list-content">
     <div class="note-list-nav" aria-label="Projects navigation">
       <button
         class="projects-toggle"
@@ -3844,7 +3835,7 @@
       </button>
     </div>
 
-    {#if isMobileViewport && projectsOverlayOpen}
+    {#if noteListView === noteListViews.projects}
       <section
         class="projects-inline"
         data-testid="projects-overlay"
@@ -3870,6 +3861,15 @@
           on:click={selectAllNotesFromProjects}
         >
           All notes
+        </button>
+
+        <button
+          class="projects-all-notes"
+          type="button"
+          data-testid="projects-home"
+          on:click={() => void openHomepageFromProjects()}
+        >
+          Back to homepage
         </button>
 
         <FolderTree
@@ -3964,51 +3964,6 @@
           tagsById={vault?.tags ?? {}}
         />
       {/if}
-    {/if}
-
-    {#if !isMobileViewport && projectsOverlayOpen}
-      <aside
-        class="projects-overlay"
-        data-testid="projects-overlay"
-        aria-label="Projects"
-        style={`left:${projectsOverlayLeft}px;`}
-      >
-        <header class="projects-overlay-header">
-          <div class="projects-overlay-title">Projects</div>
-          <button
-            class="icon-button"
-            type="button"
-            aria-label="Close projects"
-            data-testid="projects-close"
-            on:click={closeProjectsOverlay}
-          >
-            <X aria-hidden="true" size={16} />
-          </button>
-        </header>
-
-        <button
-          class="projects-all-notes"
-          type="button"
-          data-testid="projects-all-notes"
-          on:click={selectAllNotesFromProjects}
-        >
-          All notes
-        </button>
-
-        <FolderTree
-          folders={vault?.folders ?? {}}
-          notesIndex={vault?.notesIndex ?? {}}
-          {activeFolderId}
-          {draggingNoteId}
-          loading={isLoading}
-          onSelect={selectFolderFromProjects}
-          onCreate={createFolder}
-          onRename={renameFolder}
-          onDelete={deleteFolder}
-          onOpenTrash={openTrashFromProjects}
-          onNoteDrop={handleFolderNoteDrop}
-        />
-      </aside>
     {/if}
   </div>
 
@@ -4223,21 +4178,6 @@
     background: var(--bg-2);
   }
 
-  .projects-overlay {
-    position: fixed;
-    top: 44px;
-    bottom: 0;
-    width: min(320px, 86vw);
-    background: var(--bg-1);
-    border-left: 1px solid var(--stroke-0);
-    box-shadow: var(--shadow-panel);
-    padding: 20px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 30;
-  }
-
   .projects-overlay-header {
     display: flex;
     align-items: center;
@@ -4274,13 +4214,6 @@
     flex-direction: column;
     gap: 8px;
     overflow: auto;
-  }
-
-  @media (max-width: 767px) {
-    .projects-overlay {
-      top: 44px;
-      bottom: 56px;
-    }
   }
 
   .topbar-content {
