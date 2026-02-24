@@ -1,35 +1,52 @@
 import { expect, test } from "@playwright/test";
 
-test("drags notes to folders and persists order", async ({ page }) => {
-  const folderName = "Inbox";
-  const movedTitle = "Move Me";
-  const rootTitle = "Stay Root";
-  const reorderTitle = "Second In Folder";
-  const pollTimeoutMs = 10_000;
-  const persistDelayMs = 250;
-  const twoNotes = 2;
-  const firstIndex = 0;
-  const secondIndex = 1;
-  const emptyCount = 0;
-  const singleMatch = 1;
-  type NoteRowEntry = { id: string | null; title?: string };
+const folderName = "Inbox";
+const movedTitle = "Move Me";
+const rootTitle = "Stay Root";
+const reorderTitle = "Second In Folder";
+const pollTimeoutMs = 10_000;
+const persistDelayMs = 250;
+const twoNotes = 2;
+const firstIndex = 0;
+const secondIndex = 1;
+const emptyCount = 0;
+const singleMatch = 1;
+const noteListTestId = "note-list";
+const projectsOverlayTestId = "projects-overlay";
+const projectsToggleTestId = "projects-toggle";
+const projectsAllNotesTestId = "projects-all-notes";
+const metadataTabTestId = "right-panel-tab-metadata";
+const metadataProjectSelectTestId = "metadata-project-select";
 
+type NoteRowEntry = { id: string | null; title?: string };
+
+test("moves notes to projects and persists order changes", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/onboarding");
-
   await page.getByTestId("use-browser-storage").click();
   await expect(page.getByTestId("new-note")).toBeEnabled();
 
-  await page.getByTestId("projects-toggle").click();
-  await expect(page.getByTestId("projects-overlay")).toBeVisible();
+  const openProjects = async (): Promise<void> => {
+    await page.getByTestId(projectsToggleTestId).click();
+    await expect(page.getByTestId(projectsOverlayTestId)).toBeVisible();
+  };
 
-  const tree = page.getByTestId("folder-tree");
+  const closeProjectsToAllNotes = async (): Promise<void> => {
+    await page.getByTestId(projectsAllNotesTestId).click();
+    await expect(page.getByTestId(projectsOverlayTestId)).toHaveCount(
+      emptyCount
+    );
+  };
+
   const createFolder = async (name: string): Promise<void> => {
+    await openProjects();
+    const tree = page.getByTestId("folder-tree");
     await page.getByTestId("folder-add").click();
     const input = page.getByTestId("folder-rename-input");
     await input.fill(name);
     await input.press("Enter");
     await expect(tree.getByText(name, { exact: true })).toBeVisible();
+    await closeProjectsToAllNotes();
   };
 
   const createNote = async (title: string): Promise<void> => {
@@ -40,13 +57,13 @@ test("drags notes to folders and persists order", async ({ page }) => {
     await page.keyboard.type(title);
     await page.keyboard.press("Enter");
     await expect(
-      page.getByTestId("note-list").getByText(title, { exact: true })
+      page.getByTestId(noteListTestId).getByText(title, { exact: true })
     ).toBeVisible();
   };
 
   const findNoteIdByTitle = async (title: string): Promise<string> => {
     const rows = page
-      .getByTestId("note-list")
+      .getByTestId(noteListTestId)
       .locator('[data-testid^="note-row-"]');
     const entries: NoteRowEntry[] = await rows.evaluateAll(
       (elements: Element[]) =>
@@ -64,7 +81,7 @@ test("drags notes to folders and persists order", async ({ page }) => {
 
   const readNoteOrder = async (): Promise<string[]> => {
     const rows = page
-      .getByTestId("note-list")
+      .getByTestId(noteListTestId)
       .locator('[data-testid^="note-row-"]');
     const ids = await rows.evaluateAll((elements: Element[]) =>
       elements.map((element: Element) => element.getAttribute("data-note-id"))
@@ -76,22 +93,28 @@ test("drags notes to folders and persists order", async ({ page }) => {
     return resolved;
   };
 
-  await createFolder(folderName);
+  const moveOpenNoteToProject = async (projectLabel: string): Promise<void> => {
+    await page.getByTestId(metadataTabTestId).click();
+    await page
+      .getByTestId(metadataProjectSelectTestId)
+      .selectOption({ label: projectLabel });
+  };
 
+  await createFolder(folderName);
   await createNote(movedTitle);
   await createNote(rootTitle);
 
   const movedId = await findNoteIdByTitle(movedTitle);
+  await page.getByTestId(`note-row-${movedId}`).click();
+  await moveOpenNoteToProject(folderName);
 
-  const draggedRow = page.getByTestId(`note-row-${movedId}`);
+  await openProjects();
   const folderRow = page.locator('[data-testid^="folder-row-"]', {
     hasText: folderName,
   });
-
-  await draggedRow.dragTo(folderRow);
-
   await folderRow.click();
-  const noteList = page.getByTestId("note-list");
+
+  const noteList = page.getByTestId(noteListTestId);
   await expect
     .poll(() => noteList.getByText(movedTitle, { exact: true }).count(), {
       timeout: pollTimeoutMs,
@@ -110,17 +133,14 @@ test("drags notes to folders and persists order", async ({ page }) => {
   const dropTargetId = orderBefore[firstIndex];
   const draggedReorder = page.getByTestId(`note-row-${draggedId}`);
   const dropTarget = page.getByTestId(`note-row-${dropTargetId}`);
-
   await draggedReorder.dragTo(dropTarget);
 
   const orderAfter = await readNoteOrder();
   expect(orderAfter[firstIndex]).toBe(draggedId);
 
-  // Reordering persists via async project writes; give it a moment before reload.
   await page.waitForTimeout(persistDelayMs);
   await page.reload();
-  await page.getByTestId("projects-toggle").click();
-  await expect(page.getByTestId("projects-overlay")).toBeVisible();
+  await openProjects();
   await folderRow.click();
   const persistedOrder = await readNoteOrder();
   expect(persistedOrder[firstIndex]).toBe(draggedId);

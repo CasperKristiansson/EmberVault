@@ -4,6 +4,10 @@
     NoteDocumentFile,
     Vault,
   } from "$lib/core/storage/types";
+  import {
+    getChildFolderIds,
+    getRootFolderIds,
+  } from "$lib/core/utils/folder-tree";
   import { createCustomFieldKey } from "$lib/core/utils/custom-fields";
   import CustomFieldEditor from "$lib/components/rightpanel/CustomFieldEditor.svelte";
   import BacklinksPanel from "$lib/components/rightpanel/BacklinksPanel.svelte";
@@ -37,17 +41,13 @@
     noteId: string,
     fields: Record<string, CustomFieldValue>
   ) => void = () => {};
+  export let onMoveNoteToFolder: (
+    noteId: string,
+    folderId: string | null
+  ) => void | Promise<void> = async () => {};
 
   const formatTimestamp = (timestamp: number): string =>
     new Date(timestamp).toLocaleString();
-
-  const resolveFolderName = (noteValue: NoteDocumentFile): string => {
-    if (!noteValue.folderId) {
-      return "No folder";
-    }
-    const resolved = vault?.folders[noteValue.folderId]?.name;
-    return resolved ?? "Unknown folder";
-  };
 
   const resolveTagNames = (noteValue: NoteDocumentFile): string => {
     if (noteValue.tagIds.length === 0) {
@@ -109,9 +109,50 @@
     updateCustomFields(note.id, rest);
   };
 
+  type FolderOption = { id: string; label: string };
+
+  const buildFolderOptions = (folders: Vault["folders"]): FolderOption[] => {
+    const options: FolderOption[] = [];
+    const appendFolder = (folderId: string, depth: number): void => {
+      const folder = folders[folderId];
+      if (!folder) {
+        return;
+      }
+      const prefix = depth > 0 ? `${"  ".repeat(depth)}- ` : "";
+      options.push({ id: folderId, label: `${prefix}${folder.name}` });
+      for (const childId of getChildFolderIds(folderId, folders)) {
+        appendFolder(childId, depth + 1);
+      }
+    };
+    for (const rootId of getRootFolderIds(folders)) {
+      appendFolder(rootId, 0);
+    }
+    return options;
+  };
+
+  const handleFolderSelect = (event: Event): void => {
+    if (!note) {
+      return;
+    }
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLSelectElement)) {
+      return;
+    }
+    const nextFolderId = target.value || null;
+    if (nextFolderId === note.folderId) {
+      return;
+    }
+    void onMoveNoteToFolder(note.id, nextFolderId);
+  };
+
   $: customFieldEntries = note
     ? Object.entries(note.customFields)
     : ([] as Array<[string, CustomFieldValue]>);
+  $: folderOptions = vault ? buildFolderOptions(vault.folders) : [];
+  $: selectedFolderValue = note?.folderId ?? "";
+  $: hasResolvedFolderOption = selectedFolderValue
+    ? folderOptions.some((option) => option.id === selectedFolderValue)
+    : true;
 
   let unresolvedSelection: Record<string, string> = {};
 
@@ -205,8 +246,22 @@
           <span class="system-value">{formatTimestamp(note.updatedAt)}</span>
         </div>
         <div class="system-row">
-          <span class="system-label">Folder</span>
-          <span class="system-value">{resolveFolderName(note)}</span>
+          <span class="system-label">Project</span>
+          <select
+            class="select system-select"
+            aria-label="Move note to project"
+            data-testid="metadata-project-select"
+            value={selectedFolderValue}
+            on:change={handleFolderSelect}
+          >
+            {#if !hasResolvedFolderOption && selectedFolderValue}
+              <option value={selectedFolderValue}>Unknown folder</option>
+            {/if}
+            <option value="">Unassigned</option>
+            {#each folderOptions as option (option.id)}
+              <option value={option.id}>{option.label}</option>
+            {/each}
+          </select>
         </div>
         <div class="system-row">
           <span class="system-label">Tags</span>
@@ -387,6 +442,11 @@
   .system-value {
     color: var(--text-0);
     text-align: right;
+  }
+
+  .system-select {
+    width: min(220px, 100%);
+    margin-left: auto;
   }
 
   .custom-fields {

@@ -39,6 +39,10 @@
     noteId: string,
     fields: Record<string, CustomFieldValue>
   ) => void = () => {};
+  export let onMoveNoteToFolder: (
+    noteId: string,
+    folderId: string | null
+  ) => void | Promise<void> = async () => {};
 </script>
 
 <div class="right-panel" data-testid="right-panel-content">
@@ -57,6 +61,7 @@
       {onNormalizeWikiLinks}
       {onCreateNoteForWikiLink}
       onUpdateCustomFields={onUpdateCustomFields}
+      onMoveNoteToFolder={onMoveNoteToFolder}
     />
   {/if}
 </div>

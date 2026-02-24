@@ -2775,7 +2775,7 @@
 
   const moveNoteToFolder = async (
     noteId: string,
-    targetFolderId: string
+    targetFolderId: string | null
   ): Promise<void> => {
     if (!vault) {
       return;
@@ -2793,15 +2793,19 @@
       sourceFolderId && vault
         ? resolveFolderNoteOrder(notes, sourceFolderId, vault.folders)
         : [];
-    const targetOrder = resolveFolderNoteOrder(
-      notes,
-      targetFolderId,
-      vault.folders
-    );
+    const targetOrder = targetFolderId
+      ? resolveFolderNoteOrder(
+          notes,
+          targetFolderId,
+          vault.folders
+        )
+      : [];
     const nextSourceOrder = sourceFolderId
       ? sourceOrder.filter((id) => id !== noteId)
       : [];
-    const nextTargetOrder = [...targetOrder.filter((id) => id !== noteId), noteId];
+    const nextTargetOrder = targetFolderId
+      ? [...targetOrder.filter((id) => id !== noteId), noteId]
+      : [];
     const updatedNote: NoteDocumentFile = {
       ...noteDocument,
       folderId: targetFolderId,
@@ -2825,11 +2829,13 @@
         nextSourceOrder
       );
     }
-    nextFolders = setFolderNoteOrder(
-      nextFolders,
-      targetFolderId,
-      nextTargetOrder
-    );
+    if (targetFolderId) {
+      nextFolders = setFolderNoteOrder(
+        nextFolders,
+        targetFolderId,
+        nextTargetOrder
+      );
+    }
     const updatedVault: Vault = {
       ...storedVault,
       folders: nextFolders,
@@ -2845,6 +2851,13 @@
   ): Promise<void> => {
     await moveNoteToFolder(noteId, folderId);
     handleNoteDragEnd();
+  };
+
+  const handleMoveNoteToFolder = async (
+    noteId: string,
+    folderId: string | null
+  ): Promise<void> => {
+    await moveNoteToFolder(noteId, folderId);
   };
 
   const handleNoteDragStart = (noteId: string, event: DragEvent): void => {
@@ -4005,6 +4018,7 @@
     onNormalizeWikiLinks={normalizeWikiLinksInActiveNote}
     onCreateNoteForWikiLink={createNoteForWikiLink}
     onUpdateCustomFields={updateCustomFieldsForNote}
+    onMoveNoteToFolder={handleMoveNoteToFolder}
   />
 
   <ModalHost

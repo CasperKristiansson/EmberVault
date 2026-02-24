@@ -238,7 +238,8 @@ Outline:
 Metadata:
 
 - System fields:
-  - Created, Updated, Folder, Tags, Favorite
+  - Created, Updated, Project, Tags, Favorite
+  - Project field is a select that can move the active note to any project or to Unassigned
 - Links:
   - Unresolved links:
     - Show outgoing wiki links that do not resolve to an existing note id

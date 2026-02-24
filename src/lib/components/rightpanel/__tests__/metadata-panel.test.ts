@@ -99,4 +99,34 @@ describe("MetadataPanel", () => {
       Mood: "Focused",
     });
   });
+
+  it("moves note to a selected project", async () => {
+    const note = createNote();
+    const vault = createVault();
+    vault.folders = {
+      "folder-1": {
+        id: "folder-1",
+        name: "Work",
+        parentId: null,
+        childFolderIds: [],
+      },
+    };
+    const onMoveNoteToFolder = vi.fn();
+
+    const { getByTestId } = render(MetadataPanel, {
+      props: {
+        note,
+        vault,
+        onMoveNoteToFolder,
+      },
+    });
+
+    const projectSelect = getByTestId("metadata-project-select");
+    if (!(projectSelect instanceof HTMLSelectElement)) {
+      throw new TypeError("Expected a select element.");
+    }
+    await fireEvent.change(projectSelect, { target: { value: "folder-1" } });
+
+    expect(onMoveNoteToFolder).toHaveBeenCalledWith(note.id, "folder-1");
+  });
 });
