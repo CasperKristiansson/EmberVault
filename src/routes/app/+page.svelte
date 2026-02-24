@@ -43,6 +43,12 @@
   import { resolveNoteListTitle } from "$lib/core/utils/note-list-title";
   import { toDerivedMarkdown } from "$lib/core/utils/derived-markdown";
   import { resolveInterfaceDensity } from "$lib/core/utils/interface-density";
+  import {
+    formatSyncTimestamp,
+    resolveSyncBadgeDetail,
+    resolveSyncBadgeLabel,
+    resolveSyncBadgeText,
+  } from "$lib/core/utils/sync-badge";
   import { resolveAccentColor } from "$lib/core/utils/accent-color";
   import { exportVaultToDirectory } from "$lib/core/utils/vault-export";
   import {
@@ -289,6 +295,7 @@
   let startupOverlayVisible = false;
   let syncBadgeLabel = "Idle";
   let syncBadgeDetail = "No pending changes";
+  let syncBadgeText = "Idle: Last sync: Never";
   let syncInitResolutionLabel: string | null = null;
 
   const saveDelay = 400;
@@ -686,30 +693,6 @@
 
   const resetStartupState = (): void => {
     startupState = createDefaultStartupState();
-  };
-
-  const formatSyncTimestamp = (timestamp: number | null): string => {
-    if (!timestamp) {
-      return "Never";
-    }
-    try {
-      return new Date(timestamp).toLocaleString();
-    } catch {
-      return "Unknown";
-    }
-  };
-
-  const syncStateLabel = (state: SyncStatus["state"]): string => {
-    if (state === "syncing") {
-      return "Syncing";
-    }
-    if (state === "offline") {
-      return "Offline";
-    }
-    if (state === "error") {
-      return "Needs attention";
-    }
-    return "Idle";
   };
 
   const syncInitResolutionText = (
@@ -3690,11 +3673,9 @@
     activeStorageMode === "s3" &&
     startupState.blocking &&
     (startupState.stage !== "ready" || Boolean(startupState.error));
-  $: syncBadgeLabel = syncStateLabel(syncStatus.state);
-  $: syncBadgeDetail =
-    syncStatus.pendingCount > 0
-      ? `${syncStatus.pendingCount} pending`
-      : `Last sync: ${formatSyncTimestamp(syncStatus.lastSuccessAt)}`;
+  $: syncBadgeLabel = resolveSyncBadgeLabel(syncStatus.state);
+  $: syncBadgeDetail = resolveSyncBadgeDetail(syncStatus);
+  $: syncBadgeText = resolveSyncBadgeText(syncStatus);
   $: syncInitResolutionLabel = syncInitResolutionText(syncStatus.lastInitResolution);
   $: activeStorageMode, ensureSyncStatusPolling();
 </script>
@@ -3764,10 +3745,13 @@
           type="button"
           data-testid="sync-status-badge"
           data-state={syncStatus.state}
+          aria-label={syncBadgeText}
           on:click={openSettings}
         >
-          <span class="sync-badge-title">{syncBadgeLabel}</span>
-          <span class="sync-badge-detail">{syncBadgeDetail}</span>
+          <span class="sync-badge-text">
+            <span class="sync-badge-title">{syncBadgeLabel}:</span>
+            <span class="sync-badge-detail"> {syncBadgeDetail}</span>
+          </span>
         </button>
       {/if}
       {#if isMobileViewport}
@@ -4455,16 +4439,13 @@
     min-width: 132px;
     max-width: 220px;
     height: 32px;
-    padding: 4px 10px;
+    padding: 0 10px;
     border-radius: var(--r-md);
     border: 1px solid var(--stroke-0);
     background: var(--bg-2);
     color: var(--text-0);
     display: inline-flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: flex-start;
-    gap: 2px;
+    align-items: center;
     cursor: pointer;
   }
 
@@ -4477,20 +4458,23 @@
     border-color: color-mix(in srgb, var(--danger) 45%, var(--stroke-0));
   }
 
+  .sync-badge-text {
+    display: block;
+    width: 100%;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    line-height: 1.1;
+  }
+
   .sync-badge-title {
     font-size: 11px;
-    line-height: 1.1;
     font-weight: 600;
   }
 
   .sync-badge-detail {
     font-size: 10px;
     color: var(--text-2);
-    line-height: 1.1;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 100%;
   }
 
   .icon-button {

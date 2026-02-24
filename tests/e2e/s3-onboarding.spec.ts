@@ -18,6 +18,7 @@ const vaultStorageKey = "embervault/vault.json";
 const testDraftBucket = "s3://embervault";
 const testDraftSessionToken = "SESSION_TOKEN";
 const sessionTokenLabel = "Session token (optional)";
+const singleLineSyncBadgePattern = /^[^\n]+: [^\n]+$/;
 
 const extractObjectKey = (url: string): string => {
   const missingIndex = -1;
@@ -142,6 +143,9 @@ test("onboarding can connect to s3 storage (network mocked)", async ({
 
   await expect(page).toHaveURL(appPathPattern);
   await expect(page.getByTestId("note-list-title")).toBeVisible();
+  await expect(page.getByTestId("sync-status-badge")).toHaveText(
+    singleLineSyncBadgePattern
+  );
 
   expect(objects.has(vaultStorageKey)).toBe(true);
 });
