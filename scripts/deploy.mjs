@@ -11,11 +11,22 @@ const rootDirectory = path.resolve(
 );
 const infraDirectory = path.join(rootDirectory, "infra");
 const stack = process.env.PULUMI_STACK || "dev";
+const awsProfile = "Personal";
+const baseEnvironment = {
+  ...process.env,
+  AWS_PROFILE: awsProfile,
+  AWS_SDK_LOAD_CONFIG: process.env.AWS_SDK_LOAD_CONFIG || "1",
+};
 
 const run = async (command, commandArguments, options = {}) => {
+  const environment = {
+    ...baseEnvironment,
+    ...options.env,
+  };
   const child = spawn(command, commandArguments, {
     stdio: "inherit",
     ...options,
+    env: environment,
   });
   const closePromise = once(child, "close");
   const errorPromise = once(child, "error");
@@ -33,9 +44,14 @@ const run = async (command, commandArguments, options = {}) => {
 };
 
 const runWithOutput = async (command, commandArguments, options = {}) => {
+  const environment = {
+    ...baseEnvironment,
+    ...options.env,
+  };
   const child = spawn(command, commandArguments, {
     stdio: ["ignore", "pipe", "pipe"],
     ...options,
+    env: environment,
   });
   let stdout = "";
   let stderr = "";
@@ -82,6 +98,7 @@ const main = async () => {
   const distributionId = await readStackOutput("distributionId");
 
   process.stdout.write(`Deploying stack: ${stack}\n`);
+  process.stdout.write(`AWS profile: ${awsProfile}\n`);
   process.stdout.write(`Bucket: ${bucket}\n`);
   process.stdout.write(`Distribution: ${distributionId}\n`);
 
@@ -94,6 +111,8 @@ const main = async () => {
       path.join(rootDirectory, "build"),
       `s3://${bucket}`,
       "--delete",
+      "--profile",
+      awsProfile,
     ],
     { cwd: rootDirectory }
   );
@@ -106,6 +125,8 @@ const main = async () => {
       distributionId,
       "--paths",
       "/*",
+      "--profile",
+      awsProfile,
     ],
     { cwd: rootDirectory }
   );
